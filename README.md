@@ -1,4 +1,4 @@
-# arquitectura_de_computadoras# Arquitectura de Computadoras
+# Arquitectura de Computadoras
 
 Repositorio de los trabajos prácticos de la materia **Arquitectura de
 Computadoras** (FCEFyN, UNC).
