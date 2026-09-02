@@ -26,10 +26,10 @@ module alu
     parameter NB_OP = 6 //ancho del codigo para identificar la operacion que se quiere realizar
 )
 (
-    input wire [NB_DATA-1:0] i_a,
-    input wire [NB_DATA-1:0] i_b,
+    input wire signed [NB_DATA-1:0] i_a,
+    input wire signed [NB_DATA-1:0] i_b,
     input wire [NB_OP-1:0] i_op,
-    output wire [NB_DATA-1:0] o_result
+    output wire signed [NB_DATA:0] o_result
 );
     //parametros locales para identificar los codigos de operacion
     localparam [NB_OP-1:0] OP_ADD = 6'b100000;
@@ -45,18 +45,18 @@ module alu
     localparam NB_SHAMT = $clog2(NB_DATA);
     wire [NB_SHAMT-1:0] shamt = i_b[NB_SHAMT-1:0];
     
-    reg signed [NB_DATA-1:0] result;
+    reg signed [NB_DATA:0] result;
     
     always @(*) begin
         case (i_op)
             OP_ADD : result = i_a + i_b;
             OP_SUB : result = i_a - i_b;
-            OP_AND : result = i_a & i_b;
-            OP_OR  : result = i_a | i_b;
-            OP_XOR : result = i_a ^ i_b;
-            OP_NOR : result = ~(i_a | i_b);
+            OP_AND : result = {1'b0, {i_a & i_b}};
+            OP_OR  : result = {1'b0, {i_a | i_b}};
+            OP_XOR : result = {1'b0, {i_a ^ i_b}};
+            OP_NOR : result = {1'b0, {~(i_a | i_b)}};
             OP_SRA : result = $signed(i_a) >>> shamt;
-            OP_SRL : result = i_a >>  shamt;
+            OP_SRL : result = {1'b0, {$unsigned(i_a) >>  shamt}};
             default: result = {NB_DATA{1'b0}}; //para no inferir un latch
         endcase
     end
