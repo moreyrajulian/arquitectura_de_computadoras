@@ -1,5 +1,4 @@
 ## Constraints para Basys3 (Artix-7 XC7A35T-1CPG236C)
-## Verificar contra el master XDC oficial de Digilent si usas otra placa.
 
 ## ---------------- Clock 100 MHz ----------------
 set_property -dict { PACKAGE_PIN W5  IOSTANDARD LVCMOS33 } [get_ports clk]
@@ -24,6 +23,7 @@ set_property -dict { PACKAGE_PIN W18 IOSTANDARD LVCMOS33 } [get_ports {o_led[4]}
 set_property -dict { PACKAGE_PIN U15 IOSTANDARD LVCMOS33 } [get_ports {o_led[5]}]
 set_property -dict { PACKAGE_PIN U14 IOSTANDARD LVCMOS33 } [get_ports {o_led[6]}]
 set_property -dict { PACKAGE_PIN V14 IOSTANDARD LVCMOS33 } [get_ports {o_led[7]}]
+set_property -dict { PACKAGE_PIN V13  IOSTANDARD LVCMOS33 } [get_ports {o_led[8]}]
 
 ## ---------------- Pulsadores ----------------
 set_property -dict { PACKAGE_PIN U18 IOSTANDARD LVCMOS33 } [get_ports i_reset]   ;# btnC
