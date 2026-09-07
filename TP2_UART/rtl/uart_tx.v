@@ -8,7 +8,7 @@
 //======================================================================
 module uart_tx
 #(
-    parameter integer DBIT    = 8,
+    parameter integer NB_DATA    = 8,
     parameter integer SB_TICK = 16
 )
 (
@@ -16,7 +16,7 @@ module uart_tx
     input  wire            reset,
     input  wire            tx_start,     // pedido de transmision
     input  wire            s_tick,       // tick del baud generator
-    input  wire [DBIT-1:0] din,          // byte a transmitir
+    input  wire [NB_DATA-1:0] din,          // byte a transmitir
     output reg             tx_done_tick, // pulso de 1 ciclo al terminar
     output wire            tx            // linea serie de salida
 );
@@ -28,7 +28,7 @@ module uart_tx
     reg [1:0]      state_reg, state_next;
     reg [3:0]      s_reg, s_next;
     reg [2:0]      n_reg, n_next;
-    reg [DBIT-1:0] b_reg, b_next;
+    reg [NB_DATA-1:0] b_reg, b_next;
     reg            tx_reg, tx_next;      // buffer de salida (evita glitches)
 
     always @(posedge clk) begin
@@ -73,7 +73,7 @@ module uart_tx
                     if (s_reg == 15) begin
                         s_next = 0;
                         b_next = b_reg >> 1;   // corro para el proximo bit
-                        if (n_reg == (DBIT-1))
+                        if (n_reg == (NB_DATA-1))
                             state_next = stop;
                         else
                             n_next = n_reg + 1;
