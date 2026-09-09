@@ -86,7 +86,8 @@ module uart_rx
                 if (s_tick)
                     if (s_reg == (SB_TICK-1)) begin  // termino el stop bit
                         state_next   = idle;
-                        rx_done_tick = 1'b1;         // aviso: byte listo
+                        if(rx) rx_done_tick = 1'b1;         // aviso: byte listo
+                        else b_next = {NB_DATA{1'b0}};
                     end else
                         s_next = s_reg + 1;
         endcase
