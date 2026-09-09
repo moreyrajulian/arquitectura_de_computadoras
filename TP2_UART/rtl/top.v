@@ -62,7 +62,7 @@ module top
         .tx_d_in(tx_din), .tx_full(tx_full), .tx_start(tx_start)
     );
 
-    alu #(.NB_DATA(NB_DATA)) ALU (
+    alu_top #(.NB_DATA(NB_DATA)) ALU_TOP (
         .clk(clk), .reset(reset),
         .r_data(r_data), .rx_empty(rx_empty), .rd(rd),
         .tx_full(tx_full), .wr(wr), .w_data(w_data)
