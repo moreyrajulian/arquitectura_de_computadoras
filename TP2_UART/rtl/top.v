@@ -1,65 +1,71 @@
 `timescale 1ns / 1ps
-
+//======================================================================
+// Top level: UART (rx/tx) + Interface Circuit + ALU
+// DVSR default = 326 -> clk=50MHz, baud=9600 (16x oversampling). Ajustar
+// segun clk/baudrate reales del proyecto.
+//======================================================================
 module top
 #(
-    parameter integer NB_DATA = 8,   // ancho del bus de datos
-    parameter integer NB_SW   = 8    // switches usados (>= NB_DATA y >= NB_OP)
+    parameter integer NB_DATA = 8,
+    parameter integer DVSR    = 326
 )
 (
-    input  wire               clk,
-    input  wire               i_reset,     // btnC
-    input  wire [NB_SW-1:0]   i_sw,
-    input  wire               i_btn_a,     // btnL -> carga dato A
-    input  wire               i_btn_b,     // btnR -> carga dato B
-    input  wire               i_btn_op,    // btnU -> carga opcode
-    output wire [NB_DATA-1:0] o_led
+    input  wire clk, reset,
+    input  wire rx,
+    output wire tx
 );
+    // señales entre baud_gen y rx/tx
+    wire s_tick;
 
-    localparam NB_OP = 6;
+    // señales entre uart_rx y intf_circ (lado Rx)
+    wire [NB_DATA-1:0] rx_dout;
+    wire rx_done_tick;
+    wire [NB_DATA-1:0] r_data;
+    wire rx_empty;
+    wire rd;
 
-    reg [NB_DATA-1:0] reg_a;
-    reg [NB_DATA-1:0] reg_b;
-    reg [NB_OP-1:0]   reg_op;
-    reg [NB_DATA-1:0] reg_result;
+    // señales entre intf_circ y uart_tx (lado Tx)
+    wire [NB_DATA-1:0] tx_din;
+    wire tx_done_tick;
+    wire tx_start;
+    wire [NB_DATA-1:0] w_data;
+    wire wr;
+    wire tx_full;
 
-    wire [NB_DATA-1:0] alu_result;
-
-    //------------------------------------------------------------------
-    // Registros de entrada
-    //------------------------------------------------------------------
-    always @(posedge clk) begin
-        if (i_reset) begin
-            reg_a  <= {NB_DATA{1'b0}};
-            reg_b  <= {NB_DATA{1'b0}};
-            reg_op <= {NB_OP{1'b0}};
-        end else begin
-            if (i_btn_a)  reg_a  <= i_sw[NB_DATA-1:0];
-            if (i_btn_b)  reg_b  <= i_sw[NB_DATA-1:0];
-            if (i_btn_op) reg_op <= i_sw[NB_OP-1:0];
-        end
-    end
-
-    //------------------------------------------------------------------
-    // ALU
-    //------------------------------------------------------------------
-    alu #(
-        .NB_DATA (NB_DATA)
-    ) u_alu (
-        .i_a      (reg_a),
-        .i_b      (reg_b),
-        .i_op     (reg_op),
-        .o_result (alu_result)
+    baud_gen #(.DVSR(DVSR)) BAUD_GEN (
+        .clk(clk), .reset(reset),
+        .tick(s_tick)
     );
 
-    //------------------------------------------------------------------
-    // Registro de salida: cierra el camino reg -> logica -> reg, que es
-    // lo que el analisis de tiempo de Vivado puede medir.
-    //------------------------------------------------------------------
-    always @(posedge clk) begin
-        if (i_reset) reg_result <= {NB_DATA{1'b0}};
-        else         reg_result <= alu_result;
-    end
+    uart_rx #(.NB_DATA(NB_DATA)) UART_RX (
+        .clk(clk), .reset(reset),
+        .rx(rx), .s_tick(s_tick),
+        .rx_done_tick(rx_done_tick),
+        .dout(rx_dout)
+    );
 
-    assign o_led = reg_result;
+    uart_tx #(.NB_DATA(NB_DATA)) UART_TX (
+        .clk(clk), .reset(reset),
+        .tx_start(tx_start), .s_tick(s_tick),
+        .din(tx_din),
+        .tx_done_tick(tx_done_tick),
+        .tx(tx)
+    );
+
+    intf_circ #(.NB_DATA(NB_DATA)) INTF_CIRC (
+        .clk(clk), .reset(reset),
+        // lado Rx
+        .rx_d_out(rx_dout), .rx_done_tick(rx_done_tick),
+        .rd(rd), .r_data(r_data), .rx_empty(rx_empty),
+        // lado Tx
+        .w_data(w_data), .wr(wr), .tx_done(tx_done_tick),
+        .tx_d_in(tx_din), .tx_full(tx_full), .tx_start(tx_start)
+    );
+
+    alu #(.NB_DATA(NB_DATA)) ALU (
+        .clk(clk), .reset(reset),
+        .r_data(r_data), .rx_empty(rx_empty), .rd(rd),
+        .tx_full(tx_full), .wr(wr), .w_data(w_data)
+    );
 
 endmodule
