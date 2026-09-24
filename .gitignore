@@ -20,3 +20,8 @@ usage_statistics_webtalk.*
 *~
 Thumbs.db
 .DS_Store
+
+*.vcd
+*.wdb
+__pycache__/
+.venv/
