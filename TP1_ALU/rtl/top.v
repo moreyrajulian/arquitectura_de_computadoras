@@ -1,4 +1,15 @@
 `timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 08/31/2026 05:38:33 PM
+// Design Name: 
+// Module Name: top
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: `timescale 1ns / 1ps
 
 //======================================================================
 // Top del TP1: los switches cargan A, B y el opcode en registros mediante
@@ -24,25 +35,15 @@ module top
     input  wire               i_btn_a,     // btnL -> carga dato A
     input  wire               i_btn_b,     // btnR -> carga dato B
     input  wire               i_btn_op,    // btnU -> carga opcode
-    output wire [NB_DATA-1:0] o_led
+    output wire [NB_DATA:0] o_led
 );
-
-    wire tick_a, tick_b, tick_op;
 
     reg [NB_DATA-1:0] reg_a;
     reg [NB_DATA-1:0] reg_b;
     reg [NB_OP-1:0]   reg_op;
-    reg [NB_DATA-1:0] reg_result;
+    reg [NB_DATA:0] reg_result;
 
-    wire [NB_DATA-1:0] alu_result;
-    wire               alu_zero;
-
-    //------------------------------------------------------------------
-    // Antirrebote de los tres pulsadores de carga
-    //------------------------------------------------------------------
-    debouncer u_deb_a  (.i_clk(clk), .i_reset(i_reset), .i_btn(i_btn_a),  .o_tick(tick_a));
-    debouncer u_deb_b  (.i_clk(clk), .i_reset(i_reset), .i_btn(i_btn_b),  .o_tick(tick_b));
-    debouncer u_deb_op (.i_clk(clk), .i_reset(i_reset), .i_btn(i_btn_op), .o_tick(tick_op));
+    wire [NB_DATA:0] alu_result;
 
     //------------------------------------------------------------------
     // Registros de entrada
@@ -53,9 +54,9 @@ module top
             reg_b  <= {NB_DATA{1'b0}};
             reg_op <= {NB_OP{1'b0}};
         end else begin
-            if (tick_a)  reg_a  <= i_sw[NB_DATA-1:0];
-            if (tick_b)  reg_b  <= i_sw[NB_DATA-1:0];
-            if (tick_op) reg_op <= i_sw[NB_OP-1:0];
+            if (i_btn_a)  reg_a  <= i_sw[NB_DATA-1:0];
+            if (i_btn_b)  reg_b  <= i_sw[NB_DATA-1:0];
+            if (i_btn_op) reg_op <= i_sw[NB_OP-1:0];
         end
     end
 
@@ -77,7 +78,7 @@ module top
     // lo que el analisis de tiempo de Vivado puede medir.
     //------------------------------------------------------------------
     always @(posedge clk) begin
-        if (i_reset) reg_result <= {NB_DATA{1'b0}};
+        if (i_reset) reg_result <= {NB_DATA+1{1'b0}};
         else         reg_result <= alu_result;
     end
 
