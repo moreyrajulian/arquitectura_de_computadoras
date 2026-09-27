@@ -43,6 +43,10 @@ docs/
 └── tps/                 Informes de TP1, TP2, ...
 ```
 
+## Diagrama en bloques del Sistema
+
+![Diagrama en bloques del sistema](.\docs\diagramas\sistema.png)
+
 ## Abrir el proyecto en Vivado
 
 El proyecto de Vivado (`.xpr`) **no se versiona**: se regenera desde las fuentes.
