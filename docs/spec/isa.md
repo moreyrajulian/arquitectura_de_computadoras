@@ -15,7 +15,7 @@
 | lh | load half | I-type | 0000011 | 001 | - | rd = SignExt(MEM[rs1+imm][15:0]) |
 | lw | load word | I-type | 0000011 | 010 | - | rd = MEM[rs1 + SignExt(imm)] |
 | lbu | load byte, unsigned | I-type | 0000011 | 100 | - | rd = ZeroExt(MEM[rs1+imm][7:0]) |
-| lhu | load half, unsigned | I-type | 0000011 | 101 | - | rd = SignExt(MEM[rs1+imm][15:0]) |
+| lhu | load half, unsigned | I-type | 0000011 | 101 | - | rd = ZeroExt(MEM[rs1+imm][15:0]) |
 | addi | add immediate | I-type | 0010011 | 000 | - | rd = rs1 + SignExt(imm) |
 | andi | and immediate | I-type | 0010011 | 111 | - | rd = rs1 & SignExt(imm) |
 | ori | or immediate | I-type | 0010011 | 110 | - | rd = rs1 | SignExt(imm) |
