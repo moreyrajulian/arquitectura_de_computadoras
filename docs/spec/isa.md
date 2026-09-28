@@ -34,3 +34,21 @@
 | bne | branch if not equal | B-type | 1100011 | 001 | - | if (rs1 != rs2) PC += imm |
 | lui | load upper immediate | U-type | 0110111 | - | - | rd = imm << 12 |
 | #TBD | halt | - | #TBD | #TBD | #TBD | - |
+
+
+## Formatos de instrucción y construcción del Inmediato
+
+La columna de _Type_ de la tabla indica el formato de cada instrucción. La figura muestra los seis formatos (R, I, S, B, U, J) y, para cada formato con inmediato, de qué bits de la instrucción sale cada bit del inmediato de 32 bits que entrega el extensor. Los colores identifican los bits de origen en la instrucción y son los mismos en todos los formatos.
+
+![Formatos de instrucción](./docs/diagramas/formatos.png)
+
+Fuente editable: `docs/diagramas/formatos.drawio`
+
+| Formato | Inmediato de 32 bits (Verilog) |
+| --- | --- |
+| R | - (no tiene inmediato) |
+| I | `{ {20{inst[31]}}, inst[31:20] }` |
+| S | `{ {20{inst[31]}}, inst[31:25], inst[11:7] }` |
+| B | `{ {19{inst[31]}}, inst[31], inst[7], inst[30:25], inst[11:8], 1'b0 }` |
+| U | `{ inst[31:12], 12'b0 }` |
+| J | `{ {12{inst[31]}}, inst[19:12], inst[20], inst[30:21], 1'b0 }` |
