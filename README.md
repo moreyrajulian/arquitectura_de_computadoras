@@ -45,7 +45,7 @@ docs/
 
 ## Diagrama en bloques del Sistema
 
-![Diagrama en bloques del sistema](.\docs\diagramas\sistema.png)
+![Diagrama en bloques del sistema](./docs/diagramas/sistema.png)
 
 ## Abrir el proyecto en Vivado
 
