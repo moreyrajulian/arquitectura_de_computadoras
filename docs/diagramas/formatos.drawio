@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram id="formatos" name="Formatos RV32I">
-    <mxGraphModel dx="1212" dy="736" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1020" pageHeight="3046" math="0" shadow="0">
+    <mxGraphModel dx="1471" dy="894" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1020" pageHeight="3046" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -256,7 +256,7 @@
         <mxCell id="c85" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontFamily=Courier New;fontSize=12;align=left;spacingLeft=10;" value="imm = { &lt;font color=&#39;#b85450&#39;&gt;&lt;b&gt;{20{inst[31]}}&lt;/b&gt;&lt;/font&gt;, &lt;font color=&#39;#b85450&#39;&gt;&lt;b&gt;inst[31]&lt;/b&gt;&lt;/font&gt;, &lt;font color=&#39;#82b366&#39;&gt;&lt;b&gt;inst[30:25]&lt;/b&gt;&lt;/font&gt;, &lt;font color=&#39;#9673a6&#39;&gt;&lt;b&gt;inst[24:21]&lt;/b&gt;&lt;/font&gt;, &lt;font color=&#39;#d6b656&#39;&gt;&lt;b&gt;inst[20]&lt;/b&gt;&lt;/font&gt; };&lt;br&gt;&lt;font color=&#39;#777777&#39;&gt;// equivale a: { {20{inst[31]}}, inst[31:20] }&lt;/font&gt;" vertex="1">
           <mxGeometry height="46" width="832" x="150" y="743" as="geometry" />
         </mxCell>
-        <mxCell id="c86" parent="1" style="text;html=1;verticalAlign=top;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;fontSize=11;" value="&lt;b&gt;Instrucciones:&lt;/b&gt; lb, lh, lw, lbu, lhu (opcode 0000011) · addi, andi, ori, xori, slti, sltiu, slli, srli, srai (opcode 0010011) · jalr (opcode 1100111)&lt;br&gt;&lt;b&gt;Nota:&lt;/b&gt; slli, srli y srai usan inst[24:20] como &lt;i&gt;shamt&lt;/i&gt; e inst[31:25] como funct7 (inst[30] distingue srli de srai); de este inmediato solo se usan imm[4:0].&lt;br&gt;&lt;b&gt;Nota:&lt;/b&gt; lbu y lhu extienden con ceros el &lt;u&gt;dato leído&lt;/u&gt; de memoria, no el inmediato: la dirección siempre se calcula con el inmediato extendido en signo.&lt;br&gt;&lt;b&gt;Nota:&lt;/b&gt; sltiu también extiende el inmediato en signo; lo que se hace sin signo es la comparación." vertex="1">
+        <mxCell id="c86" parent="1" style="text;html=1;verticalAlign=top;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;fontSize=11;" value="&lt;b&gt;Instrucciones:&lt;/b&gt; lb, lh, lw, lbu, lhu (opcode 0000011) · addi, andi, ori, xori, slti, sltiu, slli, srli, srai (opcode 0010011) · jalr (opcode 1100111) · halt (opcode&amp;nbsp;1110011)&lt;br&gt;&lt;b&gt;Nota:&lt;/b&gt; slli, srli y srai usan inst[24:20] como &lt;i&gt;shamt&lt;/i&gt; e inst[31:25] como funct7 (inst[30] distingue srli de srai); de este inmediato solo se usan imm[4:0].&lt;br&gt;&lt;b&gt;Nota:&lt;/b&gt; lbu y lhu extienden con ceros el &lt;u&gt;dato leído&lt;/u&gt; de memoria, no el inmediato: la dirección siempre se calcula con el inmediato extendido en signo.&lt;br&gt;&lt;b&gt;Nota:&lt;/b&gt; sltiu también extiende el inmediato en signo; lo que se hace sin signo es la comparación." vertex="1">
           <mxGeometry height="114" width="832" x="150" y="799" as="geometry" />
         </mxCell>
         <mxCell id="c87" parent="1" style="line;strokeWidth=1;html=1;strokeColor=#cccccc;fillColor=none;" value="" vertex="1">
