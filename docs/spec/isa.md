@@ -33,7 +33,7 @@
 | beq | branch if equal | B-type | 1100011 | 000 | - | if (rs1 == rs2) PC += imm |
 | bne | branch if not equal | B-type | 1100011 | 001 | - | if (rs1 != rs2) PC += imm |
 | lui | load upper immediate | U-type | 0110111 | - | - | rd = imm << 12 |
-| #TBD | halt | - | #TBD | #TBD | #TBD | - |
+| halt (ebreak) | halt: stops fetch, flushes pipeline and warns the Debug Unit | I-type | 1110011 | 000 | - | stops fetch; when exits WB stage, halted = 1  |
 
 
 ## Formatos de instrucción y construcción del Inmediato
