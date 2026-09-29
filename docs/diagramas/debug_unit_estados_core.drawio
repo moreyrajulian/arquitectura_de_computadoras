@@ -1,0 +1,161 @@
+<mxfile host="Electron">
+  <diagram id="debug_unit_estados_core" name="debug_unit_estados_core">
+    <mxGraphModel dx="1471" dy="894" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1380" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t1" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=20;fontFamily=Helvetica;fontColor=#212121;align=left;verticalAlign=middle;spacing=2;fontStyle=1;" value="Debug Unit — Estados de ejecución del core" vertex="1">
+          <mxGeometry height="30" width="1300" x="30" y="14" as="geometry" />
+        </mxCell>
+        <mxCell id="t2" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=12;fontFamily=Helvetica;fontColor=#616161;align=left;verticalAlign=middle;spacing=2;fontStyle=0;" value="FSM propia de la Debug Unit que genera enable y core_rst. Es el campo state del bloque de estado (0 NO_PROG … 4 HALTED). El reloj nunca se detiene." vertex="1">
+          <mxGeometry height="20" width="1300" x="30" y="44" as="geometry" />
+        </mxCell>
+        <mxCell id="b3" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ECEFF1;strokeColor=#455A64;strokeWidth=1.8;fontSize=10.5;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;&lt;font style=&quot;font-size:12.5px&quot;&gt;NO_PROG&lt;/font&gt;&lt;/b&gt;&lt;br&gt;state = 0 · core en reset" vertex="1">
+          <mxGeometry height="72" width="180" x="60" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="b4" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=1.8;fontSize=10.5;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;&lt;font style=&quot;font-size:12.5px&quot;&gt;READY&lt;/font&gt;&lt;/b&gt;&lt;br&gt;state = 1 · PC = 0, pipeline vacío" vertex="1">
+          <mxGeometry height="72" width="180" x="380" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="b5" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;strokeWidth=1.8;fontSize=10.5;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;&lt;font style=&quot;font-size:12.5px&quot;&gt;RUNNING&lt;/font&gt;&lt;/b&gt;&lt;br&gt;state = 2 · enable = 1" vertex="1">
+          <mxGeometry height="72" width="180" x="720" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="b6" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=1.8;fontSize=10.5;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;&lt;font style=&quot;font-size:12.5px&quot;&gt;PAUSED&lt;/font&gt;&lt;/b&gt;&lt;br&gt;state = 3 · enable = 0" vertex="1">
+          <mxGeometry height="72" width="180" x="720" y="480" as="geometry" />
+        </mxCell>
+        <mxCell id="b7" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#AD1457;strokeWidth=1.8;fontSize=10.5;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;&lt;font style=&quot;font-size:12.5px&quot;&gt;HALTED&lt;/font&gt;&lt;/b&gt;&lt;br&gt;state = 4 · pipeline vacío" vertex="1">
+          <mxGeometry height="72" width="180" x="1060" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="b8" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#212121;strokeColor=#212121;strokeWidth=1;fontSize=12;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&amp;nbsp;" vertex="1">
+          <mxGeometry height="16" width="16" x="142" y="236" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.5;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150" y="252" as="sourcePoint" />
+            <mxPoint x="150" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t10" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=left;verticalAlign=middle;spacing=2;fontStyle=0;" value="reset de la placa" vertex="1">
+          <mxGeometry height="16.175" width="150" x="156" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="336" as="sourcePoint" />
+            <mxPoint x="380" y="336" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t12" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=11;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="LOAD ok" vertex="1">
+          <mxGeometry height="16.85" width="132" x="244" y="316" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="440" y="156" />
+            </Array>
+            <mxPoint x="440" y="300" as="sourcePoint" />
+            <mxPoint x="720" y="156" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t14" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=11;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="RUN / enable ← 1" vertex="1">
+          <mxGeometry height="16.85" width="260" x="450" y="134" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="510" y="516" />
+            </Array>
+            <mxPoint x="510" y="372" as="sourcePoint" />
+            <mxPoint x="720" y="516" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t16" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="STEP sin halt / pulso de enable" vertex="1">
+          <mxGeometry height="16.175" width="200" x="516" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="780" y="192" as="sourcePoint" />
+            <mxPoint x="780" y="480" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t18" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=right;verticalAlign=middle;spacing=2;fontStyle=0;" value="STOP /&lt;br&gt;enable ← 0" vertex="1">
+          <mxGeometry height="30.35" width="84" x="690" y="322" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="850" y="480" as="sourcePoint" />
+            <mxPoint x="850" y="192" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t20" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=left;verticalAlign=middle;spacing=2;fontStyle=0;" value="RUN /&lt;br&gt;enable ← 1" vertex="1">
+          <mxGeometry height="30.35" width="100" x="856" y="322" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="780" y="592" />
+              <mxPoint x="850" y="592" />
+            </Array>
+            <mxPoint x="780" y="552" as="sourcePoint" />
+            <mxPoint x="850" y="552" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t22" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="STEP sin halt / pulso de enable" vertex="1">
+          <mxGeometry height="16.175" width="230" x="700" y="596" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1150" y="516" />
+            </Array>
+            <mxPoint x="900" y="516" as="sourcePoint" />
+            <mxPoint x="1150" y="372" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t24" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="STEP y halt (HALT llegó a WB)" vertex="1">
+          <mxGeometry height="16.175" width="220" x="920" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="e25" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#6A1B9A;strokeWidth=2;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1150" y="156" />
+            </Array>
+            <mxPoint x="900" y="156" as="sourcePoint" />
+            <mxPoint x="1150" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t26" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=11;fontFamily=Helvetica;fontColor=#6A1B9A;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="halt / enable ← 0,&lt;br&gt;evt_pending ← 1 (EVT_HALTED)" vertex="1">
+          <mxGeometry height="31.700000000000003" width="300" x="906" y="116" as="geometry" />
+        </mxCell>
+        <mxCell id="b27" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#757575;strokeWidth=1.4;fontSize=10.5;fontFamily=Helvetica;fontColor=#616161;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;dashed=1;" value="desde cualquier estado" vertex="1">
+          <mxGeometry height="44" width="180" x="30" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="e28" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#C62828;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="660" as="sourcePoint" />
+            <mxPoint x="120" y="372" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t29" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#C62828;align=left;verticalAlign=middle;spacing=2;fontStyle=0;" value="LOAD con error&lt;br&gt;(CHK o timeout), o&lt;br&gt;RESET sin programa" vertex="1">
+          <mxGeometry height="44.525000000000006" width="200" x="126" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="b30" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#757575;strokeWidth=1.4;fontSize=10.5;fontFamily=Helvetica;fontColor=#616161;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;dashed=1;" value="desde cualquier estado" vertex="1">
+          <mxGeometry height="44" width="180" x="330" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="e31" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.8;endArrow=block;endFill=1;startArrow=none;startFill=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="420" y="660" as="sourcePoint" />
+            <mxPoint x="420" y="372" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t32" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=left;verticalAlign=middle;spacing=2;fontStyle=0;" value="LOAD ok&lt;br&gt;RESET" vertex="1">
+          <mxGeometry height="30.35" width="80" x="426" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="t33" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10;fontFamily=Helvetica;fontColor=#616161;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="(RESET solo si prog_valid)" vertex="1">
+          <mxGeometry height="15.5" width="180" x="330" y="706" as="geometry" />
+        </mxCell>
+        <mxCell id="b34" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#9E9E9E;strokeWidth=1.2;fontSize=11;fontFamily=Helvetica;fontColor=#212121;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;spacingTop=4;" value="&lt;b&gt;Salidas&lt;/b&gt;&lt;br&gt;enable = 1 si state = RUNNING, o durante el ciclo de STEP_PULSE&lt;br&gt;core_rst = 1 si state = NO_PROG, o mientras la FSM de protocolo está en LOAD_PREP … CLEAR&lt;br&gt;&amp;nbsp;&lt;br&gt;&lt;b&gt;Notas&lt;/b&gt;&lt;br&gt;• LOAD y RESET se aceptan en cualquier estado, también en RUNNING: detienen el core antes de tocar memoria (reprogramación&lt;br&gt;dinámica).&lt;br&gt;• RUN y STEP solo desde READY o PAUSED; en otro estado responden ERR_STATE sin cambiar nada.&lt;br&gt;• STOP fuera de RUNNING no cambia el estado (responde OK). En PAUSED el pipeline puede tener instrucciones en vuelo.&lt;br&gt;• READY → HALTED con un solo STEP no puede ocurrir: el HALT necesita al menos 5 ciclos para llegar a WB.&lt;br&gt;• La FSM de protocolo sigue atendiendo la UART en RUNNING, por eso STOP y STATUS funcionan mientras el core ejecuta." vertex="1">
+          <mxGeometry height="215" width="790" x="560" y="640" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
