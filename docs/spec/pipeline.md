@@ -116,8 +116,7 @@ bytes. La memoria se direcciona por palabra: `addr = pc_reg[AW+1:2]`.
 ### 3.4 Memoria de programa de lectura sincrónica
 La memoria de programa es una BRAM: **entrega el dato un ciclo después** de recibir la
 dirección. Se direcciona con `pc_reg`, y **su registro de salida hace de campo `instr`
-del registro IF/ID**. Decisión y alternativas en
-[`decisiones/001-memorias-sincronicas.md`](../decisiones/001-memorias-sincronicas.md).
+del registro IF/ID**.
 
 ```
 ciclo          t            t+1           t+2
@@ -177,17 +176,3 @@ Así se ahorran 32 bits por cada registro de segmentación.
 ## 9. Señales de control
 
 *Pendiente: lista con la etapa de origen y la de consumo de cada señal.*
-
----
-
-## 10. Relación con otros documentos
-
-| Tema | Dónde |
-|---|---|
-| Integración de memorias sincrónicas | [`decisiones/001-memorias-sincronicas.md`](../decisiones/001-memorias-sincronicas.md) |
-| Conflicto de lectura/escritura del banco de registros | *pendiente* (decisión 002) |
-| Codificación y recorrido de HALT | I-08 |
-| Detección de riesgos, stall y forwarding | I-05 |
-| Resolución de saltos | I-09 |
-| Tamaños y direcciones de memoria | I-07 (`memoria.md`) |
-| Contenido del dump de latches | I-06 (`protocolo_debug.md`) |
