@@ -109,12 +109,6 @@ pc_reg <= pc_next     solo si en_pc = 1
 IF no necesita saber qué tipo de salto hubo: recibe la dirección ya calculada.
 Valor de reset del PC: `0x0000_0000` (a confirmar en I-07).
 
-<<<<<<< HEAD
-### 3.4 Memoria de programa de lectura sincrónica
-La memoria de programa es una BRAM: **entrega el dato un ciclo después** de recibir la
-dirección. Se direcciona con `pc_reg`, y **su registro de salida hace de campo `instr`
-del registro IF/ID**.
-=======
 ### 3.2 Memoria de programa
 BRAM de lectura sincrónica: **entrega el dato un ciclo después** de recibir la dirección.
 Se direcciona con `pc_reg[AW+1:2]` (las instrucciones están alineadas a 4 bytes) y **su
@@ -554,8 +548,4 @@ para saber que terminó la ejecución (I-06).
 
 ## 9. Señales de control
 
-<<<<<<< HEAD
 *Pendiente: lista con la etapa de origen y la de consumo de cada señal.*
-=======
-*Pendiente: lista con la etapa de origen y la de consumo de cada señal.*
->>>>>>> 04948fd (docs(pipeline): etapas ID, EX, MEM y WB)
