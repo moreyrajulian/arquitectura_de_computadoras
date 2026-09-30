@@ -1,8 +1,5 @@
 # Arquitectura del pipeline y camino de datos
 
-> **Estado:** borrador — issue I-04 (#7). Las secciones marcadas *pendiente* se
-> completan en los próximos commits de la rama `docs/7_pipeline`.
-
 Este documento fija **qué hace cada etapa** del procesador y **qué información viaja
 entre ellas**, para poder codificar `rtl/pipeline/` sin dudas sobre las interfaces.
 Las instrucciones soportadas y su codificación están en [`isa.md`](isa.md).
@@ -36,6 +33,12 @@ core se hace con señales de *enable* (ver `docs/diagramas/sistema.png`).
 Los bloques `██` son los **registros de segmentación** (los "latches intermedios" de la
 consigna): guardan todo lo que una instrucción necesita para las etapas siguientes
 mientras pasa de una etapa a otra.
+
+El camino de datos completo, con todos los bloques, campos y señales de control de este
+documento, está en [`docs/diagramas/datapath.png`](../diagramas/datapath.png) (fuente
+editable: `datapath.drawio`):
+
+![Camino de datos del pipeline](../diagramas/datapath.png)
 
 ---
 
@@ -109,18 +112,11 @@ pc_reg <= pc_next     solo si en_pc = 1
 IF no necesita saber qué tipo de salto hubo: recibe la dirección ya calculada.
 Valor de reset del PC: `0x0000_0000` (a confirmar en I-07).
 
-<<<<<<< HEAD
-### 3.4 Memoria de programa de lectura sincrónica
-La memoria de programa es una BRAM: **entrega el dato un ciclo después** de recibir la
-dirección. Se direcciona con `pc_reg`, y **su registro de salida hace de campo `instr`
-del registro IF/ID**.
-=======
 ### 3.2 Memoria de programa
 BRAM de lectura sincrónica: **entrega el dato un ciclo después** de recibir la dirección.
 Se direcciona con `pc_reg[AW+1:2]` (las instrucciones están alineadas a 4 bytes) y **su
 registro de salida hace de campo `instr` de IF/ID**, así que no se agrega ningún ciclo
 (decisión [002](../decisiones/002-memorias-sincronicas.md)):
->>>>>>> 04948fd (docs(pipeline): etapas ID, EX, MEM y WB)
 
 ```
 ciclo          t            t+1           t+2
@@ -323,7 +319,7 @@ En las I aritméticas, `instr[30]` es un bit del inmediato. Solo se usa en `srli
 | `id_ex_funct3` | 3 | Tipo de salto; tamaño y signo del acceso a memoria. |
 | `alu_ctrl`, `alu_src_a`, `alu_src_b` | 4 + 1 + 1 | Control de EX. |
 | `branch`, `jal`, `jalr` | 3 | Control de salto. |
-| `mem_read`, `mem_write` | 2 | Control de MEM. |
+| `mem_read`, `mem_write` | 2 | Es un load (para riesgos) y control de MEM. |
 | `reg_write`, `mem_to_reg` | 2 | Control de WB. |
 | `id_ex_halt` | 1 | HALT en vuelo. |
 | **Total** | **161** | |
@@ -360,14 +356,19 @@ Primero, el **forwarding**: el valor de `rs1` o `rs2` que se leyó en ID puede e
 porque una instrucción anterior que todavía no llegó a WB lo está modificando. Cada
 operando pasa por un mux de tres entradas:
 
-| Entrada | Valor | Cuándo se usa |
+| `fwd_a` / `fwd_b` | Valor | Cuándo se usa |
 |---|---|---|
-| 0 | `id_ex_rs1_data` / `id_ex_rs2_data` | Caso normal: el valor leído en ID es el correcto. |
-| 1 | `ex_mem_result` | La instrucción anterior (ahora en MEM) escribe ese registro. |
-| 2 | `wb_data` | La instrucción de hace dos (ahora en WB) escribe ese registro. |
+| `00` | `id_ex_rs1_data` / `id_ex_rs2_data` | Caso normal: el valor leído en ID es el correcto. |
+| `10` | `ex_mem_result` | La instrucción anterior (ahora en MEM) escribe ese registro. |
+| `01` | `wb_data` | La instrucción de hace dos (ahora en WB) escribe ese registro. |
 
-Los selectores los genera la unidad de forwarding (I-05). A la salida de estos muxes
-están `rs1_val` y `rs2_val`, los valores **correctos** de los registros fuente.
+Los selectores los genera la unidad de forwarding (I-05). La codificación es la habitual
+para esta unidad: `10` toma el dato de EX/MEM y `01` el de MEM/WB. Si las dos
+instrucciones anteriores escriben el mismo registro, gana EX/MEM porque es el valor más
+reciente.
+
+A la salida de estos muxes están `rs1_val` y `rs2_val`, los valores **correctos** de los
+registros fuente.
 
 Después, los operandos de la ALU:
 
@@ -534,7 +535,7 @@ wb_rd        = mem_wb_rd
 ```
 
 Estas tres señales van al puerto de escritura del banco de registros, en ID (§4.2).
-`wb_data` también es la entrada 2 de los muxes de forwarding de EX (§5.1).
+`wb_data` también es la entrada `01` de los muxes de forwarding de EX (§5.1).
 
 ### 7.3 Registro `halted`
 Cuando un HALT llega a WB, ya no puede ser anulado por ningún salto. En ese momento se
@@ -550,12 +551,120 @@ para saber que terminó la ejecución (I-06).
 
 ## 8. Registros de segmentación
 
-*Pendiente: tabla completa de IF/ID, ID/EX, EX/MEM y MEM/WB.*
+Contenido completo de los cuatro registros. **Lo produce** es el bloque que calcula el
+valor; **Lo usa** es quién lo lee desde ese registro. Los campos que dicen "pasa" no se
+usan en la etapa siguiente: solo se copian al próximo registro.
+
+Todos los registros tienen las entradas `rst`, `en` y `flush` de §2.
+
+### IF/ID — 65 bits
+
+| Campo | Ancho | Lo produce | Lo usa |
+|---|---|---|---|
+| `if_id_valid` | 1 | IF | ID (anula el control si vale 0) |
+| `if_id_pc` | 32 | IF: `pc_reg` | pasa |
+| `if_id_instr` | 32 | IF: memoria de programa (salida registrada de la BRAM) | ID: campos, generador de inmediatos, control |
+
+### ID/EX — 161 bits
+
+| Campo | Ancho | Lo produce | Lo usa |
+|---|---|---|---|
+| `id_ex_valid` | 1 | ID (copia de `if_id_valid`) | pasa |
+| `id_ex_pc` | 32 | IF (pasa por ID) | EX: `PC + imm`, `PC + 4` |
+| `id_ex_rs1_data` | 32 | ID: banco de registros | EX: mux de forwarding A |
+| `id_ex_rs2_data` | 32 | ID: banco de registros | EX: mux de forwarding B |
+| `id_ex_imm` | 32 | ID: generador de inmediatos | EX: mux B, `PC + imm` |
+| `id_ex_rs1` | 5 | ID: campo `rs1` | unidad de forwarding (I-05) |
+| `id_ex_rs2` | 5 | ID: campo `rs2` | unidad de forwarding (I-05) |
+| `id_ex_rd` | 5 | ID: campo `rd` | detección de load-use (I-05); pasa |
+| `id_ex_funct3` | 3 | ID: campo `funct3` | EX: tipo de salto; pasa |
+| `alu_ctrl` | 4 | ID: control | EX: ALU |
+| `alu_src_a` | 1 | ID: control | EX: mux A |
+| `alu_src_b` | 1 | ID: control | EX: mux B |
+| `branch` | 1 | ID: control | EX: resolución de saltos |
+| `jal` | 1 | ID: control | EX: resolución de saltos, mux de resultado |
+| `jalr` | 1 | ID: control | EX: resolución de saltos, mux de resultado |
+| `mem_read` | 1 | ID: control | detección de load-use (I-05) |
+| `mem_write` | 1 | ID: control | pasa |
+| `reg_write` | 1 | ID: control | pasa |
+| `mem_to_reg` | 1 | ID: control | pasa |
+| `id_ex_halt` | 1 | ID: control | IF (`stop_fetch`); pasa |
+
+### EX/MEM — 109 bits
+
+| Campo | Ancho | Lo produce | Lo usa |
+|---|---|---|---|
+| `ex_mem_valid` | 1 | EX (copia) | pasa |
+| `ex_mem_pc` | 32 | IF (pasa) | solo dump |
+| `ex_mem_result` | 32 | EX: mux de resultado | MEM: dirección; forwarding (entrada `10`); pasa |
+| `ex_mem_store_data` | 32 | EX: mux de forwarding B | MEM: dato a escribir |
+| `ex_mem_rd` | 5 | ID (pasa) | unidad de forwarding (I-05); pasa |
+| `ex_mem_funct3` | 3 | ID (pasa) | MEM: tamaño del store; pasa |
+| `mem_write` | 1 | ID (pasa) | MEM: `we` |
+| `reg_write` | 1 | ID (pasa) | unidad de forwarding (I-05); pasa |
+| `mem_to_reg` | 1 | ID (pasa) | pasa |
+| `ex_mem_halt` | 1 | ID (pasa) | IF (`stop_fetch`); pasa |
+
+### MEM/WB — 110 bits
+
+| Campo | Ancho | Lo produce | Lo usa |
+|---|---|---|---|
+| `mem_wb_valid` | 1 | MEM (copia) | WB: `halted` |
+| `mem_wb_pc` | 32 | IF (pasa) | solo dump |
+| `mem_wb_result` | 32 | EX (pasa) | WB: mux de write-back |
+| `mem_wb_read_data` | 32 | MEM: memoria de datos (salida registrada de la BRAM) | WB: extensión del load |
+| `mem_wb_rd` | 5 | ID (pasa) | WB: dirección de escritura; forwarding (I-05) |
+| `mem_wb_funct3` | 3 | ID (pasa) | WB: extensión del load |
+| `mem_wb_offset` | 2 | MEM: `result[1:0]` | WB: extensión del load |
+| `reg_write` | 1 | ID (pasa) | WB: habilita la escritura; forwarding (I-05) |
+| `mem_to_reg` | 1 | ID (pasa) | WB: mux de write-back |
+| `mem_wb_halt` | 1 | ID (pasa) | IF (`stop_fetch`); WB: `halted` |
+
+### Resumen
+
+| Registro | Bits | En flip-flops | En la BRAM |
+|---|---|---|---|
+| IF/ID | 65 | 33 | 32 (`instr`) |
+| ID/EX | 161 | 161 | — |
+| EX/MEM | 109 | 109 | — |
+| MEM/WB | 110 | 78 | 32 (`read_data`) |
+| **Total** | **445** | **381** | **64** |
+
+Es el contenido de los "latches intermedios" que la Debug Unit tiene que enviar a la PC
+(≈ 56 bytes empaquetado). El formato lo define I-06.
 
 ## 9. Señales de control
 
-<<<<<<< HEAD
-*Pendiente: lista con la etapa de origen y la de consumo de cada señal.*
-=======
-*Pendiente: lista con la etapa de origen y la de consumo de cada señal.*
->>>>>>> 04948fd (docs(pipeline): etapas ID, EX, MEM y WB)
+### 9.1 Recorrido
+Todas las señales de control nacen en la unidad de control de ID (§4.4), viajan por los
+registros de segmentación hasta la etapa que las usa, y ahí dejan de viajar:
+
+| Señal | ID/EX | EX/MEM | MEM/WB | Se consume en |
+|---|:---:|:---:|:---:|---|
+| `imm_sel` | | | | ID: generador de inmediatos (no viaja) |
+| `alu_ctrl` | ● | | | EX: ALU |
+| `alu_src_a`, `alu_src_b` | ● | | | EX: muxes de operandos |
+| `branch`, `jal`, `jalr` | ● | | | EX: resolución de saltos (`jal`/`jalr` también en el mux de resultado) |
+| `mem_read` | ● | | | ID: detección de load-use, leyendo ID/EX |
+| `mem_write` | ● | ● | | MEM: `we` de la memoria de datos |
+| `reg_write` | ● | ● | ● | WB: escritura del banco; forwarding lee sus copias en EX/MEM y MEM/WB |
+| `mem_to_reg` | ● | ● | ● | WB: mux de write-back |
+| `halt` | ● | ● | ● | IF: `stop_fetch` (todas las copias); WB: `halted` |
+| `funct3`* | ● | ● | ● | EX: tipo de salto; MEM: tamaño del store; WB: tamaño y signo del load |
+| `valid`* | ● | ● | ● | todas las etapas (burbujas y dump) |
+
+\* No salen de la unidad de control: `funct3` es un campo de la instrucción y `valid`
+nace en IF. Se incluyen porque viajan y actúan como control.
+
+### 9.2 Señales de control del pipeline
+Además de las que genera ID, hay señales que controlan el pipeline en sí. No viajan en
+los registros de segmentación: se calculan en el ciclo y actúan en el ciclo.
+
+| Señal | Ancho | Se genera | Se consume | Definida en |
+|---|---|---|---|---|
+| `redirect`, `redirect_pc` | 1 + 32 | EX: resolución de saltos | IF: mux de próximo PC | §5.3 / I-09 |
+| `stop_fetch` | 1 | OR de los bits `halt` y `halted` | IF: mux de próximo PC | §3.4 |
+| `fwd_a`, `fwd_b` | 2 + 2 | unidad de forwarding | EX: muxes de forwarding | I-05 |
+| `en_pc`, `en_*` | 1 c/u | detección de riesgos y Debug Unit | IF y cada registro de segmentación | I-05 / I-06 |
+| `flush_*` | 1 c/u | resolución de saltos y detección de riesgos | cada registro de segmentación | I-05 / I-09 |
+| `halted` | 1 | WB (registro) | IF (`stop_fetch`) y Debug Unit | §7.3 / I-06 |
