@@ -1,6 +1,6 @@
 # 001 - Codificación y comportamiento de la instrucción HALT
 
-- **Estado:** propuesta
+- **Estado:** Aceptada
 - **Fecha:** 2026-09-28
 - **Autores:** Moreyra, Julián - Costamagna, Matias
 
