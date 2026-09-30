@@ -40,7 +40,7 @@ Clock Wizard (ver `docs/timing/`).
 
 Un error menor al 2 % es seguro para 8N1.
 
-> **Ojo con el TP2:** `fpga/tp2_uart/top.v` usa `DVSR = 326` y el comentario dice
+> **Error en el TP2:** `fpga/tp2_uart/top.v` usa `DVSR = 326` y el comentario dice
 > "50 MHz, 9600 baud", pero la Basys 3 tiene 100 MHz: 100 MHz / (16 × 326) ≈ **19 172 baud**,
 > es decir, 19200, que coincide con `serial_comm.py`. Conviene corregir ese comentario.
 
