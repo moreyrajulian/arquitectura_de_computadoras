@@ -1,6 +1,6 @@
 # 010 - Detección de load-use conservadora y sin forwarding hacia MEM
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-02
 - **Autores:** Costamagna, Matías
 

@@ -145,8 +145,8 @@ unidad de riesgos.
 | Flush por salto | Burbujas en IF/ID e ID/EX con el PC fuera de secuencia respecto del volcado anterior |
 | HALT en vuelo | Bit `halt` en algún latch |
 
-Las reglas siguen las ecuaciones de `pipeline.md` §10 (unidad de riesgos, I-05); se ajustan si
-I-09 cambia la etapa de resolución de saltos.
+Las reglas siguen las ecuaciones de `pipeline.md` §10 (unidad de riesgos, I-05) y la resolución
+de saltos en EX (decisión 012).
 
 ### 4.4 Errores durante un paso
 

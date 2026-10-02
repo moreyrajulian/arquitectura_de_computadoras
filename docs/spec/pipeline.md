@@ -1,7 +1,8 @@
 # Arquitectura del pipeline y camino de datos
 
 > **Estado:** completo para revisión — issue I-04 (#7); la §10 (riesgos y su control) es
-> la issue I-05. Lo que depende de otras issues (I-06, I-07, I-09) está marcado en cada sección.
+> la issue I-05 y la resolución de saltos (§5.3, §10.5) la I-09, decisión [012](../decisiones/012_resolucion-saltos.md). Lo que
+> depende de otras issues (I-06, I-07) está marcado en cada sección.
 
 Este documento fija **qué hace cada etapa** del procesador y **qué información viaja
 entre ellas**, para poder codificar `rtl/pipeline/` sin dudas sobre las interfaces.
@@ -23,7 +24,7 @@ core se hace con señales de *enable* (ver `docs/diagramas/sistema.png`).
 | **MEM** | Lee o escribe la memoria de datos | memoria de datos, alineación y máscara de bytes |
 | **WB** | Elige el valor final y lo escribe en `rd` | extensión de loads, mux de write-back |
 
-¹ La etapa donde se resuelven los saltos se fija en I-09; este documento asume EX.
+¹ Los saltos se resuelven en EX, sin predicción (decisión [012](../decisiones/012_resolucion-saltos.md)).
 
 ```
         ┌────┐  IF/ID  ┌────┐  ID/EX  ┌────┐  EX/MEM  ┌─────┐  MEM/WB  ┌────┐
@@ -116,8 +117,8 @@ pc_reg <= pc_next     solo si en_pc = 1
 
 | Señal | Ancho | Viene de | Significado |
 |---|---|---|---|
-| `redirect` | 1 | etapa de salto (I-09) | Hay que cambiar el flujo: `beq`/`bne` tomado, `jal` o `jalr`. |
-| `redirect_pc` | 32 | etapa de salto (I-09) | Destino ya calculado: `PC + imm` o `(rs1 + imm) & ~1`. |
+| `redirect` | 1 | EX: resolución de saltos (§5.3) | Hay que cambiar el flujo: `beq`/`bne` tomado, `jal` o `jalr`. |
+| `redirect_pc` | 32 | EX: resolución de saltos (§5.3) | Destino ya calculado: `PC + imm` o `(rs1 + imm) & ~1`. |
 | `stop_fetch` | 1 | §3.4 | Hay un HALT en el pipeline. Congela el PC y, a través de `flush_if_id` (§3.3), invalida lo que entra a IF/ID. |
 | `en_pc` | 1 | §10.4 | En 0 el PC no avanza (stall o core detenido). |
 
@@ -449,9 +450,12 @@ redirect_pc = jalr ? {alu_out[31:1], 1'b0}       (rs1 + imm, con el bit 0 en cer
 ```
 
 - La ALU compara con una resta: `beq` salta si `rs1 - rs2 = 0`.
+- No hay predicción: mientras el salto llega a EX, IF sigue buscando `PC + 4`.
 - Cuando `redirect = 1`, IF y ID contienen instrucciones que se buscaron siguiendo
-  `PC + 4` y no deben ejecutarse: se hace flush de IF/ID y de ID/EX (§10.5). Un salto
-  tomado cuesta 2 ciclos. La etapa de resolución y su costo se revisan en I-09.
+  `PC + 4` y no deben ejecutarse: se hace flush de IF/ID y de ID/EX (§10.5).
+- **Penalización:** un salto tomado (`beq`/`bne` tomado, `jal`, `jalr`) pierde **2 ciclos**;
+  uno no tomado, **0** (tabla completa en §10.5).
+- Por qué en EX y no en ID ni con predicción: decisión [012](../decisiones/012_resolucion-saltos.md).
 
 ### 5.4 Resultado
 ```
@@ -476,9 +480,21 @@ memoria.
 | `ex_mem_halt` | 1 | HALT en vuelo. |
 | **Total** | **109** | |
 
-> **Nota de tiempo.** El camino más largo del diseño probablemente pase por EX: dato
-> reenviado desde WB → mux de forwarding → ALU → decisión de salto → mux de próximo PC.
-> Es el primer candidato a revisar en el análisis de tiempo.
+> **Hipótesis de camino crítico** (decisión [012](../decisiones/012_resolucion-saltos.md), a verificar en la integración con el
+> reporte de timing de Vivado). El camino más largo sería el de la decisión de salto, que
+> termina en `pc_reg`:
+>
+> ```
+> BRAM de datos (load en WB) → extensión del load → mux de WB → mux de forwarding (01)
+>   → ALU (resta) → zero → taken → redirect → mux de próximo PC → pc_reg
+> ```
+>
+> `redirect` además maneja el flush de IF/ID e ID/EX; para acotar su fanout, el flush solo
+> pone en 0 `valid` y los campos de control (los datos de una burbuja no importan, §2). Si el
+> reporte confirma que este camino limita la frecuencia, las medidas en orden de costo son:
+> comparar con un comparador de igualdad en lugar de la resta y `zero` (solo hay `beq` y
+> `bne`), registrar `redirect` y aplicarlo desde MEM (3 ciclos de penalización), o bajar la
+> frecuencia.
 
 ---
 
@@ -716,11 +732,11 @@ los registros de segmentación: se calculan en el ciclo y actúan en el ciclo.
 
 | Señal | Ancho | Se genera | Se consume | Definida en |
 |---|---|---|---|---|
-| `redirect`, `redirect_pc` | 1 + 32 | EX: resolución de saltos | IF: mux de próximo PC | §5.3 / I-09 |
+| `redirect`, `redirect_pc` | 1 + 32 | EX: resolución de saltos | IF: mux de próximo PC | §5.3 / decisión 012 |
 | `stop_fetch` | 1 | OR de los bits `halt` y `halted` | IF: mux de próximo PC y `flush_if_id` | §3.4 |
 | `fwd_a`, `fwd_b` | 2 + 2 | unidad de forwarding | EX: muxes de forwarding | §10.2 |
 | `en_pc`, `en_*` | 1 c/u | detección de riesgos y Debug Unit | IF y cada registro de segmentación | §10.4 / I-06 |
-| `flush_*` | 1 c/u | `flush_if_id = redirect \| stop_fetch`; `flush_id_ex = redirect \| stall` | IF/ID e ID/EX | §3.3 / §10.4 / I-09 |
+| `flush_*` | 1 c/u | `flush_if_id = redirect \| stop_fetch`; `flush_id_ex = redirect \| stall` | IF/ID e ID/EX | §3.3 / §10.4 / §10.5 |
 | `halted` | 1 | WB (registro) | IF (`stop_fetch`) y Debug Unit | §7.3 / I-06 |
 
 ---
@@ -742,7 +758,7 @@ editable: `control_riesgos.drawio`):
 | Datos, distancia 1 o 2 | `add x1,…` y enseguida `sub …, x1, …` | EX (unidad de forwarding) | forwarding desde EX/MEM o MEM/WB (§10.2) | 0 |
 | Datos, distancia 3 | `add x1,…` y tres después `or …, x1, …` | ID (banco de registros) | bypass interno del banco ([007](../decisiones/007_banco-registros.md)) | 0 |
 | Datos, carga-uso | `lw x1,…` y enseguida `add …, x1, …` | ID (detector de load-use) | 1 stall + forwarding desde MEM/WB (§10.3) | 1 ciclo |
-| Control | `beq`/`bne` tomado, `jal`, `jalr` | EX (resolución de saltos) | flush de IF/ID e ID/EX (§10.5) | 2 ciclos |
+| Control | `beq`/`bne` tomado, `jal`, `jalr` | EX (resolución de saltos) | flush de IF/ID e ID/EX (§10.5) | 2 ciclos (no tomado: 0) |
 | Estructural | — | — | no hay ninguno que obligue a frenar (§10.6) | 0 |
 
 Las dependencias WAR y WAW no son riesgos en este pipeline: las instrucciones avanzan en
@@ -809,7 +825,7 @@ load_use = id_ex_mem_read && id_ex_rd != 0 && if_id_valid &&
   son parte del inmediato), nunca de menos. Cada falso positivo cuesta un ciclo y no cambia
   el resultado. Un `sw` que guarda el dato recién cargado también se frena, aunque se podría
   resolver con forwarding hacia MEM; no se implementa. Ver decisión
-  [010](../decisiones/010_deteccion-load-use.md).
+  [011](../decisiones/011_deteccion-load-use.md).
 - Con `if_id_valid = 0` no hay nada que frenar: la burbuja no lee registros.
 - Después del stall, el load está en WB y la instrucción frenada en EX: el dato llega por
   `fwd = 01` (`wb_data`). Un load seguido de un salto que usa el dato funciona igual.
@@ -847,8 +863,9 @@ flush_ex_mem = flush_mem_wb = 0
 - **Una burbuja hacia adelante:** el stall frena IF e ID y deja avanzar al resto. La burbuja
   que entra a ID/EX es la que ocupa el lugar de la instrucción retenida.
 - **Stall y salto a la vez** (§3.3): gana el salto (`~redirect`). Con los saltos resueltos en
-  EX no puede ocurrir: la instrucción en EX es un load o un salto, no las dos cosas. El término
-  queda para que la regla de §3.3 siga valiendo si I-09 mueve la resolución a otra etapa.
+  EX (decisión [012](../decisiones/012_resolucion-saltos.md)) no puede ocurrir: la instrucción en EX es un load o un salto, no las
+  dos cosas. El término queda como protección, para que la regla de §3.3 siga valiendo si
+  alguna vez se agrega una redirección desde otra etapa.
 - **Stall con un HALT en ID:** `flush_if_id = 1` por `stop_fetch`, pero `en_if_id = 0`; como
   `en` tiene prioridad sobre `flush`, IF/ID conserva el HALT (§3.4).
 - **Core detenido en medio de un stall:** con `enable = 0` nada cambia, y al volver a 1 las
@@ -866,8 +883,20 @@ mismo flanco:
 - `flush_if_id = 1`: la que la BRAM está entregando queda con `if_id_valid = 0`.
 
 Ninguna de las dos llegó a escribir nada (los efectos se producen en MEM y WB), así que
-anularlas es suficiente. Es equivalente a predecir siempre "no tomado": un salto no tomado no
-cuesta nada y uno tomado (o `jal`/`jalr`) cuesta 2 ciclos. I-09 revisa la etapa de resolución.
+anularlas es suficiente. Es equivalente a predecir siempre "no tomado".
+
+| Caso | Ciclos perdidos |
+|---|:---:|
+| `beq`/`bne` no tomado | 0 |
+| `beq`/`bne` tomado | 2 |
+| `jal`, `jalr` | 2 |
+| Salto que usa el resultado de la instrucción anterior (aritmética) | +0 (forwarding a EX) |
+| Salto que usa el dato de un load inmediatamente anterior | +1 (stall de load-use, §10.3) |
+
+Resolver en ID ahorraría un ciclo en el salto tomado, pero agregaría un stall cuando el salto
+depende de la instrucción anterior, que es el caso más común; predecir los saltos hacia atrás
+como tomados ahorra un ciclo por iteración de lazo, a cambio de una segunda fuente de
+redirección. La comparación medida y el porqué de la elección están en la decisión [012](../decisiones/012_resolucion-saltos.md).
 
 Ejemplo ([`riesgo_salto.png`](../diagramas/riesgo_salto.png)):
 
@@ -913,7 +942,7 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 | Codificación y comportamiento de HALT | [`decisiones/001_instruccion-halt.md`](../decisiones/001_instruccion-halt.md) |
 | Integración de memorias sincrónicas | [`decisiones/009_memorias-sincronicas.md`](../decisiones/009_memorias-sincronicas.md) |
 | Banco de registros y conflicto ID/WB | [`decisiones/007_banco-registros.md`](../decisiones/007_banco-registros.md) |
-| Detección de riesgos, stall y forwarding | §10 y [`decisiones/010_deteccion-load-use.md`](../decisiones/010_deteccion-load-use.md) |
-| Resolución de saltos | I-09 |
+| Detección de riesgos, stall y forwarding | §10 y [`decisiones/011_deteccion-load-use.md`](../decisiones/011_deteccion-load-use.md) |
+| Resolución de saltos | §5.3, §10.5 y [`decisiones/012_resolucion-saltos.md`](../decisiones/012_resolucion-saltos.md) |
 | Tamaños y direcciones de memoria | I-07 (`memoria.md`) |
 | Contenido del dump de latches | I-06 (`protocolo_debug.md`) |
