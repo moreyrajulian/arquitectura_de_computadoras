@@ -1,5 +1,8 @@
 # Arquitectura del pipeline y camino de datos
 
+> **Estado:** completo para revisión — issue I-04 (#7). Lo que depende de otras issues
+> (I-05, I-06, I-07, I-09) está marcado en cada sección.
+
 Este documento fija **qué hace cada etapa** del procesador y **qué información viaja
 entre ellas**, para poder codificar `rtl/pipeline/` sin dudas sobre las interfaces.
 Las instrucciones soportadas y su codificación están en [`isa.md`](isa.md).
@@ -63,7 +66,11 @@ Todos tienen las mismas tres entradas:
 | `en` | En 0 conserva el contenido (stall o core detenido por la Debug Unit). |
 | `flush` | En 1 carga una burbuja en lugar de la instrucción entrante. |
 
-Quién maneja `en` y `flush` se define en I-05 (riesgos), I-06 (Debug Unit) e I-09 (saltos).
+Prioridad: `rst` > `en` > `flush`. Con `en = 0` el registro conserva su contenido aunque
+`flush` valga 1: un stall o el core detenido nunca pierden la instrucción retenida.
+
+Quién maneja `en` y `flush` se define en I-05 (riesgos), I-06 (Debug Unit) e I-09 (saltos);
+los flush que ya quedan fijados por este documento están en §3.3 y §9.2.
 
 ### Burbujas y bit `valid`
 Cada registro de segmentación lleva un bit `valid` que indica si contiene una
@@ -106,7 +113,7 @@ pc_reg <= pc_next     solo si en_pc = 1
 |---|---|---|---|
 | `redirect` | 1 | etapa de salto (I-09) | Hay que cambiar el flujo: `beq`/`bne` tomado, `jal` o `jalr`. |
 | `redirect_pc` | 32 | etapa de salto (I-09) | Destino ya calculado: `PC + imm` o `(rs1 + imm) & ~1`. |
-| `stop_fetch` | 1 | §3.4 | Hay un HALT en el pipeline. |
+| `stop_fetch` | 1 | §3.4 | Hay un HALT en el pipeline. Congela el PC y, a través de `flush_if_id` (§3.3), invalida lo que entra a IF/ID. |
 | `en_pc` | 1 | I-05 / I-06 | En 0 el PC no avanza. |
 
 IF no necesita saber qué tipo de salto hubo: recibe la dirección ya calculada.
@@ -116,7 +123,7 @@ Valor de reset del PC: `0x0000_0000` (a confirmar en I-07).
 BRAM de lectura sincrónica: **entrega el dato un ciclo después** de recibir la dirección.
 Se direcciona con `pc_reg[AW+1:2]` (las instrucciones están alineadas a 4 bytes) y **su
 registro de salida hace de campo `instr` de IF/ID**, así que no se agrega ningún ciclo
-(decisión [002](../decisiones/002-memorias-sincronicas.md)):
+(decisión [009](../decisiones/009_memorias-sincronicas.md)):
 
 ```
 ciclo          t            t+1           t+2
@@ -131,22 +138,64 @@ etapa ID       —            instr(p)      instr(p+4)
   cambia y la instrucción queda quieta.
 - **Flush:** la salida de la BRAM no se puede borrar, así que el flush pone
   `if_id_valid = 0`. ID ve `valid = 0` y trata la instrucción como burbuja (§4.4).
+  IF/ID tiene dos motivos de flush: un salto tomado (`redirect`) y una parada por HALT
+  (`stop_fetch`, §3.4).
 - **Reset:** pone `if_id_valid = 0`. La basura que tiene la BRAM a la salida después de un
   reset se ignora con el mismo mecanismo.
+- **Stall y salto a la vez:** si en el mismo ciclo hay un stall (I-05) y `redirect = 1`,
+  gana el salto: el stall se anula (`en = 1`), la instrucción que quería retener está en el
+  camino equivocado y se descarta con el flush, y el PC toma `redirect_pc`.
+
+En resumen:
+
+```
+flush_if_id  = redirect | stop_fetch
+if_id_valid <= ~(rst | flush_if_id)          (en cada flanco con en = 1; con en = 0 no cambia)
+```
 
 ### 3.4 Parada por HALT
-Mientras haya un HALT en el pipeline, IF deja de buscar instrucciones. Así detrás del
-HALT solo entran burbujas, y cuando llega a WB el pipeline queda vacío (decisión 001).
+Mientras haya un HALT en el pipeline, IF deja de buscar instrucciones. Así detrás del HALT
+solo entran burbujas, y cuando llega a WB el pipeline queda vacío
+(decisión [001](../decisiones/001_instruccion-halt.md)).
 
 ```
-stop_fetch = id_is_halt | id_ex_halt | ex_mem_halt | mem_wb_halt | halted
+stop_fetch  = id_is_halt | id_ex_halt | ex_mem_halt | mem_wb_halt | halted
 ```
 
-> **Propuesta de ajuste a la decisión 001 (a acordar):** la versión actual congela el PC
-> solo mientras el HALT está en ID. Cuando el HALT pasa a EX, la condición se apaga y se
-> buscan instrucciones posteriores al HALT. La fórmula de arriba mantiene la parada
-> mientras el HALT esté en cualquier etapa. Si un salto anterior lo anula, el flush lo
-> convierte en burbuja y su bit desaparece solo.
+`stop_fetch` actúa en dos lugares, y hacen falta los dos:
+
+1. **PC** (§3.1): `pc_next = pc_reg`, así que no se buscan instrucciones nuevas.
+2. **IF/ID** (§3.3): `flush_if_id = 1`, así que lo que entra a IF/ID es burbuja.
+
+El primero solo no alcanza. En el ciclo en que el HALT está en ID, `pc_reg` ya vale
+`h + 4` (h = dirección del HALT) y la BRAM ya está leyendo esa dirección: esa instrucción
+aparece en `if_id_instr` en el flanco siguiente y no se puede cancelar. Además, con el PC
+congelado, la BRAM vuelve a leer `h + 4` en cada ciclo. Sin el flush, esa instrucción
+entraría como válida y se repetiría ciclo tras ciclo.
+
+```
+ciclo              t            t+1          t+2          t+3          t+4
+HALT en            IF           ID           EX           MEM          WB → halted <= 1
+pc_reg             h            h+4          h+4          h+4          h+4
+BRAM lee           h            h+4          h+4          h+4          h+4
+stop_fetch         0            1            1            1            1
+IF/ID recibe       HALT (1)     h+4 (0)      h+4 (0)      h+4 (0)      h+4 (0)
+```
+
+(El número entre paréntesis es el `valid` que se guarda en IF/ID en el flanco del final
+de ese ciclo.)
+
+La parada mira el bit `halt` de todas las etapas porque el HALT está en ID un solo ciclo:
+si se mirara solo ID, en t+2 el PC volvería a avanzar y entrarían instrucciones posteriores
+al HALT. Al terminar t+4, `halted = 1` mantiene la parada.
+
+- **HALT en el camino equivocado:** si un salto anterior se toma, `redirect` gana en el
+  mux del PC (§3.1) y el flush convierte al HALT en burbuja. Su bit `halt` desaparece y
+  `stop_fetch` se apaga solo, sin lógica extra.
+- **HALT retenido por un stall:** la palabra del HALT (`0x0010_0073`) tiene `1` en el campo
+  `rs2` (es el inmediato de `ebreak`), así que un load a `x1` justo antes puede disparar la
+  detección de load-use (I-05). Como `en` tiene prioridad sobre `flush` (§2), IF/ID conserva
+  el HALT durante el stall y no se pierde.
 
 ### 3.5 Salidas hacia IF/ID
 
@@ -207,7 +256,7 @@ Cuando una instrucción no usa un campo, esos bits tienen otra cosa. Por ejemplo
 - **Escritura:** un puerto en el flanco de subida, **manejado por WB** (`wb_reg_write`,
   `wb_rd`, `wb_data`).
 - **Bypass:** si en el mismo ciclo WB escribe el registro que ID está leyendo, la lectura
-  entrega el dato nuevo (decisión [003](../decisiones/003-banco-registros.md)):
+  entrega el dato nuevo (decisión [007](../decisiones/007_banco-registros.md)):
 
   ```
   id_rs1_data = (rs1 == 0)                     ? 0       :
@@ -469,7 +518,7 @@ dirección con `offset = 2` pone el byte en los cuatro lugares y escribe solo co
 ### 6.3 Lectura (loads)
 La BRAM se lee siempre con la dirección de `ex_mem_result`, y la palabra completa aparece
 **en el ciclo siguiente**: su registro de salida hace de campo `mem_wb_read_data`
-(decisión [002](../decisiones/002-memorias-sincronicas.md)). Seleccionar el byte o la
+(decisión [009](../decisiones/009_memorias-sincronicas.md)). Seleccionar el byte o la
 media palabra y extenderla se hace en WB (§7.1). El `ena` de la BRAM va unido al `en`
 de MEM/WB, para que con el core detenido el dato leído no cambie.
 
@@ -663,8 +712,22 @@ los registros de segmentación: se calculan en el ciclo y actúan en el ciclo.
 | Señal | Ancho | Se genera | Se consume | Definida en |
 |---|---|---|---|---|
 | `redirect`, `redirect_pc` | 1 + 32 | EX: resolución de saltos | IF: mux de próximo PC | §5.3 / I-09 |
-| `stop_fetch` | 1 | OR de los bits `halt` y `halted` | IF: mux de próximo PC | §3.4 |
+| `stop_fetch` | 1 | OR de los bits `halt` y `halted` | IF: mux de próximo PC y `flush_if_id` | §3.4 |
 | `fwd_a`, `fwd_b` | 2 + 2 | unidad de forwarding | EX: muxes de forwarding | I-05 |
 | `en_pc`, `en_*` | 1 c/u | detección de riesgos y Debug Unit | IF y cada registro de segmentación | I-05 / I-06 |
-| `flush_*` | 1 c/u | resolución de saltos y detección de riesgos | cada registro de segmentación | I-05 / I-09 |
+| `flush_*` | 1 c/u | `flush_if_id = redirect \| stop_fetch`; `flush_id_ex = redirect \| stall` | IF/ID e ID/EX | §3.3 / I-05 / I-09 |
 | `halted` | 1 | WB (registro) | IF (`stop_fetch`) y Debug Unit | §7.3 / I-06 |
+
+---
+
+## 10. Relación con otros documentos
+
+| Tema | Dónde |
+|---|---|
+| Codificación y comportamiento de HALT | [`decisiones/001_instruccion-halt.md`](../decisiones/001_instruccion-halt.md) |
+| Integración de memorias sincrónicas | [`decisiones/009_memorias-sincronicas.md`](../decisiones/009_memorias-sincronicas.md) |
+| Banco de registros y conflicto ID/WB | [`decisiones/007_banco-registros.md`](../decisiones/007_banco-registros.md) |
+| Detección de riesgos, stall y forwarding | I-05 |
+| Resolución de saltos | I-09 |
+| Tamaños y direcciones de memoria | I-07 (`memoria.md`) |
+| Contenido del dump de latches | I-06 (`protocolo_debug.md`) |

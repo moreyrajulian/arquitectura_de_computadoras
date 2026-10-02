@@ -1,4 +1,4 @@
-# 003 - Banco de registros: implementación y conflicto de lectura/escritura entre ID y WB
+# 007 - Banco de registros: implementación y conflicto de lectura/escritura entre ID y WB
 
 - **Estado:** propuesta
 - **Fecha:** 2026-09-29
@@ -49,6 +49,12 @@ Restricciones:
    - Ventajas: un solo flanco.
    - Desventajas: 38 flip-flops más y una entrada más en cada mux de forwarding. Complica
      la unidad de forwarding (I-05), que ya es de los bloques más delicados.
+
+### Implementación del almacenamiento
+1. **Flip-flops** (32 × 32 = 1024 FF, sobre 41 600 disponibles en la Basys 3). Lectura
+   asíncrona, cantidad arbitraria de puertos de lectura y reset a cero en un ciclo.
+2. **RAM distribuida (LUTRAM).** Usa menos recursos, pero cada puerto de lectura extra
+   duplica la memoria y **no se puede resetear** en un ciclo.
 
 ## Decisión
 - **Conflicto ID–WB: opción B (bypass interno).** Se descarta la opción A porque

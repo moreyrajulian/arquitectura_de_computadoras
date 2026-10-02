@@ -5,6 +5,7 @@
 | add | add | R-type | 0110011 | 000 | 0000000 | rd = rs1 + rs2 |
 | sub | substract | R-type | 0110011 | 000 | 0100000 | rd = rs1 - rs2 |
 | sll | shfit left logical | R-type | 0110011 | 001 | 0000000 | rd = rs1 << rs2[4:0] |
+| srl | shift right logical | R-type | 0110011 | 101 | 0000000 | rd = rs1 >> rs2[4:0] |
 | sra | shift right arithmetic | R-type | 0110011 | 101 | 0100000 | rd = rs1 >>a rs2[4:0] |
 | and | and | R-type | 0110011 | 111 | 0000000 | rd = rs1 & rs2 |
 | or | or | R-type | 0110011 | 110 | 0000000 | rd = rs1 | rs2 |
@@ -21,7 +22,7 @@
 | ori | or immediate | I-type | 0010011 | 110 | - | rd = rs1 | SignExt(imm) |
 | xori | exclusive or imm. | I-type | 0010011 | 100 | - | rd = rs1 ^ SignExt(imm) |
 | slti | set if less than imm. | I-type | 0010011 | 010 | - | rd = (rs1 < SignExt(imm)) ? 1 : 0 |
-| sltiu | set if less than imm. unsigned | I-type | 0010011 | 011 | - | rd = (rs1 < ZeroExt(imm)) ? 1 : 0 |
+| sltiu | set if less than imm. unsigned | I-type | 0010011 | 011 | - | rd = (rs1 <u SignExt(imm)) ? 1 : 0 |
 | slli | shfit left log. imm. | I-type | 0010011 | 001 | 0000000 | rd = rs1 << shamt |
 | srli | shfit right log. imm. | I-type | 0010011 | 101 | 0000000 |  rd = rs1 >> shamt |
 | srai | shift right arith. imm | I-type | 0010011 | 101 | 0100000 | rd = rs1 >>a shamt |
@@ -40,7 +41,7 @@
 
 La columna de _Type_ de la tabla indica el formato de cada instrucción. La figura muestra los seis formatos (R, I, S, B, U, J) y, para cada formato con inmediato, de qué bits de la instrucción sale cada bit del inmediato de 32 bits que entrega el extensor. Los colores identifican los bits de origen en la instrucción y son los mismos en todos los formatos.
 
-![Formatos de instrucción](./docs/diagramas/formatos.png)
+![Formatos de instrucción](../diagramas/formatos.png)
 
 Fuente editable: `docs/diagramas/formatos.drawio`
 
