@@ -7,7 +7,7 @@ cambia algo de este documento, tiene que cambiar el RTL y el cliente de la PC en
 |---|---|
 | **Versión del protocolo** | 1 (la devuelve el comando `INFO`) |
 | **Estado** | Propuesta, pendiente de revisión |
-| **Depende de** | [`isa.md`](isa.md) (codificación del HALT), `memoria.md` (tamaños), `pipeline.md` (contenido de los latches) |
+| **Depende de** | [`isa.md`](isa.md) (codificación del HALT), [`memoria.md`](memoria.md) (tamaños, puertos B y avisos de acceso), `pipeline.md` (contenido de los latches) |
 | **Diagramas** | [`sistema`](../diagramas/sistema.png), secuencias `protocolo_*.png`, FSM `debug_unit_*.png` |
 
 ## 1. Capa física: UART
@@ -160,7 +160,7 @@ Lo devuelven `STATUS`, `LOAD`, `RESET`, `STEP`, `STOP`, `EVT_HALTED` y es el com
 | Offset | Tamaño | Campo | Contenido |
 |---|---|---|---|
 | 0 | 1 | `state` | Estado de ejecución: 0 `NO_PROG`, 1 `READY`, 2 `RUNNING`, 3 `PAUSED`, 4 `HALTED` |
-| 1 | 1 | `flags` | bit 0 `prog_valid`, bit 1 `halted` (HALT llegó a WB), bits 7:2 en 0 |
+| 1 | 1 | `flags` | bit 0 `prog_valid`, bit 1 `halted` (HALT llegó a WB), bit 2 `imem_fault`, bit 3 `dmem_oob`, bit 4 `dmem_misaligned` (avisos de acceso, [`memoria.md`](memoria.md) §6), bits 7:5 en 0 |
 | 2 | 2 | `dmem_used` | Palabras de la memoria de datos escritas desde el último `RESET`/`LOAD` |
 | 4 | 4 | `pc` | Valor del PC (dirección que busca IF en el próximo ciclo) |
 | 8 | 4 | `cycles` | Ciclos ejecutados (con `enable = 1`) desde el último `RESET`/`LOAD` |
@@ -170,8 +170,8 @@ Lo devuelven `STATUS`, `LOAD`, `RESET`, `STEP`, `STOP`, `EVT_HALTED` y es el com
 | Offset | Tamaño | Campo |
 |---|---|---|
 | 0 | 1 | `proto_version` (= 1) |
-| 1 | 2 | `imem_words`: tamaño de la memoria de programa en palabras |
-| 3 | 2 | `dmem_words`: tamaño de la memoria de datos en palabras |
+| 1 | 2 | `imem_words`: tamaño de la memoria de programa en palabras (1024, [`memoria.md`](memoria.md)) |
+| 3 | 2 | `dmem_words`: tamaño de la memoria de datos en palabras (1024) |
 | 5 | 4 | Palabras de cada latch, un byte por latch: IF/ID, ID/EX, EX/MEM, MEM/WB |
 | 9 | 4 | `clk_khz`: frecuencia del core en kHz (para pasar ciclos a tiempo) |
 
@@ -189,7 +189,8 @@ programa y cómo partir los latches. Así el cliente no tiene constantes duplica
 Qué hace, en orden:
 
 1. Al aceptar el encabezado: `enable = 0`, `core_rst = 1`, `prog_valid = 0`.
-2. Por cada 4 bytes recibidos escribe `imem[i]` por el puerto B de la BRAM.
+2. Por cada 4 bytes recibidos escribe `imem[i]` por el puerto B de la BRAM
+   (señales y tiempos en [`memoria.md`](memoria.md) §4).
 3. Al recibir el `CHK`:
    - **Correcto:** llena `imem[N .. imem_words−1]` con HALT (`0x00100073`), pone en cero la
      memoria de datos y el mapa de palabras usadas, pone `cycles = 0` y libera `core_rst`
@@ -261,7 +262,9 @@ Todas requieren que el core **no esté en `RUNNING`** (si no, la foto no sería 
   interfaz lo necesita para dibujar el pipeline.
 - **`READ_DMEM`**: payload `addr` (4 B, dirección en bytes, alineada a palabra) y `count`
   (2 B, palabras). Responde `count` palabras. Si `addr` no está alineada, `count = 0` o el
-  rango se sale de la memoria: `ERR_ADDR`.
+  rango se sale de la memoria (`addr + 4·count > 4·dmem_words`): `ERR_ADDR`. La Debug Unit
+  valida estrictamente; el alias de direcciones fuera de rango es solo del core
+  ([`memoria.md`](memoria.md) §6).
 - **`READ_DMEM_USED`**: "la memoria de datos usada" que pide la consigna. La Debug Unit
   mantiene un bit por palabra que se pone en 1 cuando el core escribe esa palabra (cualquier
   `sb`/`sh`/`sw`) y un contador `dmem_used` de palabras marcadas. Responde `dmem_used` pares

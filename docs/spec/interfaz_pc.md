@@ -42,7 +42,7 @@ stall por load-use (`lw x4` seguido de `add x5, x4, x1`). Tamaño mínimo de la 
 
 | Panel | Contenido | Fuente (comando) |
 |---|---|---|
-| Encabezado | Puerto, baudrate, archivo cargado y **estado del core** (`NO_PROG`, `READY`, `RUNNING`, `PAUSED`, `HALTED`) con un color por estado | Bloque de estado |
+| Encabezado | Puerto, baudrate, archivo cargado y **estado del core** (`NO_PROG`, `READY`, `RUNNING`, `PAUSED`, `HALTED`) con un color por estado. Advertencia si hay algún aviso de acceso (`imem_fault`, `dmem_oob`, `dmem_misaligned`: el programa accedió fuera de rango o desalineado, [`memoria.md`](memoria.md) §6) | Bloque de estado (`flags`) |
 | **Programa** | Dirección, palabra en hex, instrucción desensamblada y una etiqueta con la **etapa** en la que está cada instrucción (IF, ID, EX, MEM, WB). Pestaña «Fuente .s» con el texto original y sus comentarios. | Lo que se envió con `LOAD` + PC de cada latch |
 | **Pipeline** | Cinco cajas IF → WB con PC e instrucción de cada etapa. Burbujas en gris, etapas retenidas en naranja, HALT en rojo. Debajo, los riesgos inferidos (stall, forwarding) con la explicación. | `pc` del estado (IF) + `pc` y `valid` de cada latch |
 | **Latches intermedios** | IF/ID, ID/EX, EX/MEM y MEM/WB campo por campo, con los nombres de `pipeline.md`. Tecla `c`: alterna entre campos y las palabras de 32 bits crudas. | `READ_LATCHES` (dentro de `READ_ALL`) |
