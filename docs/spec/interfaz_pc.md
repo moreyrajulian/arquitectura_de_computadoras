@@ -166,14 +166,46 @@ se ven como una notificación (*toast* de Textual) y en el panel de Tramas.
    HALT?) · [Detener] [Seguir esperando]». Detener manda `STOP` y deja el core en `PAUSED`,
    desde donde se puede seguir paso a paso.
 
-## 6. Pendiente
+## 6. Requisitos por sistema
+
+La TUI tiene que andar igual en Windows (PC de los integrantes) y en Linux (laboratorio). Se
+prueba en las dos plataformas desde el comienzo de I-52.
+
+### Terminal
+
+| | Windows | Linux |
+|---|---|---|
+| Terminal | **Windows Terminal**. La consola clásica (`conhost`) no muestra bien los colores ni los caracteres de caja | Cualquier terminal del escritorio: GNOME Terminal, Konsole, kitty, Alacritty, WezTerm. **No** la consola de texto sin entorno gráfico (`Ctrl+Alt+F3`): solo tiene 8/16 colores y fuente limitada |
+| Colores | 24 bits | 24 bits en las terminales de arriba. En `xterm` o terminales viejas, 256 colores: Textual aproxima los tonos y funciona igual |
+| Codificación | UTF-8 (por defecto en Windows Terminal) | Locale UTF-8. Si los bordes salen como `?`: `export LANG=C.UTF-8` |
+| Dentro de `tmux` | — | Para tener 24 bits: `set -as terminal-features ",*:RGB"` en `.tmux.conf` |
+| Tamaño mínimo | 160 × 45 | 160 × 45 |
+
+**Símbolos:** en las columnas que tienen que quedar alineadas (programa, pipeline, latches,
+registros, historial) se usan solo ASCII y caracteres de caja (`─│╭╮╰╯`). Símbolos como `⏸` o
+`▶` se dibujan con ancho doble en algunas fuentes y desalinean las columnas; por eso la marca de
+etapa retenida es `*` y la fila actual del historial se marca con `>`.
+
+### Puerto serie
+
+| | Windows | Linux |
+|---|---|---|
+| Nombre | `COMn` | `/dev/ttyUSBn`. El FT2232 de la Basys 3 crea dos interfaces (JTAG y UART); la UART suele ser la segunda (`ttyUSB1`) |
+| Permisos | — | El usuario tiene que estar en el grupo `dialout` (`uucp` en Arch): `sudo usermod -aG dialout $USER` y volver a iniciar sesión. Si no, `Permission denied` al abrir el puerto |
+| Otros procesos | Cerrar cualquier terminal serie (PuTTY, el monitor serie de Vivado) | Además, **ModemManager** puede tomar el puerto al conectar la placa y mandar bytes. El protocolo lo tolera (en reposo la FPGA descarta todo hasta un `0xA5`) y el reintento del primer `INFO` lo cubre. Si molesta: `sudo systemctl stop ModemManager` |
+
+Para no depender del nombre, `F1` (Conectar) lista los puertos con
+`serial.tools.list_ports` y propone el que tenga el VID/PID de FTDI (`0403:6010`). También se
+puede pasar `--port` por línea de comandos.
+
+## 7. Pendiente
 
 - Los campos de cada latch se toman de `pipeline.md` (rama `docs/7_pipeline`); si cambian,
   se actualiza solo la tabla del decodificador en `model`.
 - La salida del ensamblador (formato de errores, `.hex`) se define con su issue.
 - El formato del JSON exportado se acuerda con el modelo de referencia (I-16).
 
-## 7. Checklist de revisión
+## 8. Checklist de revisión
 
 - [ ] TUI con Textual y separación `client` / `model` / `session` / `tui` (decisión 008)
 - [ ] Paneles del boceto: programa, pipeline, latches, registros, memoria usada, historial
@@ -181,3 +213,4 @@ se ven como una notificación (*toast* de Textual) y en el panel de Tramas.
 - [ ] Qué se muestra en cada paso y cómo se resaltan los cambios
 - [ ] Reglas para inferir stalls y forwarding
 - [ ] Comportamiento del modo continuo y del watchdog
+- [ ] Requisitos de terminal y de puerto serie en Windows y Linux
