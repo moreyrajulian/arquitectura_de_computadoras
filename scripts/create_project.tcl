@@ -39,6 +39,10 @@ if {[llength $xdcs] > 0} { add_files -fileset constrs_1 -norecurse $xdcs }
 set tbs [glob -nocomplain [file join $root tb unit *.v] [file join $root tb integration *.v]]
 if {[llength $tbs] > 0} { add_files -fileset sim_1 -norecurse $tbs }
 
+# Plantillas (_plantilla.v, _plantilla_tb.v, ...): no forman parte del diseño
+set plantillas [get_files -quiet -filter {NAME =~ "*/_*.v"}]
+if {[llength $plantillas] > 0} { remove_files $plantillas }
+
 # IP cores (Clock Wizard, BRAM, ...): cada ip/*.tcl los genera con create_ip
 foreach ip_script [lsort [glob -nocomplain [file join $root ip *.tcl]]] {
     puts "Generando IP: $ip_script"
