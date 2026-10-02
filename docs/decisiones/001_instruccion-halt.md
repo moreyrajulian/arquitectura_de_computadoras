@@ -1,7 +1,7 @@
 # 001 - Codificación y comportamiento de la instrucción HALT
 
 - **Estado:** Aceptada
-- **Fecha:** 2026-09-28
+- **Fecha:** 2026-09-28 (actualizada el 2026-10-02 en la revisión de la I-04)
 - **Autores:** Moreyra, Julián - Costamagna, Matias
 
 La consigna exige una instrucción de parada, pero HALT no existe en RV32I.
@@ -54,27 +54,74 @@ que cumple las tres condiciones de la consigna a la vez: no choca con lo
 implementado, tiene un mnemónico que el ensamblador genera y no exige
 herramientas propias. ECALL y el resto de SYSTEM quedan como no implementadas.
 
-### Comportamiento del hardware (versión inicial)
+### Comportamiento del hardware
 1. **Decodificación (ID):** se compara la palabra completa contra
-   `0x00100073` y se genera la señal `is_halt`. HALT viaja por el pipeline
-   como una instrucción sin efectos: `RegWrite=0`, `MemWrite=0`, `MemRead=0`,
-   sin salto.
-2. **Detener la búsqueda:** mientras `is_halt` esté activa en ID, el PC se
-   congela y IF inserta burbujas (NOP) en IF/ID. La instrucción que ya se
-   había buscado detrás del HALT se descarta.
+   `0x00100073` (solo si `if_id_valid = 1`) y se genera la señal `is_halt`
+   (`id_is_halt` en `pipeline.md`). HALT viaja por el pipeline como una
+   instrucción sin efectos: `RegWrite=0`, `MemWrite=0`, `MemRead=0`, sin
+   salto. Lo único que lleva es su bit `halt`, que se copia en ID/EX, EX/MEM y
+   MEM/WB.
+2. **Detener la búsqueda:** mientras haya un HALT en cualquier etapa,
+   `stop_fetch` vale 1:
+
+   ```
+   stop_fetch  = id_is_halt | id_ex_halt | ex_mem_halt | mem_wb_halt | halted
+   flush_if_id = redirect | stop_fetch
+   ```
+
+   `stop_fetch` congela el PC (`pc_next = pc_reg`) y además hace flush de IF/ID:
+   todo lo que entra a IF/ID detrás del HALT entra con `valid = 0`
+   (`pipeline.md` §3.3 y §3.4).
 3. **Drenar el pipeline:** las instrucciones anteriores al HALT siguen
    avanzando y completan sus etapas (incluidos saltos, loads y stores) con
    normalidad.
-4. **Cancelación por salto anterior:** el congelamiento del PC es
-   combinacional (depende de `is_halt` en ID) y no se latchea todavía. Si un
-   branch/jalr más viejo se resuelve como tomado, el flush habitual descarta
-   ese HALT y la búsqueda se reanuda en el destino.
+4. **Cancelación por salto anterior:** `stop_fetch` es combinacional: depende
+   de los bits `halt` que están en el pipeline en ese ciclo. Si un
+   branch/jal/jalr más viejo se resuelve como tomado, `redirect` tiene
+   prioridad en el mux del PC, el flush convierte al HALT en burbuja, su bit
+   `halt` desaparece y `stop_fetch` se apaga solo. La búsqueda sigue en el
+   destino del salto.
 5. **Aviso a la Debug Unit:** cuando HALT llega a WB (ya no puede ser
    descartado por nadie anterior) se latchea `halted = 1`, que se expone a la
    Debug Unit. Desde ese momento el pipeline queda vacío y estable, así que
    la Debug Unit puede leer registros y memoria de forma consistente.
 6. **Salida del estado halted:** por ahora solo con reset (o la orden que
    defina la Debug Unit). Queda pendiente definir si se puede reanudar.
+7. **HALT retenido por un stall:** el campo `rs2` de la palabra del HALT vale
+   1 (es el inmediato de `ebreak`), así que un load a `x1` justo antes puede
+   disparar la detección de load-use. En los registros de segmentación `en`
+   tiene prioridad sobre `flush` (`pipeline.md` §2): durante el stall IF/ID
+   conserva el HALT aunque `flush_if_id = 1`, y el HALT no se pierde.
+
+### Por qué la parada mira todas las etapas y hace flush de IF/ID
+La primera versión de esta decisión congelaba el PC solo mientras `is_halt`
+estaba activa en ID. Eso tenía dos problemas:
+
+- **El HALT está en ID un solo ciclo.** Resolviendo saltos en EX, entre que el
+  HALT sale de ID y llega a WB pasan tres ciclos (EX, MEM, WB). Si la parada
+  dependiera solo de ID, en esos ciclos el PC volvería a avanzar y entrarían
+  hasta tres instrucciones posteriores al HALT. Por eso `stop_fetch` es el OR
+  de los bits `halt` de todas las etapas, y después de WB lo sostiene
+  `halted`.
+- **Congelar el PC no cancela la lectura que ya está en curso.** La memoria de
+  programa es una BRAM con un ciclo de latencia (decisión 009): en el ciclo en
+  que el HALT está en ID, `pc_reg` ya vale `h + 4` (h = dirección del HALT) y
+  la BRAM ya está leyendo esa dirección. Esa instrucción aparece en
+  `if_id_instr` en el flanco siguiente. Y como después el PC queda congelado
+  en `h + 4`, la BRAM la vuelve a leer en cada ciclo. Sin invalidar IF/ID,
+  entraría como válida y se repetiría. Por eso `stop_fetch` también hace
+  flush de IF/ID, con el mismo mecanismo que ya se usa para los saltos.
+
+```
+ciclo              t            t+1          t+2          t+3          t+4
+HALT en            IF           ID           EX           MEM          WB → halted <= 1
+pc_reg             h            h+4          h+4          h+4          h+4
+stop_fetch         0            1            1            1            1
+IF/ID recibe       HALT (1)     h+4 (0)      h+4 (0)      h+4 (0)      h+4 (0)
+```
+
+(Entre paréntesis, el `valid` que se guarda en IF/ID en el flanco del final de
+cada ciclo.)
 
 ### ¿Qué sucede si en la memoria no hay una instrucción de parada?
 El procesador nunca se detiene por sí mismo: el PC sigue incrementando y
@@ -97,8 +144,13 @@ decisión).
 ## Consecuencias
 - **Decodificador (ID):** un comparador de 32 bits adicional y la señal
   `is_halt`.
+- **IF:** `stop_fetch` entra al mux de próximo PC y al flush de IF/ID
+  (`flush_if_id = redirect | stop_fetch`).
 - **Control de riesgos/hazard unit:** nueva causa de congelamiento del PC y de
-  inserción de burbujas, con la salvedad del flush por salto anterior.
+  inserción de burbujas, con la salvedad del flush por salto anterior. El
+  stall por load-use (I-05) debe respetar la prioridad de `en` sobre `flush`;
+  opcionalmente, la detección puede ignorar `rs1`/`rs2` en las instrucciones
+  que no los usan (HALT, `lui`, `jal`) para evitar stalls innecesarios.
 - **Etapa WB / Debug Unit:** nueva señal `halted`, a documentar en la
   interfaz de la Debug Unit.
 - **Toolchain:** no requiere cambios; los programas se escriben con `ebreak`.
@@ -108,4 +160,4 @@ decisión).
   los programas de prueba.
 - **A revisar si cambia algún supuesto:** el punto donde se resuelven los
   branches (EX vs MEM) afecta cuándo es seguro latchear la parada; si se
-  agrega reanudación, `halted` debe tener una señal de limpieza
+  agrega reanudación, `halted` debe tener una señal de limpieza.
