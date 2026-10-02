@@ -1,8 +1,9 @@
 # Arquitectura del pipeline y camino de datos
 
 > **Estado:** completo para revisión — issue I-04 (#7); la §10 (riesgos y su control) es
-> la issue I-05 y la resolución de saltos (§5.3, §10.5) la I-09, decisión [012](../decisiones/012_resolucion-saltos.md). Lo que
-> depende de otras issues (I-06, I-07) está marcado en cada sección.
+> la issue I-05 y la resolución de saltos (§5.3, §10.5) la I-09, decisión [012](../decisiones/012_resolucion-saltos.md). Tamaños,
+> direcciones y política de acceso a las memorias: [`memoria.md`](memoria.md) (I-07). Lo que
+> depende de I-06 está marcado en cada sección.
 
 Este documento fija **qué hace cada etapa** del procesador y **qué información viaja
 entre ellas**, para poder codificar `rtl/pipeline/` sin dudas sobre las interfaces.
@@ -123,11 +124,13 @@ pc_reg <= pc_next     solo si en_pc = 1
 | `en_pc` | 1 | §10.4 | En 0 el PC no avanza (stall o core detenido). |
 
 IF no necesita saber qué tipo de salto hubo: recibe la dirección ya calculada.
-Valor de reset del PC: `0x0000_0000` (a confirmar en I-07).
+Valor de reset del PC: `0x0000_0000`, la primera palabra de la memoria de programa
+([`memoria.md`](memoria.md) §2).
 
 ### 3.2 Memoria de programa
 BRAM de lectura sincrónica: **entrega el dato un ciclo después** de recibir la dirección.
-Se direcciona con `pc_reg[AW+1:2]` (las instrucciones están alineadas a 4 bytes) y **su
+Tiene 1024 palabras (`IMEM_AW = 10`, [`memoria.md`](memoria.md)). Se direcciona con
+`pc_reg[IMEM_AW+1:2]` (las instrucciones están alineadas a 4 bytes) y **su
 registro de salida hace de campo `instr` de IF/ID**, así que no se agrega ningún ciclo
 (decisión [009](../decisiones/009_memorias-sincronicas.md)):
 
@@ -517,9 +520,12 @@ flowchart LR
 La memoria está organizada en palabras de 32 bits, pero se direcciona por byte:
 
 ```
-índice de palabra = result[AW+1:2]
+índice de palabra = result[DMEM_AW+1:2]          (DMEM_AW = 10: 1024 palabras)
 byte dentro de la palabra (offset) = result[1:0]
 ```
+
+Los bits `result[31:DMEM_AW+2]` no llegan a la memoria (§6.4). Mapa de direcciones y
+configuración de la BRAM: [`memoria.md`](memoria.md).
 
 ### 6.2 Escritura (stores)
 Un store puede escribir 1, 2 o 4 bytes de la palabra. La BRAM tiene un *write enable*
@@ -543,10 +549,19 @@ La BRAM se lee siempre con la dirección de `ex_mem_result`, y la palabra comple
 media palabra y extenderla se hace en WB (§7.1). El `ena` de la BRAM va unido al `en`
 de MEM/WB, para que con el core detenido el dato leído no cambie.
 
-### 6.4 Accesos desalineados
-No se soportan. El hardware ignora los bits bajos que no corresponden al tamaño: un `lw`
-o `sw` ignora `offset` y un `lh`/`sh` ignora `offset[0]`. Cualquier acceso cae así en la
-palabra o media palabra alineada que lo contiene. La política queda documentada en I-07.
+### 6.4 Accesos desalineados y fuera de rango
+No generan excepciones: el hardware ignora los bits que no corresponden
+(decisión [015](../decisiones/015_accesos-desalineados-y-fuera-de-rango.md)).
+
+- **Desalineados:** un `lw` o `sw` ignora `offset` y un `lh`/`lhu`/`sh` ignora `offset[0]`.
+  El acceso cae en la palabra o media palabra alineada que lo contiene.
+- **Fuera de rango** (`result ≥ 0x1000`): los bits `[31:12]` se ignoran y el acceso cae en
+  `result mod 4096`.
+
+Cada caso pone en 1 un aviso persistente (`dmem_misaligned`, `dmem_oob`) que se calcula en MEM
+con `ex_mem_result`, `ex_mem_funct3`, `mem_write` y `mem_to_reg`, y que la Debug Unit informa
+en el bloque de estado ([`memoria.md`](memoria.md) §6.2). Nada del camino de datos lee esos
+avisos.
 
 ### 6.5 Salidas hacia MEM/WB
 
@@ -738,6 +753,7 @@ los registros de segmentación: se calculan en el ciclo y actúan en el ciclo.
 | `en_pc`, `en_*` | 1 c/u | detección de riesgos y Debug Unit | IF y cada registro de segmentación | §10.4 / I-06 |
 | `flush_*` | 1 c/u | `flush_if_id = redirect \| stop_fetch`; `flush_id_ex = redirect \| stall` | IF/ID e ID/EX | §3.3 / §10.4 / §10.5 |
 | `halted` | 1 | WB (registro) | IF (`stop_fetch`) y Debug Unit | §7.3 / I-06 |
+| `imem_fault`, `dmem_oob`, `dmem_misaligned` | 1 c/u | MEM y WB (registros persistentes) | Debug Unit (bloque de estado) | §6.4 / [`memoria.md`](memoria.md) §6.2 |
 
 ---
 
@@ -944,5 +960,5 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 | Banco de registros y conflicto ID/WB | [`decisiones/007_banco-registros.md`](../decisiones/007_banco-registros.md) |
 | Detección de riesgos, stall y forwarding | §10 y [`decisiones/011_deteccion-load-use.md`](../decisiones/011_deteccion-load-use.md) |
 | Resolución de saltos | §5.3, §10.5 y [`decisiones/012_resolucion-saltos.md`](../decisiones/012_resolucion-saltos.md) |
-| Tamaños y direcciones de memoria | I-07 (`memoria.md`) |
+| Tamaños, direcciones, BRAM y política de acceso a memoria | [`memoria.md`](memoria.md) y decisiones [013](../decisiones/013_tamano-y-mapa-de-memorias.md) a [016](../decisiones/016_acceso-por-byte.md) |
 | Contenido del dump de latches | I-06 (`protocolo_debug.md`) |
