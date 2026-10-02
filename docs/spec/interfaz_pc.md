@@ -138,14 +138,15 @@ unidad de riesgos.
 
 | Evento | Regla (sobre el volcado actual) |
 |---|---|
-| Stall load-use (próximo ciclo) | `ID/EX.mem_read = 1` y `ID/EX.rd ≠ 0` y `ID/EX.rd ∈ {rs1, rs2}` de la instrucción en IF/ID |
+| Stall load-use (próximo ciclo) | `ID/EX.mem_read = 1`, `ID/EX.rd ≠ 0`, `IF/ID.valid = 1` y `ID/EX.rd ∈ {rs1, rs2}` de la instrucción en IF/ID, sin `redirect` en el mismo ciclo |
 | Stall ocurrido | Respecto del volcado anterior: PC e IF/ID no cambiaron, `ID/EX.valid = 0` y `cycles` aumentó en 1 |
 | Forwarding EX/MEM → EX | `EX/MEM.valid`, `EX/MEM.reg_write`, `EX/MEM.rd ≠ 0` y `EX/MEM.rd = ID/EX.rs1` o `rs2` |
 | Forwarding MEM/WB → EX | Igual con MEM/WB, si EX/MEM no tiene prioridad sobre el mismo registro |
 | Flush por salto | Burbujas en IF/ID e ID/EX con el PC fuera de secuencia respecto del volcado anterior |
 | HALT en vuelo | Bit `halt` en algún latch |
 
-Las reglas se ajustan cuando se cierren la unidad de riesgos (I-05) y la de saltos (I-09).
+Las reglas siguen las ecuaciones de `pipeline.md` §10 (unidad de riesgos, I-05); se ajustan si
+I-09 cambia la etapa de resolución de saltos.
 
 ### 4.4 Errores durante un paso
 
