@@ -103,7 +103,11 @@ agregar más, no quitar.
 
 ## 4. Programas de prueba (`sw/`)
 
-Cada programa es un archivo `sw/<nombre>.asm` con su `sw/<nombre>.exp` al lado (§5).
+Cada programa es un archivo `sw/<nombre>.s` con su `sw/<nombre>.exp` al lado (§5). La
+extensión es `.s` porque es la que usan el ensamblador ([017](../decisiones/017_ensamblador.md))
+y la interfaz de la PC. Las convenciones completas, la lista con el detalle de cada programa
+y cómo agregar uno están en [`sw/README.md`](../../sw/README.md) (decisión
+[018](../decisiones/018_programas-de-prueba.md)).
 
 Reglas para todos:
 
@@ -157,13 +161,28 @@ Además:
 Son 22 programas. Para saber si falta alguno: **toda instrucción de `isa.md` aparece en al menos
 un programa** (la lista de §4.1 cubre las 32 más HALT) y **toda línea de §10.7 tiene su programa**
 (la tabla de §4.2). Si se agrega un mecanismo nuevo, se agrega su programa en el mismo cambio.
+`python -m pytest sw` comprueba las dos condiciones y que cada programa tenga su `.exp`.
+
+### 4.3 Programas para las etapas intermedias
+
+Los 22 programas necesitan el pipeline completo. Para las etapas anteriores hay dos grupos más
+(detalle en [`sw/README.md`](../../sw/README.md) §4 y §5):
+
+| Programas | Para qué nivel | Qué tienen de distinto |
+|---|---|---|
+| `indep_alu_r`, `indep_alu_i`, `indep_cargas`, `indep_stores`, `indep_saltos`, `indep_lui` | 2, de IF a MEM (M3 a M6), antes de que exista WB | Ninguna instrucción lee un registro que escribe otra: parten de un **estado inicial** de registros y de `dmem` (`sw/estado_inicial/`, en formato `$readmemh`) y cada resultado se ve en el registro de segmentación de su etapa |
+| `<nombre>_nops`, de los programas de riesgos y de saltos | 3 sin riesgos (I-38, M7): pipeline completo sin forwarding, stall ni flush | Llevan `nop` para que toda dependencia quede a distancia 3 y detrás de cada salto haya dos `nop`. Mismo estado final que el original y los mismos ciclos en M7 y en M8 |
+
+En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en M8
+(I-40 e I-43), todos. `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban
+es la interacción del HALT con el stall y el flush.
 
 ---
 
 ## 5. Estado final esperado (`.exp`)
 
 **Todo programa de `sw/` tiene que venir con su estado final esperado de registros y memoria**,
-en un archivo `sw/<nombre>.exp` al lado del `.asm`. Un programa sin `.exp` no cuenta como prueba:
+en un archivo `sw/<nombre>.exp` al lado del `.s`. Un programa sin `.exp` no cuenta como prueba:
 se puede ejecutar, pero no hay contra qué compararlo.
 
 Este documento fija **qué** tiene que decir cada `.exp` y **en qué formato**, no el valor concreto
@@ -176,7 +195,7 @@ Ejemplo del formato, con una versión reducida de `loaduse_rs1_rs2` (un `lw` seg
 inmediato):
 
 ```
-# ejemplo: fragmento de sw/loaduse_rs1_rs2.asm
+# ejemplo: fragmento de sw/loaduse_rs1_rs2.s
 #   addi x1, x0, 42
 #   sw   x1, 8(x0)
 #   lw   x5, 8(x0)
@@ -304,12 +323,15 @@ mecanismo y hay que agregar uno. I-40 lo hace para el forwarding; I-43 para el r
 | Testbench de un módulo | `tb/unit/<módulo>_tb.v`, módulo superior `<módulo>_tb` | `tb/unit/regfile_tb.v` |
 | Testbench de integración por etapa | `tb/integration/stage_<if\|id\|ex\|mem\|wb>_tb.v` | `stage_id_tb.v` |
 | Testbench del core completo | `tb/integration/core_tb.v`, con el programa por parámetro `PROGRAM` | — |
-| Programa de prueba | `sw/<nombre>.asm`, en minúsculas y `_` | `fwd_exmem.asm` |
+| Programa de prueba | `sw/<nombre>.s`, en minúsculas y `_` | `fwd_exmem.s` |
+| Programa con instrucciones independientes (§4.3) | `sw/indep_<grupo>.s` | `indep_cargas.s` |
+| Variante con `nop` para M7 (§4.3) | `sw/<nombre>_nops.s` | `fwd_exmem_nops.s` |
 | Estado esperado | `sw/<nombre>.exp` | `fwd_exmem.exp` |
-| Memoria generada por el ensamblador | `sw/<nombre>.coe`; **no se versiona** (se regenera desde el `.asm`) | — |
+| Estado inicial de los `indep_*` | `sw/estado_inicial/regs.hex` y `dmem.hex` | — |
+| Memoria generada por el ensamblador | `sw/<nombre>.hex`, `.bin`, `.coe`, `.lst`; **no se versiona** (se regenera desde el `.s`) | — |
 
-Los archivos `.coe` no entran al repositorio porque se generan: versionarlos duplicaría el
-programa y podrían quedar desactualizados respecto del `.asm`.
+Las salidas del ensamblador no entran al repositorio porque se generan: versionarlas
+duplicaría el programa y podrían quedar desactualizadas respecto del `.s`.
 
 **Señales dentro de un testbench**
 
