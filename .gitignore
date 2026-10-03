@@ -25,3 +25,6 @@ Thumbs.db
 *.wdb
 __pycache__/
 .venv/
+
+# Memoria generada por el ensamblador (se regenera desde el .asm)
+sw/*.coe

@@ -1,10 +1,5 @@
 # Arquitectura del pipeline y camino de datos
 
-> **Estado:** completo para revisión — issue I-04 (#7); la §10 (riesgos y su control) es
-> la issue I-05 y la resolución de saltos (§5.3, §10.5) la I-09, decisión [012](../decisiones/012_resolucion-saltos.md). Tamaños,
-> direcciones y política de acceso a las memorias: [`memoria.md`](memoria.md) (I-07). Lo que
-> depende de I-06 está marcado en cada sección.
-
 Este documento fija **qué hace cada etapa** del procesador y **qué información viaja
 entre ellas**, para poder codificar `rtl/pipeline/` sin dudas sobre las interfaces.
 Las instrucciones soportadas y su codificación están en [`isa.md`](isa.md).
@@ -938,7 +933,7 @@ los stalls y flush del pipeline vienen de riesgos de datos (load-use) y de contr
 
 ### 10.7 Casos para el plan de verificación
 
-Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba (I-11):
+Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba (plan en [`verificacion.md`](verificacion.md) §4.2, I-11):
 
 - Forwarding desde EX/MEM y desde MEM/WB, en `rs1` y en `rs2`.
 - Las dos instrucciones anteriores escriben el mismo registro (gana EX/MEM).
