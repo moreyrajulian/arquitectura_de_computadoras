@@ -1,0 +1,26 @@
+// Referencia generada por LLVM (zig cc) (zig 0.16.0)
+// desde tests/programs/fibonacci.s con validate_reference.py --update.
+// No editar a mano: es la fuente independiente contra la que se valida rvasm.
+00001137
+00a00513
+008000ef
+00100073
+ffc10113
+00112023
+00050293
+00000313
+00100393
+00000e13
+00000513
+02028263
+006e2023
+00650533
+00730eb3
+00038313
+000e8393
+004e0e13
+fff28293
+fe1ff06f
+00012083
+00410113
+00008067
