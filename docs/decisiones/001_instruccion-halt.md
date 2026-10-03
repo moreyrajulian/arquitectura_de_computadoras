@@ -1,6 +1,6 @@
 # 001 - Codificación y comportamiento de la instrucción HALT
 
-- **Estado:** Aceptada
+- **Estado:** aceptada
 - **Fecha:** 2026-09-28 (actualizada el 2026-10-02 en la revisión de la I-04)
 - **Autores:** Moreyra, Julián - Costamagna, Matias
 
@@ -85,8 +85,9 @@ herramientas propias. ECALL y el resto de SYSTEM quedan como no implementadas.
    descartado por nadie anterior) se latchea `halted = 1`, que se expone a la
    Debug Unit. Desde ese momento el pipeline queda vacío y estable, así que
    la Debug Unit puede leer registros y memoria de forma consistente.
-6. **Salida del estado halted:** por ahora solo con reset (o la orden que
-   defina la Debug Unit). Queda pendiente definir si se puede reanudar.
+6. **Salida del estado halted:** solo con `RESET` o `LOAD` de la Debug Unit
+   ([decisión 004](004_carga-y-reprogramacion.md), `protocolo_debug.md` §3.7).
+   No se reanuda desde el punto del HALT.
 7. **HALT retenido por un stall:** el campo `rs2` de la palabra del HALT vale
    1 (es el inmediato de `ebreak`), así que un load a `x1` justo antes puede
    disparar la detección de load-use. En los registros de segmentación `en`

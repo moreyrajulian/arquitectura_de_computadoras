@@ -6,7 +6,7 @@ cambia algo de este documento, tiene que cambiar el RTL y el cliente de la PC en
 | | |
 |---|---|
 | **Versión del protocolo** | 1 (la devuelve el comando `INFO`) |
-| **Estado** | Propuesta, pendiente de revisión |
+| **Estado** | aceptada. Punto abierto: el empaquetado de los latches en `READ_LATCHES` (§3.6) es provisorio; se fija con los campos de `pipeline.md` §8 en I-06 |
 | **Depende de** | [`isa.md`](isa.md) (codificación del HALT), [`memoria.md`](memoria.md) (tamaños, puertos B y avisos de acceso), `pipeline.md` (contenido de los latches) |
 | **Diagramas** | [`sistema`](../diagramas/sistema.png), secuencias `protocolo_*.png`, FSM `debug_unit_*.png` |
 

@@ -1,6 +1,6 @@
 # 006 - Debug Unit con dos FSM independientes
 
-- **Estado:** A
+- **Estado:** aceptada
 - **Fecha:** 2026-09-29
 - **Autores:** Costamagna, Matías
 

@@ -6,7 +6,7 @@ la Debug Unit. Es el boceto previo a programarlo (I-52).
 | | |
 |---|---|
 | **Tipo** | TUI (interfaz de texto a pantalla completa) con [Textual](https://textual.textualize.io/) — ver [decisión 008](../decisiones/008_interfaz-pc.md) |
-| **Estado** | Propuesta, pendiente de revisión |
+| **Estado** | aceptada. Puntos abiertos en §7 |
 | **Depende de** | [`protocolo_debug.md`](protocolo_debug.md) (comandos y bloques), `pipeline.md` (campos de los latches), [`isa.md`](isa.md) (desensamblado) |
 | **Boceto** | [`interfaz.drawio`](../diagramas/interfaz.drawio) / [`interfaz.png`](../diagramas/interfaz.png) |
 
@@ -201,7 +201,8 @@ puede pasar `--port` por línea de comandos.
 
 ## 7. Pendiente
 
-- Los campos de cada latch se toman de `pipeline.md` (rama `docs/7_pipeline`); si cambian,
+- Los campos de cada latch se toman de [`pipeline.md`](pipeline.md) §8, con el empaquetado que
+  fije `READ_LATCHES` ([`protocolo_debug.md`](protocolo_debug.md) §3.6); si cambian,
   se actualiza solo la tabla del decodificador en `model`.
 - La salida del ensamblador (formato de errores, `.hex`) está en
   [`tools/assembler/README.md`](../../tools/assembler/README.md) §4 y §5; la API que usa la

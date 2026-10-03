@@ -1,4 +1,4 @@
-# 010 - Detección de load-use conservadora y sin forwarding hacia MEM
+# 011 - Detección de load-use conservadora y sin forwarding hacia MEM
 
 - **Estado:** aceptada
 - **Fecha:** 2026-10-02

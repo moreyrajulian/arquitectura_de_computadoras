@@ -1,6 +1,6 @@
 # 010 - Convenciones de código RTL
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-02
 - **Autores:** Costamagna, Matías
 

@@ -1,6 +1,6 @@
 # 016 - Acceso por byte y media palabra con *byte write enable* de la BRAM
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-02
 - **Autores:** Costamagna, Matías
 

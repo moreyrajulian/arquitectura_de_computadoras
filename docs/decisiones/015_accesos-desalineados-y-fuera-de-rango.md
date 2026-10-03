@@ -1,6 +1,6 @@
 # 015 - Accesos desalineados y fuera de rango: se truncan y dejan un aviso
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-02
 - **Autores:** Costamagna, Matías
 
