@@ -203,7 +203,10 @@ puede pasar `--port` por línea de comandos.
 
 - Los campos de cada latch se toman de `pipeline.md` (rama `docs/7_pipeline`); si cambian,
   se actualiza solo la tabla del decodificador en `model`.
-- La salida del ensamblador (formato de errores, `.hex`) se define con su issue.
+- La salida del ensamblador (formato de errores, `.hex`) está en
+  [`tools/assembler/README.md`](../../tools/assembler/README.md) §4 y §5; la API que usa la
+  interfaz (`assemble`, `Program.source_map`, `AssemblerError.errors`), en §1 y en la
+  [decisión 017](../decisiones/017_ensamblador.md).
 - El formato del JSON exportado se acuerda con el modelo de referencia (I-16).
 
 ## 8. Checklist de revisión
