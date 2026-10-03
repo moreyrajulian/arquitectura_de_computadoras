@@ -258,7 +258,9 @@ Cuando una instrucción no usa un campo, esos bits tienen otra cosa. Por ejemplo
 - **Lectura:** dos puertos asíncronos (`rs1`, `rs2`); el dato está disponible en el mismo
   ciclo.
 - **Escritura:** un puerto en el flanco de subida, **manejado por WB** (`wb_reg_write`,
-  `wb_rd`, `wb_data`).
+  `wb_rd`, `wb_data`). Solo escribe con el core habilitado: `we = wb_reg_write & enable`
+  (decisión [018](../decisiones/018_paso-a-paso-sin-clock.md)), para que con el core detenido
+  los registros no se adelanten al pipeline.
 - **Bypass:** si en el mismo ciclo WB escribe el registro que ID está leyendo, la lectura
   entrega el dato nuevo (decisión [007](../decisiones/007_banco-registros.md)):
 
@@ -622,8 +624,10 @@ Cuando un HALT llega a WB, ya no puede ser anulado por ningún salto. En ese mom
 activa `halted`, que queda en 1 hasta el próximo reset (decisión 001):
 
 ```
-si (mem_wb_valid & mem_wb_halt)  →  halted <= 1
+si (enable & mem_wb_valid & mem_wb_halt)  →  halted <= 1
 ```
+
+Como todo elemento con estado del core, `halted` solo cambia con `enable = 1` (§10.4).
 
 Detrás del HALT solo entraron burbujas (§3.4), así que un ciclo después todos los
 `valid` están en 0: el pipeline está vacío. `halted` es la señal que la Debug Unit mira
@@ -883,6 +887,22 @@ flush_ex_mem = flush_mem_wb = 0
   señales combinacionales se recalculan igual. El stall continúa donde quedó, así que se puede
   avanzar ciclo a ciclo con `STEP` sin perder instrucciones.
 
+**Elementos con estado que respetan `enable`** (decisión
+[018](../decisiones/018_paso-a-paso-sin-clock.md)). El clock nunca se toca: parar o avanzar el
+core es dejar pasar o no el flanco con la entrada CE de cada flip-flop. Respetan `enable`:
+
+| Elemento | Cómo |
+|---|---|
+| `pc_reg`, IF/ID (y `ena` de `imem`) | `en_pc`, `en_if_id` (con el stall) |
+| ID/EX, EX/MEM | `en_id_ex`, `en_ex_mem` |
+| MEM/WB (y `ena` de `dmem`) | `en_mem_wb`; la escritura de `dmem` solo ocurre con `ena = 1` |
+| Escritura del banco de registros (§4.2) | `we = wb_reg_write & enable` |
+| `halted` (§7.3) y avisos de acceso (§6.4) | solo se actualizan con `enable = 1` |
+
+No usan `enable`: la lógica combinacional, la Debug Unit, la UART y el puerto B de las BRAM.
+`core_rst` tiene prioridad sobre `enable`, para limpiar el core con el core detenido. Todo
+elemento con estado que se agregue al core tiene que conectar `enable` (o un `en_*`).
+
 ### 10.5 Salto tomado
 
 Cuando la resolución de saltos (§5.3) pone `redirect = 1`, las dos instrucciones que entraron
@@ -954,6 +974,7 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 | Integración de memorias sincrónicas | [`decisiones/009_memorias-sincronicas.md`](../decisiones/009_memorias-sincronicas.md) |
 | Banco de registros y conflicto ID/WB | [`decisiones/007_banco-registros.md`](../decisiones/007_banco-registros.md) |
 | Detección de riesgos, stall y forwarding | §10 y [`decisiones/011_deteccion-load-use.md`](../decisiones/011_deteccion-load-use.md) |
+| Paso a paso sin intervenir el clock (`enable`) | §10.4 y [`decisiones/018_paso-a-paso-sin-clock.md`](../decisiones/018_paso-a-paso-sin-clock.md) |
 | Resolución de saltos | §5.3, §10.5 y [`decisiones/012_resolucion-saltos.md`](../decisiones/012_resolucion-saltos.md) |
 | Tamaños, direcciones, BRAM y política de acceso a memoria | [`memoria.md`](memoria.md) y decisiones [013](../decisiones/013_tamano-y-mapa-de-memorias.md) a [016](../decisiones/016_acceso-por-byte.md) |
 | Contenido del dump de latches | I-06 (`protocolo_debug.md`) |

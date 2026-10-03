@@ -420,7 +420,7 @@ Señales hacia el core y las memorias (coinciden con el diagrama de sistema):
 
 | Señal | Dirección | Descripción |
 |---|---|---|
-| `enable` | DU → core | Habilita el avance del pipeline y del PC (1 en `RUNNING`, un ciclo en `STEP`) |
+| `enable` | DU → core | Habilita el avance del pipeline y del PC (1 en `RUNNING`, un ciclo en `STEP`). El clock nunca se detiene: todo elemento con estado del core la respeta (decisión [018](../decisiones/018_paso-a-paso-sin-clock.md), [`pipeline.md`](pipeline.md) §10.4) |
 | `core_rst` | DU → core | Reset síncrono: PC = 0, registros = 0, latches a burbuja |
 | `halt` | core → DU | HALT llegó a WB |
 | `dbg_reg_addr[4:0]` / `dbg_reg_data[31:0]` | DU ↔ core | Puerto de lectura extra del banco de registros |
