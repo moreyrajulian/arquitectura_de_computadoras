@@ -1,0 +1,23 @@
+# branch_cond: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000005
+  x2  = 0x00000005
+  x3  = 0x00000007
+  x4  = 0x00000003
+  x11 = 0x00000011
+  x12 = 0x00000012
+  x13 = 0x00000003
+  x14 = 0x00000006
+  x15 = 0x00000009
+  x16 = 0x00000001
+  x17 = 0x00000001
+  x18 = 0x00000018
+  x19 = 0x00000019
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: 4 addi, 0x10, 0x20-0x30 (5), 3 vueltas de 4 (12), 0x54, 0x58,
+#   0x5C, 0x78, 0x7C, 0x68, 0x6C, halt = 4 + 1 + 5 + 12 + 8 = 30
+# Saltos tomados: beq 0x10, bne 0x30, bne 0x50 (x2), beq 0x5C, 0x7C, 0x6C = 7
+ciclos = 48          # n = 30, + 4 de llenado, + 2 * 7 saltos tomados

@@ -1,0 +1,36 @@
+# indep_alu_i: estado final esperado, calculado a mano desde isa.md
+# Parte de sw/estado_inicial/ (x1-x9 y dmem quedan como estaban).
+regs:
+  x1  = 0x00000007
+  x2  = 0xFFFFFFFD
+  x3  = 0x7FFFFFFF
+  x4  = 0x80000000
+  x5  = 0x00000021
+  x6  = 0x00000100
+  x7  = 0x00001000
+  x8  = 0xDEADBEEF
+  x9  = 0x12345678
+  x11 = 0xFFFFFFFF
+  x12 = 0x000007FC
+  x13 = 0x000000EF
+  x14 = 0xDEADBE00
+  x15 = 0xFFFFF807
+  x16 = 0xEDCBA987
+  x17 = 0x00000001
+  x18 = 0x00000000
+  x19 = 0x00000001
+  x20 = 0x00000000
+  x21 = 0x80000000
+  x22 = 0x00000001
+  x23 = 0xFFFFFFFF
+  x24 = 0xFDEADBEE
+  x25 = 0x0DEADBEE
+  x26 = 0x23456780
+dmem:
+  0x100 = 0xDEADBEEF
+  0x104 = 0x7F018040
+  0xFFC = 0xCAFEBABE
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 21          # n = 17, + 4 de llenado

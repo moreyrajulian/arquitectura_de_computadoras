@@ -1,0 +1,22 @@
+# loaduse_sw_beq_nops: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000033
+  x2  = 0x00000033
+  x4  = 0x00000020
+  x5  = 0x00000033
+  x6  = 0x00000033
+  x7  = 0x00000033
+  x8  = 0x00000020
+  x9  = 0x00000099
+dmem:
+  0x000 = 0x00000033
+  0x004 = 0x00000033
+  0x010 = 0x00000020
+  0x020 = 0x00000033
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: 15 de loaduse_sw_beq + 8 nop de los lw + 2 nop del bne no
+#   tomado = 25. Los 2 nop del beq tomado los anula el flush y se cuentan como
+#   el costo del salto (sin flush, en M7, se ejecutan y suman lo mismo).
+ciclos = 31          # n = 25, + 4 de llenado, + 2 * 1 salto tomado

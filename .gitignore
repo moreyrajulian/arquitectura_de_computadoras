@@ -27,5 +27,8 @@ __pycache__/
 .pytest_cache/
 .venv/
 
-# Memoria generada por el ensamblador (se regenera desde el .asm)
+# Salida del ensamblador (se regenera desde el .s)
+sw/*.hex
+sw/*.bin
 sw/*.coe
+sw/*.lst

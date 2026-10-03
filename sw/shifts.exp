@@ -1,0 +1,25 @@
+# shifts: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x87654321
+  x2  = 0x00000021
+  x3  = 0xFFFFFFFF
+  x4  = 0x00000040
+  x10 = 0x87654321
+  x11 = 0x0ECA8642
+  x12 = 0x80000000
+  x13 = 0x87654321
+  x14 = 0x43B2A190
+  x15 = 0x00000001
+  x16 = 0xFFFFFFFE
+  x17 = 0x87654321
+  x18 = 0xC3B2A190
+  x19 = 0xFFFFFFFF
+  x20 = 0x43B2A190
+  x21 = 0xFFFFFFFF
+  x22 = 0x87654321
+  x23 = 0x00000001
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 24          # n = 20, + 4 de llenado

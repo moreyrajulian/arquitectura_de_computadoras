@@ -1,0 +1,21 @@
+# jump_nops: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000004
+  x2  = 0x0000005D
+  x3  = 0x00000050
+  x5  = 0x00000068
+  x10 = 0x00000001
+  x11 = 0x00000011
+  x12 = 0x00000012
+  x13 = 0x00000013
+  x14 = 0x00000014
+  x15 = 0x00000015
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: jal, addi, addi, jalr, nop, nop, addi, jal, addi, addi, addi,
+#   jalr, addi, jal, halt = 15. Los 2 nop de cada salto los anula el flush y se
+#   cuentan como el costo del salto (sin flush, en M7, se ejecutan y suman lo
+#   mismo).
+ciclos = 29          # n = 15, + 4 de llenado, + 2 * 5 saltos tomados

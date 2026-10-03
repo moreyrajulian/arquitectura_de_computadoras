@@ -1,0 +1,26 @@
+# indep_lui: estado final esperado, calculado a mano desde isa.md
+# Parte de sw/estado_inicial/ (x1-x9 y dmem quedan como estaban).
+regs:
+  x1  = 0x00000007
+  x2  = 0xFFFFFFFD
+  x3  = 0x7FFFFFFF
+  x4  = 0x80000000
+  x5  = 0x00000021
+  x6  = 0x00000100
+  x7  = 0x00001000
+  x8  = 0xDEADBEEF
+  x9  = 0x12345678
+  x11 = 0x12345000
+  x12 = 0xFFFFF000
+  x13 = 0x80000000
+  x14 = 0x00000000
+  x15 = 0x00001000
+  x16 = 0x7FFFF000
+dmem:
+  0x100 = 0xDEADBEEF
+  0x104 = 0x7F018040
+  0xFFC = 0xCAFEBABE
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 11          # n = 7, + 4 de llenado

@@ -1,0 +1,12 @@
+# halt_stall: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x0000007B
+  x2  = 0x0000007B
+  x3  = 0x00000001
+  x4  = 0x00000002
+dmem:
+  0x000 = 0x0000007B
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 11          # n = 6, + 4 de llenado, + 1 stall (falso positivo del HALT)

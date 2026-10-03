@@ -1,0 +1,32 @@
+# indep_cargas: estado final esperado, calculado a mano desde isa.md
+# Parte de sw/estado_inicial/ (x1-x9 y dmem quedan como estaban).
+regs:
+  x1  = 0x00000007
+  x2  = 0xFFFFFFFD
+  x3  = 0x7FFFFFFF
+  x4  = 0x80000000
+  x5  = 0x00000021
+  x6  = 0x00000100
+  x7  = 0x00001000
+  x8  = 0xDEADBEEF
+  x9  = 0x12345678
+  x11 = 0xDEADBEEF
+  x12 = 0xCAFEBABE
+  x13 = 0x7F018040
+  x14 = 0xFFFFFFEF
+  x15 = 0xFFFFFF80
+  x16 = 0x00000040
+  x17 = 0x000000BE
+  x18 = 0x0000007F
+  x19 = 0xFFFFDEAD
+  x20 = 0x00007F01
+  x21 = 0x0000BEEF
+  x22 = 0x00008040
+dmem:
+  0x100 = 0xDEADBEEF
+  0x104 = 0x7F018040
+  0xFFC = 0xCAFEBABE
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 17          # n = 13, + 4 de llenado, sin stalls

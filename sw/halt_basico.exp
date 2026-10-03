@@ -1,0 +1,9 @@
+# halt_basico: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000001
+  x2  = 0x00000002
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 7           # n = 3, + 4 de llenado

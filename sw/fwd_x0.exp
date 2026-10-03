@@ -1,0 +1,16 @@
+# fwd_x0: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000009
+  x2  = 0x00000004
+  x3  = 0x00000005
+  x4  = 0x00000009
+  x5  = 0x00000005
+  x6  = 0x00000009
+  x7  = 0x00000077
+  x8  = 0x00000009
+dmem:
+  0x000 = 0x00000009
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 18          # n = 14, + 4 de llenado; el lw a x0 no frena

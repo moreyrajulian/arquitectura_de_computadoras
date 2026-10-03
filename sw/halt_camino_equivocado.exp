@@ -1,0 +1,13 @@
+# halt_camino_equivocado: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000001
+  x2  = 0x00000002
+  x3  = 0x00000003
+  x4  = 0x00000004
+  x5  = 0x00000005
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: 3 addi, beq, addi x4, jal, addi x5, halt = 8
+ciclos = 16          # n = 8, + 4 de llenado, + 2 * 2 saltos tomados

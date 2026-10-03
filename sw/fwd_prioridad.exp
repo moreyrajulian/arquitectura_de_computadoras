@@ -1,0 +1,13 @@
+# fwd_prioridad: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000002
+  x2  = 0x00000002
+  x3  = 0x00000006
+  x4  = 0xFFFFFFFA
+  x5  = 0x00000030
+  x6  = 0x00000060
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 15          # n = 11, + 4 de llenado

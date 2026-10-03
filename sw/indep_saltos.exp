@@ -1,0 +1,28 @@
+# indep_saltos: estado final esperado, calculado a mano desde isa.md
+# Parte de sw/estado_inicial/ (x1-x9 y dmem quedan como estaban).
+regs:
+  x1  = 0x00000007
+  x2  = 0xFFFFFFFD
+  x3  = 0x7FFFFFFF
+  x4  = 0x80000000
+  x5  = 0x00000021
+  x6  = 0x00000100
+  x7  = 0x00001000
+  x8  = 0xDEADBEEF
+  x9  = 0x12345678
+  x11 = 0x0000003C
+  x12 = 0x0000005C
+  x13 = 0x00000048
+dmem:
+  0x100 = 0xDEADBEEF
+  0x104 = 0x7F018040
+  0xFFC = 0xCAFEBABE
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: beq, bne, beq, nop, nop, bne, nop, nop, jal, jalr, beq, jal,
+#   halt = 13. Saltos tomados: beq 0x00, bne 0x10, jal 0x38, jalr 0x58,
+#   beq 0x64, jal 0x44 = 6. Los 2 nop de cada salto tomado los anula el flush
+#   y se cuentan como el costo del salto (sin flush se ejecutan y suman lo
+#   mismo).
+ciclos = 29          # n = 13, + 4 de llenado, + 2 * 6 saltos tomados
