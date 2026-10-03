@@ -1,0 +1,6 @@
+# El ensamblador no tiene dependencias; esto es para los tests.
+pytest>=8
+
+# Opcional: LLVM empaquetado, para validar contra un ensamblador estandar
+# (validate_reference.py y los tests en vivo de test_reference.py).
+# ziglang
