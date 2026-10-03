@@ -1,6 +1,6 @@
 # 005 - Cómo se determina la "memoria de datos usada"
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-09-29
 - **Autores:** Costamagna, Matías
 
@@ -28,8 +28,8 @@ pares (`addr`, `valor`) en orden creciente. `LOAD` y `RESET` ponen el mapa en ce
 ## Consecuencias
 - Un `sb`/`sh` marca la palabra completa que contiene el byte.
 - Una palabra escrita con valor cero aparece igual, que es lo que se quiere mostrar.
-- El mapa de 1 bit por palabra ocupa poco: 1 K palabras son 1 Kbit (distribuido en LUTRAM o una
-  BRAM pequeña; a definir en `memoria.md`).
+- El mapa de 1 bit por palabra ocupa poco: 1 K palabras son 1 Kbit, en RAM distribuida (LUTRAM,
+  [`memoria.md`](../spec/memoria.md) §7).
 - `READ_ALL` se puede partir sin ambigüedad porque `dmem_used` viene en el bloque de estado.
 - Si la memoria de datos creciera mucho, el volcado de `READ_DMEM_USED` puede tardar en
   el paso a paso; habría que agregar paginación.

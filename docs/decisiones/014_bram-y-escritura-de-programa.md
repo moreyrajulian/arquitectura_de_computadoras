@@ -1,6 +1,6 @@
 # 014 - Implementación de las memorias con BRAM y escritura de la memoria de programa por el puerto B
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-02
 - **Autores:** Costamagna, Matías
 

@@ -1,6 +1,6 @@
 # 004 - LOAD como único mecanismo de carga y reprogramación
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-09-29
 - **Autores:** Costamagna, Matías
 

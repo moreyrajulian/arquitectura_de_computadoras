@@ -1,6 +1,6 @@
 # 002 - Formato de trama del protocolo de debug
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-09-29
 - **Autores:** Costamagna, Matías
 

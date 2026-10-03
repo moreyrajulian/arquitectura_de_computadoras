@@ -1,6 +1,6 @@
 # 009 - Integración de las memorias de lectura sincrónica (BRAM) en el pipeline
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-09-29
 - **Autores:** Moreyra, Julián
 
@@ -76,3 +76,7 @@ no cambia la interfaz.
   detenido el dato leído no cambie.
 - Si en la etapa de integración el camino crítico pasara por la BRAM, revisar esta
   decisión frente a la opción B o C.
+
+**Puntos abiertos:**
+- Usar el pin de reset del latch de salida de la BRAM con valor NOP (la alternativa de arriba).
+  Se decide al generar el IP (I-20); no cambia la interfaz.

@@ -1,6 +1,6 @@
 # 003 - Baudrate de la UART: 115200
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-09-29
 - **Autores:** Costamagna, Matías
 

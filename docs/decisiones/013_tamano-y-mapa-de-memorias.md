@@ -1,6 +1,6 @@
 # 013 - Tamaño y mapa de direcciones de las memorias
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-02
 - **Autores:** Costamagna, Matías
 

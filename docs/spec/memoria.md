@@ -8,7 +8,7 @@ accesos por byte, desalineados o fuera de rango. Es la referencia para escribir
 | | |
 |---|---|
 | **Issue** | I-07 — Mapa de memoria |
-| **Estado** | Propuesta, pendiente de revisión |
+| **Estado** | aceptada |
 | **Decisiones** | [013](../decisiones/013_tamano-y-mapa-de-memorias.md) tamaño y mapa · [014](../decisiones/014_bram-y-escritura-de-programa.md) BRAM y escritura de la memoria de programa · [015](../decisiones/015_accesos-desalineados-y-fuera-de-rango.md) desalineados y fuera de rango · [016](../decisiones/016_acceso-por-byte.md) acceso por byte y media palabra |
 | **Depende de** | [`pipeline.md`](pipeline.md) (§3.2, §6, §7.1), [`protocolo_debug.md`](protocolo_debug.md) (`LOAD`, `RESET`, `READ_DMEM*`), decisiones [004](../decisiones/004_carga-y-reprogramacion.md), [005](../decisiones/005_memoria-de-datos-usada.md) y [009](../decisiones/009_memorias-sincronicas.md) |
 
@@ -495,10 +495,10 @@ nuevo y el cliente de la PC se adapta solo. Límites:
 
 ## 10. Checklist de revisión
 
-- [ ] 1024 palabras por memoria, mapas desde `0x0000_0000` y PC de reset en 0
-- [ ] Configuración del Block Memory Generator (TDP, sin registro de salida, byte write enable en `dmem`)
-- [ ] Conexión de los puertos A y B y la tabla de concurrencia
-- [ ] Escritura de `imem` por el puerto B con el core en reset y el relleno con HALT
-- [ ] Little-endian y los ejemplos de byte y media palabra
-- [ ] Política de desalineados y fuera de rango, y los tres avisos del bloque de estado
-- [ ] Mapa de palabras usadas en LUTRAM
+- [x] 1024 palabras por memoria, mapas desde `0x0000_0000` y PC de reset en 0
+- [x] Configuración del Block Memory Generator (TDP, sin registro de salida, byte write enable en `dmem`)
+- [x] Conexión de los puertos A y B y la tabla de concurrencia
+- [x] Escritura de `imem` por el puerto B con el core en reset y el relleno con HALT
+- [x] Little-endian y los ejemplos de byte y media palabra
+- [x] Política de desalineados y fuera de rango, y los tres avisos del bloque de estado
+- [x] Mapa de palabras usadas en LUTRAM

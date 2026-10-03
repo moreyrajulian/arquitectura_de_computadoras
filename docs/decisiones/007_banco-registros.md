@@ -1,6 +1,6 @@
 # 007 - Banco de registros: implementación y conflicto de lectura/escritura entre ID y WB
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-09-29
 - **Autores:** Moreyra, Julián
 
@@ -71,7 +71,7 @@ Restricciones:
 - La unidad de forwarding (I-05) solo necesita cubrir los casos EX/MEM → EX y MEM/WB → EX.
   El caso "WB escribe mientras ID lee" queda resuelto dentro del banco.
 - La Debug Unit (I-06) dispone de un puerto de lectura propio.
-- El reset del banco deja todos los registros en cero; queda disponible si la respuesta a
-  "¿hay que vaciar los registros?" resulta ser sí.
+- El reset del banco deja todos los registros en cero; es lo que usan `LOAD` y `RESET` para
+  vaciarlos ([decisión 004](004_carga-y-reprogramacion.md)).
 - Si el análisis de tiempo mostrara que el camino de ID (lectura + bypass) es el crítico,
   revisar la opción C.

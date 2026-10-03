@@ -1,6 +1,6 @@
 # 008 - Interfaz de PC: TUI con Textual
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-02
 - **Autores:** Costamagna, Matías
 

@@ -21,6 +21,14 @@ llenando a medida que avanzan los issues del milestone de especificación.
 - **Una decisión, una nota.** Numeradas (`001-...md`) y con el formato de la plantilla:
   contexto, opciones, decisión, consecuencias. Si una decisión cambia, se crea una nota
   nueva que reemplaza a la anterior en lugar de borrarla.
+- **Estado de una decisión: la acepta el merge.** La nota se escribe como `propuesta` y el
+  último commit del PR, ya aprobado por el otro integrante, la pasa a `aceptada`. Así, en
+  `master` solo hay decisiones `aceptada` o `reemplazada por NNN`. Si se mergea sin cerrar
+  todo el tema, los puntos abiertos se listan en las consecuencias de la nota. Para cambiar
+  una decisión aceptada se escribe una nota nueva que la reemplaza, y la vieja pasa a
+  `reemplazada por NNN`. Los valores van siempre en minúscula.
+- **Estado de un documento de `spec/`:** la misma regla. El campo **Estado** del encabezado
+  dice `aceptada` al mergear y, si quedan puntos abiertos, en qué sección están.
 - **Fuente y exportado juntos.** Si agregás `datapath.drawio`, también va `datapath.png`
   (o `.svg`) con el mismo nombre.
 - **Diagramas simples en Mermaid.** Máquinas de estados y secuencias pueden escribirse como

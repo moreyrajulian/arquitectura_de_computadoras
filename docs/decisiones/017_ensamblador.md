@@ -1,6 +1,6 @@
 # 017 - Ensamblador propio, formatos de salida y validación
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-03
 - **Autores:** Costamagna, Matías
 

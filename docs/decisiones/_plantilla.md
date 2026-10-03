@@ -1,6 +1,8 @@
 # NNN - Título de la decisión
 
 - **Estado:** propuesta | aceptada | reemplazada por NNN
+  <!-- Se escribe `propuesta`; el último commit del PR, ya aprobado, la pasa a `aceptada`.
+       Si quedan puntos abiertos, van en Consecuencias. Regla completa en docs/README.md. -->
 - **Fecha:** AAAA-MM-DD
 - **Autores:**
 
@@ -17,4 +19,5 @@ Qué se eligió y el porqué, en pocas líneas.
 
 ## Consecuencias
 Qué implica esta decisión: qué módulos afecta, qué queda más simple o más difícil,
-qué habría que revisar si cambia algún supuesto.
+qué habría que revisar si cambia algún supuesto. Si la nota se mergea con puntos sin
+cerrar, se listan acá como **Puntos abiertos**.

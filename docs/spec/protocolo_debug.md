@@ -6,7 +6,7 @@ cambia algo de este documento, tiene que cambiar el RTL y el cliente de la PC en
 | | |
 |---|---|
 | **Versión del protocolo** | 1 (la devuelve el comando `INFO`) |
-| **Estado** | Propuesta, pendiente de revisión |
+| **Estado** | aceptada. Punto abierto: el empaquetado de los latches en `READ_LATCHES` (§3.6) es provisorio; se fija con los campos de `pipeline.md` §8 en I-06 |
 | **Depende de** | [`isa.md`](isa.md) (codificación del HALT), [`memoria.md`](memoria.md) (tamaños, puertos B y avisos de acceso), `pipeline.md` (contenido de los latches) |
 | **Diagramas** | [`sistema`](../diagramas/sistema.png), secuencias `protocolo_*.png`, FSM `debug_unit_*.png` |
 
@@ -432,10 +432,10 @@ Señales hacia el core y las memorias (coinciden con el diagrama de sistema):
 
 ## 8. Checklist de revisión
 
-- [ ] 115200 8N1 y el cálculo de `DVSR` a partir de `CLK_FREQ_HZ`
-- [ ] Formato de trama, little-endian y checksum XOR
-- [ ] Lista de comandos y la tabla de estados permitidos
-- [ ] Qué limpia `LOAD`/`RESET` (y llenar el resto de la memoria de programa con HALT)
-- [ ] Contenido provisorio de los latches (se cierra con `pipeline.md`)
-- [ ] Mapa de palabras usadas para `READ_DMEM_USED`
-- [ ] Timeouts (100 ms en la FPGA) y la regla de no reintentar `STEP`/`RUN` a ciegas
+- [x] 115200 8N1 y el cálculo de `DVSR` a partir de `CLK_FREQ_HZ`
+- [x] Formato de trama, little-endian y checksum XOR
+- [x] Lista de comandos y la tabla de estados permitidos
+- [x] Qué limpia `LOAD`/`RESET` (y llenar el resto de la memoria de programa con HALT)
+- [ ] Contenido provisorio de los latches (se cierra con `pipeline.md` §8 en I-06; punto abierto del encabezado)
+- [x] Mapa de palabras usadas para `READ_DMEM_USED`
+- [x] Timeouts (100 ms en la FPGA) y la regla de no reintentar `STEP`/`RUN` a ciegas
