@@ -1,0 +1,19 @@
+# jump: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000004
+  x2  = 0x0000003D
+  x3  = 0x00000038
+  x5  = 0x00000048
+  x10 = 0x00000001
+  x11 = 0x00000011
+  x12 = 0x00000012
+  x13 = 0x00000013
+  x14 = 0x00000014
+  x15 = 0x00000015
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: jal, addi, addi, jalr, addi, jal, addi, addi, addi, jalr, addi,
+#   jal, halt = 13. Saltos tomados: los 5
+ciclos = 27          # n = 13, + 4 de llenado, + 2 * 5 saltos tomados

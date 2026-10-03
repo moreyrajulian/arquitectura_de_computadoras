@@ -1,0 +1,14 @@
+# fwd_exmem: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x0000000A
+  x2  = 0x0000000F
+  x3  = 0xFFFFFFF1
+  x4  = 0xFFFFFFE2
+  x5  = 0x00000040
+dmem:
+  0x000 = 0xFFFFFFE2
+  0x044 = 0x0000000F
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 12          # n = 8, + 4 de llenado

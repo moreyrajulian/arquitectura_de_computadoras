@@ -1,0 +1,16 @@
+// Estado inicial de los registros para los programas indep_*.
+//
+// Formato de $readmemh: "@<indice>" fija la posicion (numero de registro, en
+// hex) y el valor que sigue va en esa posicion. Los registros que no aparecen
+// valen 0: el testbench los pone en cero antes de leer este archivo.
+// Ver sw/README.md.
+
+@01 00000007    // x1  = 7
+@02 FFFFFFFD    // x2  = -3
+@03 7FFFFFFF    // x3  = maximo con signo
+@04 80000000    // x4  = minimo con signo
+@05 00000021    // x5  = 33: como cantidad de desplazamiento cuenta 1
+@06 00000100    // x6  = base de datos (0x100)
+@07 00001000    // x7  = fin de dmem: -4(x7) es la ultima palabra (0xFFC)
+@08 DEADBEEF    // x8  = dato
+@09 12345678    // x9  = dato

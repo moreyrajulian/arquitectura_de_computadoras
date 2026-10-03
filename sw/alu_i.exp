@@ -1,0 +1,25 @@
+# alu_i: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000064
+  x2  = 0xFFFFFF9C
+  x3  = 0x00000678
+  x10 = 0x00000063
+  x11 = 0x0000079B
+  x12 = 0xFFFFF800
+  x13 = 0xFFFFFF90
+  x14 = 0x00000070
+  x15 = 0xFFFFFE78
+  x16 = 0xFFFFFF9B
+  x17 = 0x00000687
+  x18 = 0x00000001
+  x19 = 0x00000000
+  x20 = 0x00000001
+  x21 = 0x00000001
+  x22 = 0x00000000
+  x23 = 0x00000001
+  x24 = 0x00000001
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 23          # n = 19, + 4 de llenado

@@ -1,0 +1,15 @@
+# lui: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x12345678
+  x2  = 0xFFFFF7FF
+  x3  = 0x00001000
+  x4  = 0xDEADBEEF
+  x5  = 0x7FFFFFFF
+  x6  = 0x00000800
+  x7  = 0xABCDE000
+  x8  = 0x7FFFF000
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 18          # n = 14, + 4 de llenado

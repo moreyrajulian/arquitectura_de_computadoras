@@ -1,0 +1,24 @@
+# branch_cond_nops: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000005
+  x2  = 0x00000005
+  x3  = 0x00000007
+  x4  = 0x00000003
+  x11 = 0x00000011
+  x12 = 0x00000012
+  x13 = 0x00000003
+  x14 = 0x00000006
+  x15 = 0x00000009
+  x16 = 0x00000001
+  x17 = 0x00000001
+  x18 = 0x00000018
+  x19 = 0x00000019
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: 30 de branch_cond + 2 nop por cada uno de los 3 saltos no
+#   tomados = 36. Los 2 nop de cada salto tomado los anula el flush y se
+#   cuentan como el costo del salto (sin flush, en M7, se ejecutan y suman lo
+#   mismo).
+ciclos = 54          # n = 36, + 4 de llenado, + 2 * 7 saltos tomados

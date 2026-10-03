@@ -1,0 +1,17 @@
+# load_sin_dep_nops: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000044
+  x2  = 0x00000010
+  x3  = 0x00000003
+  x5  = 0x00000044
+  x6  = 0x00000011
+  x7  = 0x00000044
+  x8  = 0x00000044
+  x9  = 0xFFFFFFBC
+dmem:
+  0x020 = 0x00000044
+  0x024 = 0x00000003
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 17          # n = 13 (11 + 2 nop), + 4 de llenado

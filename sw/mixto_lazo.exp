@@ -1,0 +1,19 @@
+# mixto_lazo: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000114
+  x2  = 0x00000010
+  x5  = 0x0000000D
+  x10 = 0x00000023
+dmem:
+  0x100 = 0x00000001
+  0x104 = 0x00000004
+  0x108 = 0x00000007
+  0x10C = 0x0000000A
+  0x110 = 0x0000000D
+  0x200 = 0x00000023
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: 3 + 5 vueltas de 5 + 3 + 5 vueltas de 5 + sw + halt = 58
+# Stalls: 1 por vuelta de sumar = 5. Saltos tomados: 4 + 4 = 8
+ciclos = 83          # n = 58, + 4 de llenado, + 5 stalls, + 2 * 8 saltos tomados

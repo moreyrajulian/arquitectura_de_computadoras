@@ -1,0 +1,18 @@
+# loaduse_rs1_rs2_nops: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x0000002A
+  x2  = 0xFFFFFFFB
+  x3  = 0x00000003
+  x5  = 0x0000002A
+  x6  = 0x0000002A
+  x7  = 0xFFFFFFFB
+  x8  = 0x00000005
+  x9  = 0x0000002A
+  x10 = 0x00000054
+dmem:
+  0x008 = 0x0000002A
+  0x00C = 0xFFFFFFFB
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 22          # n = 18 (12 + 6 nop), + 4 de llenado, sin stalls

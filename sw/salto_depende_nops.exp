@@ -1,0 +1,19 @@
+# salto_depende_nops: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000005
+  x2  = 0x00000006
+  x3  = 0x00000006
+  x4  = 0x00000005
+  x5  = 0x0000008C
+  x6  = 0x00000074
+  x8  = 0x00000008
+  x9  = 0x00000009
+  x10 = 0x00000010
+dmem:
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: 0x00-0x18, 0x2C-0x50, 0x64-0x70, 0x8C = 7 + 10 + 4 + 1 = 22.
+#   Los 2 nop de cada salto tomado los anula el flush y se cuentan como el
+#   costo del salto (sin flush, en M7, se ejecutan y suman lo mismo).
+ciclos = 32          # n = 22, + 4 de llenado, + 2 * 3 saltos tomados

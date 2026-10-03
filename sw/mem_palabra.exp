@@ -1,0 +1,20 @@
+# mem_palabra: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0xDEADBEEF
+  x2  = 0x00001000
+  x3  = 0x00000123
+  x4  = 0x12345000
+  x5  = 0x00000200
+  x10 = 0x00000123
+  x11 = 0xDEADBEEF
+  x12 = 0x12345000
+  x13 = 0x00000123
+dmem:
+  0x000 = 0x00000123
+  0x010 = 0x12345000
+  0x1F8 = 0x00000123
+  0xFFC = 0xDEADBEEF
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 19          # n = 15, + 4 de llenado

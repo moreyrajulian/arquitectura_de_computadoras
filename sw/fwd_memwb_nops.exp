@@ -1,0 +1,16 @@
+# fwd_memwb_nops: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000007
+  x2  = 0x0000000A
+  x3  = 0xFFFFFFF6
+  x4  = 0xFFFFFFEC
+  x10 = 0x00000001
+  x11 = 0x00000002
+  x12 = 0x00000003
+  x13 = 0x00000004
+dmem:
+  0x008 = 0xFFFFFFEC
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 18          # n = 14 (10 + 4 nop), + 4 de llenado

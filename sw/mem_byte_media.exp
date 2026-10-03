@@ -1,0 +1,42 @@
+# mem_byte_media: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00007FFE
+  x2  = 0x00007E81
+  x3  = 0x0000817E
+  x4  = 0x0000FA0F
+  x5  = 0x00008001
+  x6  = 0x000005F0
+  x7  = 0x11223344
+  x8  = 0xFFFF8001
+  x9  = 0x00007FFE
+  x10 = 0x11228144
+  x11 = 0xFFFFFF81
+  x12 = 0x0000007E
+  x13 = 0xFFFFFFF0
+  x14 = 0x00000005
+  x15 = 0x0000007E
+  x16 = 0xFFFFFF81
+  x17 = 0x0000000F
+  x18 = 0xFFFFFFFA
+  x19 = 0x00000081
+  x20 = 0x0000007E
+  x21 = 0x000000F0
+  x22 = 0x00000005
+  x23 = 0x0000007E
+  x24 = 0x00000081
+  x25 = 0x0000000F
+  x26 = 0x000000FA
+  x27 = 0x00007E81
+  x28 = 0x000005F0
+  x29 = 0xFFFF817E
+  x30 = 0xFFFFFA0F
+  x31 = 0xFFFF8001
+dmem:
+  0x100 = 0x05F07E81
+  0x104 = 0xFA0F817E
+  0x108 = 0x7FFE8001
+  0x10C = 0x7FFE8144
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+ciclos = 58          # n = 54, + 4 de llenado

@@ -1,0 +1,16 @@
+# mem_avisos: estado final esperado, calculado a mano desde isa.md y memoria.md 6
+regs:
+  x1  = 0x00000055
+  x2  = 0x00001000
+  x3  = 0x12345000
+  x10 = 0x12345000
+  x11 = 0x00000055
+  x12 = 0x00005000
+dmem:
+  0x000 = 0x12345000
+  0x004 = 0x00000055
+  0x008 = 0x00550000
+halted = 1
+pipeline_vacio = 1
+avisos = imem_fault, dmem_oob, dmem_misaligned
+ciclos = 17          # n = 11, + 4 de llenado, + 2 por el jalr (los dos nop se anulan)
