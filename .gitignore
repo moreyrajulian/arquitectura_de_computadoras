@@ -24,4 +24,5 @@ Thumbs.db
 *.vcd
 *.wdb
 __pycache__/
+.pytest_cache/
 .venv/
