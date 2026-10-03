@@ -212,10 +212,10 @@ puede pasar `--port` por línea de comandos.
 
 ## 8. Checklist de revisión
 
-- [ ] TUI con Textual y separación `client` / `model` / `session` / `tui` (decisión 008)
-- [ ] Paneles del boceto: programa, pipeline, latches, registros, memoria usada, historial
-- [ ] Lista de controles, atajos y en qué estados se habilitan
-- [ ] Qué se muestra en cada paso y cómo se resaltan los cambios
-- [ ] Reglas para inferir stalls y forwarding
-- [ ] Comportamiento del modo continuo y del watchdog
-- [ ] Requisitos de terminal y de puerto serie en Windows y Linux
+- [x] TUI con Textual y separación `client` / `model` / `session` / `tui` (decisión 008)
+- [x] Paneles del boceto: programa, pipeline, latches, registros, memoria usada, historial
+- [x] Lista de controles, atajos y en qué estados se habilitan
+- [x] Qué se muestra en cada paso y cómo se resaltan los cambios
+- [x] Reglas para inferir stalls y forwarding
+- [x] Comportamiento del modo continuo y del watchdog
+- [x] Requisitos de terminal y de puerto serie en Windows y Linux
