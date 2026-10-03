@@ -78,7 +78,7 @@ dentro de la carpeta `build/`.
 
 1. [x] TP1: ALU
 2. [x] TP2: UART
-3. [ ] Especificación: ISA, protocolo de debug, diagrama del pipeline (`docs/spec/`)
+3. [x] Especificación: ISA, protocolo de debug, diagrama del pipeline (`docs/spec/`)
 4. [ ] Ensamblador (`tools/assembler/`)
 5. [ ] Etapas del pipeline + registros de segmentación
 6. [ ] Forwarding y detección de riesgos
