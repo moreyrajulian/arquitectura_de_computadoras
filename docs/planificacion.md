@@ -22,7 +22,8 @@ cinco etapas funcionando, porque involucran a varias a la vez.
 ## Supuestos de la estimación
 
 - **Inicio real:** 26/09/2026 (primer issue de especificación; la reorganización del
-  repositorio y las plantillas son del 24/09). **Fin estimado:** 07/01/2027.
+  repositorio y las plantillas son del 24/09). **Fin estimado:** 23/12/2026 (antes de la
+  reprogramación del 03/10 era el 07/01/2027).
 - **Personas:** A es Julián Moreyra y B es Matías Costamagna.
 - **Dedicación:** unas 10 a 12 horas por semana por persona. Un "día" del cronograma es un
   día de calendario con esa dedicación (incluye fines de semana), no una jornada completa.
@@ -37,12 +38,18 @@ cinco etapas funcionando, porque involucran a varias a la vez.
 - **Reprogramación al 02/10/2026:** M1 avanzó más rápido de lo estimado, así que las tareas
   pendientes de M1 se reprogramaron desde el 02/10 y **todas las tareas desde M2 en adelante
   se adelantaron 14 días**, sin cambiar su orden ni sus duraciones.
+- **Reprogramación al 03/10/2026:** M1 cerró completo y de M2 solo queda el I-16, con
+  12 días de adelanto sobre el plan anterior. Las tareas pendientes se recalcularon desde
+  el 04/10 respetando el "Depende de" de cada issue, la estimación actual (campo
+  *Estimate* del Project) y la regla de un issue por persona a la vez, con prioridad para
+  el pipeline. No se achicaron las duraciones: la velocidad de M1 (documentos) no se
+  traslada al RTL. Las dos semanas ganadas quedan como **reserva** antes de las fiestas.
 - Frente al plan anterior (monociclo y luego segmentación), este enfoque suma unos 10 días
   por persona: un registro de segmentación por issue, una integración por etapa y la traza
   por etapa en el modelo de referencia. A cambio, cada error queda acotado a la última
   etapa integrada.
 
-## Avance al 02/10/2026
+## Avance al 03/10/2026
 
 | Issue | Responsable | Inicio | Fin real | Estimado | Real | PR |
 |---|---|---|---|---|---|---|
@@ -51,7 +58,19 @@ cinco etapas funcionando, porque involucran a varias a la vez.
 | I-03 Formatos de instrucción | B | 28/09 | 28/09 | 2 días | 1 día | #21 |
 | I-08 Decisión HALT | A + B | 28/09 | 29/09 | 2 días | 2 días | #22 |
 | I-06 Protocolo de debug | B (era de A) | 29/09 | 30/09 | 6 días | 2 días | #23 |
-| I-04 Pipeline y datapath | A | 29/09 | en curso | 6 días | — | sin PR (`docs/7_pipeline`) |
+| I-04 Pipeline y datapath | A | 29/09 | 02/10 | 6 días | 4 días | #24 |
+| I-12 Boceto interfaz PC | B | 02/10 | 02/10 | 3 días | 1 día | #74 |
+| I-05 Control y riesgos | B | 02/10 | 02/10 | 4 días | 1 día | #76 |
+| I-09 Decisión saltos | B | 02/10 | 02/10 | 3 días | 1 día | #77 |
+| I-07 Mapa de memoria | B | 02/10 | 02/10 | 3 días | 1 día | #78 |
+| I-13 Convenciones RTL | A + B | 02/10 | 03/10 | 1 día | 2 días | #75 |
+| I-11 Plan de verificación | A | 03/10 | 03/10 | 3 días | 1 día | #79 |
+| I-14 Paso a paso sin clock | A | 03/10 | 03/10 | 2 días | 1 día | #84 |
+| I-10 Ensamblador | B (era de A) | 03/10 | 03/10 | 7 días | 1 día | #81 |
+| I-15 Programas de prueba | B | 03/10 | 03/10 | 4 días | 1 día | #83 |
+
+M1 cerró el 03/10 (estimado: 15/10). Con el I-10 pasado a B, la carga ya no coincide con
+los totales de arriba: conviene revisar el reparto al cerrar M3.
 
 ## Cómo se reparte el trabajo
 
@@ -92,19 +111,21 @@ las partes del sistema y puedan defender cualquiera:
 
 | Milestone | Fin estimado |
 |---|---|
-| M1 - Especificación | 15/10/2026 |
-| M2 - Ensamblador y modelo de referencia | 29/10/2026 |
-| M3 - Etapa IF | 04/11/2026 |
-| M4 - Etapa ID | 12/11/2026 |
-| M5 - Etapa EX | 19/11/2026 |
-| M6 - Etapa MEM | 22/11/2026 |
-| M7 - Etapa WB y cierre del pipeline | 04/12/2026 |
-| M8 - Riesgos | 18/12/2026 |
-| M9 - Debug Unit | 11/12/2026 |
-| M10 - Interfaz de PC | 29/12/2026 |
-| M11 - Integración y timing | 07/01/2027 |
+| M1 - Especificación | 03/10/2026 (cerrado) |
+| M2 - Ensamblador y modelo de referencia | 07/10/2026 |
+| M3 - Etapa IF | 17/10/2026 |
+| M4 - Etapa ID | 25/10/2026 |
+| M5 - Etapa EX | 30/10/2026 |
+| M6 - Etapa MEM | 02/11/2026 |
+| M7 - Etapa WB y cierre del pipeline | 14/11/2026 |
+| M8 - Riesgos | 28/11/2026 |
+| M9 - Debug Unit | 02/12/2026 |
+| M10 - Interfaz de PC | 15/12/2026 |
+| M11 - Integración y timing | 23/12/2026 |
 
-M9 (Debug Unit) termina antes que M8 (Riesgos) porque lo lleva B en paralelo.
+M9 (Debug Unit) termina después de M8 (Riesgos): sus módulos llenan los huecos que dejan
+las etapas del pipeline, que tienen prioridad, y la prueba en placa (I-49) necesita el cliente
+del protocolo (I-50).
 
 ## Diagrama (Mermaid)
 
@@ -124,82 +145,82 @@ gantt
     I-03 Formatos de instrucción (B) :done, 2026-09-28, 1d
     I-08 Decisión HALT (A + B) :crit, done, 2026-09-28, 2d
     I-06 Protocolo de debug (B) :done, 2026-09-29, 2d
-    I-04 Pipeline y datapath (A) :active, 2026-09-29, 6d
-    I-12 Boceto interfaz PC (B) :2026-10-02, 3d
-    I-13 Convenciones RTL (A + B) :crit, 2026-10-05, 1d
-    I-14 Paso a paso sin clock (A) :2026-10-06, 2d
-    I-09 Decisión saltos (B) :2026-10-06, 3d
-    I-11 Plan de verificación (A) :2026-10-08, 3d
-    I-07 Mapa de memoria (B) :2026-10-09, 3d
-    I-05 Control y riesgos (B) :2026-10-12, 4d
-    M1 cerrado :milestone, 2026-10-16, 0d
+    I-04 Pipeline y datapath (A) :done, 2026-09-29, 4d
+    I-12 Boceto interfaz PC (B) :done, 2026-10-02, 1d
+    I-05 Control y riesgos (B) :done, 2026-10-02, 1d
+    I-09 Decisión saltos (B) :done, 2026-10-02, 1d
+    I-07 Mapa de memoria (B) :done, 2026-10-02, 1d
+    I-13 Convenciones RTL (A + B) :crit, done, 2026-10-02, 2d
+    I-11 Plan de verificación (A) :done, 2026-10-03, 1d
+    I-14 Paso a paso sin clock (A) :done, 2026-10-03, 1d
+    M1 cerrado :milestone, 2026-10-04, 0d
     section M2 Ensamblador y modelo de referencia
-    I-10 Ensamblador (A) :2026-10-16, 7d
-    I-15 Programas de prueba (B) :2026-10-20, 4d
-    I-16 Modelo de referencia (A) :2026-10-23, 7d
-    M2 cerrado :milestone, 2026-10-30, 0d
+    I-10 Ensamblador (B) :done, 2026-10-03, 1d
+    I-15 Programas de prueba (B) :done, 2026-10-03, 1d
+    I-16 Modelo de referencia (A) :2026-10-04, 4d
+    M2 cerrado :milestone, 2026-10-08, 0d
     section M3 Etapa IF
-    I-21 Registro IF/ID (A) :2026-10-11, 2d
-    I-17 Banco de pruebas incremental (B) :2026-10-24, 4d
-    I-18 Definiciones de la ISA (A) :2026-10-30, 1d
-    I-20 Memoria de programa (A) :2026-10-31, 3d
-    I-19 PC y próxima dirección (B) :2026-11-01, 2d
-    I-22 Integración IF (B) :2026-11-03, 2d
-    M3 cerrado :milestone, 2026-11-05, 0d
+    I-17 Banco de pruebas incremental (B) :2026-10-04, 3d
+    I-18 Definiciones de la ISA (A) :2026-10-10, 1d
+    I-20 Memoria de programa (A) :2026-10-11, 3d
+    I-19 PC y próxima dirección (B) :2026-10-14, 2d
+    I-21 Registro IF/ID (A) :2026-10-14, 2d
+    I-22 Integración IF (B) :2026-10-16, 2d
+    M3 cerrado :milestone, 2026-10-18, 0d
     section M4 Etapa ID
-    I-23 Banco de registros (A) :2026-11-03, 2d
-    I-24 Unidad de control (A) :2026-11-05, 3d
-    I-25 Generador de inmediatos (B) :2026-11-05, 2d
-    I-26 Registro ID/EX (A) :2026-11-08, 2d
-    I-27 Integración ID (B) :2026-11-10, 3d
-    M4 cerrado :milestone, 2026-11-13, 0d
+    I-23 Banco de registros (A + B) :crit, 2026-10-08, 2d
+    I-24 Unidad de control (A) :2026-10-16, 3d
+    I-25 Generador de inmediatos (B) :2026-10-18, 2d
+    I-26 Registro ID/EX (A) :2026-10-19, 2d
+    I-27 Integración ID (B) :2026-10-23, 3d
+    M4 cerrado :milestone, 2026-10-26, 0d
     section M5 Etapa EX
-    I-28 ALU + control de ALU (B) :2026-11-07, 3d
-    I-29 Lógica de saltos (A) :2026-11-10, 3d
-    I-30 Registro EX/MEM (B) :2026-11-13, 1d
-    I-31 Integración EX (A) :2026-11-17, 3d
-    M5 cerrado :milestone, 2026-11-20, 0d
+    I-28 ALU + control de ALU (B) :2026-10-20, 3d
+    I-29 Lógica de saltos (A) :2026-10-21, 3d
+    I-30 Registro EX/MEM (B) :2026-10-26, 1d
+    I-31 Integración EX (A) :2026-10-28, 3d
+    M5 cerrado :milestone, 2026-10-31, 0d
     section M6 Etapa MEM
-    I-32 Memoria de datos (B) :2026-10-28, 4d
-    I-33 Registro MEM/WB (B) :2026-11-14, 1d
-    I-34 Integración MEM (B) :2026-11-20, 3d
-    M6 cerrado :milestone, 2026-11-23, 0d
+    I-32 Memoria de datos (B) :2026-10-10, 4d
+    I-33 Registro MEM/WB (B) :2026-10-27, 1d
+    I-34 Integración MEM (B) :2026-10-31, 3d
+    M6 cerrado :milestone, 2026-11-03, 0d
     section M7 Etapa WB y cierre del pipeline
-    I-35 Write back (B) :2026-11-23, 3d
-    I-36 Saltos hacia IF (B) :2026-11-26, 3d
-    I-37 HALT y vaciado (A) :2026-11-29, 3d
-    I-38 Validación sin riesgos (A) :2026-12-02, 3d
-    M7 cerrado :milestone, 2026-12-05, 0d
+    I-35 Write back (B) :2026-11-03, 3d
+    I-36 Saltos hacia IF (B) :2026-11-06, 3d
+    I-37 HALT y vaciado (A) :2026-11-09, 3d
+    I-38 Validación sin riesgos (A) :2026-11-12, 3d
+    M7 cerrado :milestone, 2026-11-15, 0d
     section M8 Riesgos
-    I-39 Unidad de forwarding (A) :2026-12-05, 4d
-    I-40 Verificación forwarding (A) :2026-12-09, 3d
-    I-41 Stall carga-uso (B) :2026-12-12, 4d
-    I-42 Flush por saltos (A) :2026-12-12, 4d
-    I-43 Regresión completa (B) :2026-12-16, 3d
-    M8 cerrado :milestone, 2026-12-19, 0d
+    I-39 Unidad de forwarding (A) :2026-11-15, 4d
+    I-40 Verificación forwarding (A) :2026-11-19, 3d
+    I-41 Stall carga-uso (B) :2026-11-22, 4d
+    I-42 Flush por saltos (A) :2026-11-22, 4d
+    I-43 Regresión completa (B) :2026-11-26, 3d
+    M8 cerrado :milestone, 2026-11-29, 0d
     section M9 Debug Unit
-    I-44 UART para debug (A) :2026-11-13, 4d
-    I-45 Debug - FSM de comandos (A) :2026-11-20, 5d
-    I-46 Debug - carga de programa (A) :2026-11-25, 4d
-    I-47 Debug - modos de ejecución (B) :2026-11-29, 4d
-    I-48 Debug - volcado de estado (B) :2026-12-03, 5d
-    I-49 Top y prueba en placa (B) :2026-12-08, 4d
-    M9 cerrado :milestone, 2026-12-12, 0d
+    I-44 UART para debug (A) :2026-10-24, 4d
+    I-45 Debug - FSM de comandos (A) :2026-10-31, 5d
+    I-46 Debug - carga de programa (A) :2026-11-05, 4d
+    I-47 Debug - modos de ejecución (B) :2026-11-09, 4d
+    I-48 Debug - volcado de estado (B) :2026-11-13, 5d
+    I-49 Top y prueba en placa (B) :2026-11-29, 4d
+    M9 cerrado :milestone, 2026-12-03, 0d
     section M10 Interfaz de PC
-    I-50 Cliente del protocolo (B) :2026-10-16, 4d
-    I-51 Desensamblador (B) :2026-11-15, 2d
-    I-52 Interfaz de usuario (A) :2026-12-16, 6d
-    I-53 Vista del pipeline (B) :2026-12-23, 4d
-    I-54 Verificación y README (B) :2026-12-27, 3d
-    M10 cerrado :milestone, 2026-12-30, 0d
+    I-50 Cliente del protocolo (B) :2026-11-18, 4d
+    I-52 Interfaz de usuario (A) :2026-11-26, 6d
+    I-51 Desensamblador (B) :2026-12-07, 2d
+    I-53 Vista del pipeline (B) :2026-12-09, 4d
+    I-54 Verificación y README (B) :2026-12-13, 3d
+    M10 cerrado :milestone, 2026-12-16, 0d
     section M11 Integración y timing
-    I-58 Programa de demo (B) :2026-11-17, 3d
-    I-55 Pipeline en la placa (B) :2026-12-19, 4d
-    I-56 Camino crítico y skew (A) :2026-12-23, 4d
-    I-57 Clock Wizard (A) :2026-12-27, 4d
-    I-59 Preguntas de la consigna (A + B) :crit, 2026-12-31, 2d
-    I-60 Informe y presentación (A + B) :crit, 2027-01-02, 6d
-    M11 cerrado :milestone, 2027-01-08, 0d
+    I-58 Programa de demo (B) :2026-10-28, 3d
+    I-55 Pipeline en la placa (B) :2026-12-03, 4d
+    I-56 Camino crítico y skew (A) :2026-12-07, 4d
+    I-57 Clock Wizard (A) :2026-12-11, 4d
+    I-59 Preguntas de la consigna (A + B) :crit, 2026-12-16, 2d
+    I-60 Informe y presentación (A + B) :crit, 2026-12-18, 6d
+    M11 cerrado :milestone, 2026-12-24, 0d
 ```
 
 ## Cómo mantenerlo
