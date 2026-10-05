@@ -5,7 +5,7 @@ registros y memoria, la cantidad de ciclos y el contenido de los cuatro registro
 segmentación **en cada ciclo**. Es el segundo oráculo de
 [`verificacion.md`](../../docs/spec/verificacion.md) §2: el RTL se compara contra él en el
 banco de pruebas incremental (nivel 2) y contra el `.exp` escrito a mano (nivel 3). El porqué
-del diseño está en la [decisión 0NN](../../docs/decisiones/0NN_modelo-de-referencia.md).
+del diseño está en la [decisión 020](../../docs/decisiones/020_modelo-de-referencia.md).
 
 | | |
 |---|---|
