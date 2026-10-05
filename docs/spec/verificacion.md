@@ -107,7 +107,7 @@ Cada programa es un archivo `sw/<nombre>.s` con su `sw/<nombre>.exp` al lado (§
 extensión es `.s` porque es la que usan el ensamblador ([017](../decisiones/017_ensamblador.md))
 y la interfaz de la PC. Las convenciones completas, la lista con el detalle de cada programa
 y cómo agregar uno están en [`sw/README.md`](../../sw/README.md) (decisión
-[018](../decisiones/018_programas-de-prueba.md)).
+[019](../decisiones/019_programas-de-prueba.md)).
 
 Reglas para todos:
 
