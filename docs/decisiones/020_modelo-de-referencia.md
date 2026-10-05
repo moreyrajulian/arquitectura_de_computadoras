@@ -19,7 +19,7 @@ Restricciones:
 - **Independencia:** si el modelo copia el diseño del RTL, un error de interpretación queda en
   los dos lados y la prueba pasa igual (`verificacion.md` §2).
 - **Etapas intermedias:** hasta M7 el pipeline no tiene forwarding, stall ni flush por saltos,
-  y se prueba con los `indep_*` y las variantes `_nops` (decisión 018 de programas de prueba).
+  y se prueba con los `indep_*` y las variantes `_nops` (decisión 019 de programas de prueba).
 - Python, como el ensamblador ([017](017_ensamblador.md)).
 
 El contenido de un latch **no siempre es un valor de la ISA**. En `addi x1, x0, 5` seguido de
