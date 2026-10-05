@@ -4,7 +4,7 @@ Programas en ensamblador que ejecuta el procesador en todas las pruebas: por eta
 (nivel 2), core completo (nivel 3), Debug Unit (nivel 4) y placa (nivel 5) de
 [`verificacion.md`](../docs/spec/verificacion.md). Cada uno viene con su **estado final
 esperado**, calculado a mano desde [`isa.md`](../docs/spec/isa.md). El porqué de estas
-convenciones está en la [decisión 018](../docs/decisiones/018_programas-de-prueba.md).
+convenciones está en la [decisión 019](../docs/decisiones/019_programas-de-prueba.md).
 
 | | |
 |---|---|

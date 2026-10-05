@@ -37,7 +37,7 @@ Una prueba es tan buena como su resultado esperado. Hay tres fuentes, escritas p
 | Oráculo | Qué es | Quién lo produce |
 |---|---|---|
 | **Estado esperado a mano** (`sw/<programa>.exp`, §5) | El estado final del programa, calculado leyendo `isa.md`, sin ejecutar nada | Quien escribe el programa |
-| **Modelo de referencia** (I-16) | Un programa que ejecuta `isa.md` instrucción por instrucción y produce el estado final y la traza por etapa | Quien escribe el modelo |
+| **Modelo de referencia** (I-16, [`tools/isasim`](../../tools/isasim/README.md)) | Un programa que ejecuta `isa.md` instrucción por instrucción y, con las reglas de `pipeline.md`, calcula en qué ciclo pasa cada instrucción por cada etapa: produce el estado final, los ciclos y la traza de los registros de segmentación (decisión [020](../decisiones/020_modelo-de-referencia.md)) | Quien escribe el modelo |
 | **RTL** | El procesador | Quien escribe los módulos |
 
 Reglas:
@@ -107,7 +107,7 @@ Cada programa es un archivo `sw/<nombre>.s` con su `sw/<nombre>.exp` al lado (§
 extensión es `.s` porque es la que usan el ensamblador ([017](../decisiones/017_ensamblador.md))
 y la interfaz de la PC. Las convenciones completas, la lista con el detalle de cada programa
 y cómo agregar uno están en [`sw/README.md`](../../sw/README.md) (decisión
-[018](../decisiones/018_programas-de-prueba.md)).
+[019](../decisiones/019_programas-de-prueba.md)).
 
 Reglas para todos:
 
@@ -297,7 +297,7 @@ Cuándo se considera aprobado cada nivel:
 | Nivel | Aprobado cuando |
 |---|---|
 | 1. Unitario | Imprime `TEST PASSED` y cubre todos los casos mínimos de §3 |
-| 2. Por etapa | Para todos los programas de `sw/` que la etapa ya puede ejecutar, cada registro de segmentación de las etapas integradas coincide con la traza del modelo en **todos** los ciclos (campos de `pipeline.md` §8, incluidos `valid` y las señales de control) |
+| 2. Por etapa | Para todos los programas de `sw/` que la etapa ya puede ejecutar, cada registro de segmentación de las etapas integradas coincide con la traza del modelo en **todos** los ciclos (campos de `pipeline.md` §8, incluidos `valid` y las señales de control), comparando los bits que marca la máscara del modelo: en una burbuja, solo `valid` y el control ([`tools/isasim`](../../tools/isasim/README.md) §3). Hasta M7 el modelo corre en modo `sin_riesgos` |
 | 3. Core completo | Para los 22 programas, el estado final coincide con el `.exp` en todos los campos de §5, incluido `ciclos` |
 | 4. Debug Unit | Imprime `TEST PASSED` y cada programa da el mismo estado final con `RUN` que con `STEP` repetido |
 | 5. Placa | Para los 22 programas cargados con `LOAD`, el volcado de `READ_ALL` coincide con el `.exp` |
