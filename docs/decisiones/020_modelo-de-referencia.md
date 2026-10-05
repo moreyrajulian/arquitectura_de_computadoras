@@ -89,7 +89,7 @@ los 12 que necesitan los mecanismos de riesgo fallan en ese modo, como correspon
   ([`protocolo_debug.md`](../spec/protocolo_debug.md) §3.6): 3 + 6 + 4 + 4 palabras, la
   menos significativa primero. Si el protocolo elige otro, cambia solo `latches.py`.
 - **Verificación del modelo:** `verificacion.md` §2 pide que el modelo coincida con todos los
-  `.exp` antes de usarlo. Lo hace `tools/isasim/tests/test_programas.py`; un programa nuevo en
+  `.exp` antes de usarlo. Lo hace `tools/isasim/tests/test_sw_programas.py`; un programa nuevo en
   `sw/` queda probado sin cambiar el test.
 - **Si cambia `pipeline.md`** (un campo de un latch, el costo de un salto o del stall): se
   actualiza la capa 2 y se recalculan a mano los `.exp` afectados. Los tests dicen cuáles.

@@ -177,7 +177,7 @@ python -m pytest tools/isasim
 |---|---|
 | `test_isa.py` | Capa 1 con valores calculados a mano: `x0`, desbordes, `sra`/`srl` con negativos, `slt` frente a `sltu`, `sltiu`, `lb` frente a `lbu` (ejemplos de `memoria.md` §5), stores parciales, saltos hacia atrás, `jal`/`jalr`, alias y desalineados |
 | `test_pipeline.py` | Capa 2: anchos de §8, la fórmula de ciclos, el valor viejo en `id_ex_rs1_data`, bypass del banco, burbuja del stall, flush de saltos, HALT, máscaras y modos |
-| `test_programas.py` | **Los programas de `sw/` contra su `.exp` escrito a mano**: todos en modo completo, los de M7 en `sin_riesgos`, y que los originales con riesgos no pasan sin los mecanismos. También el bloque de estado del ejemplo de `protocolo_debug.md` §4 |
+| `test_sw_programas.py` | **Los programas de `sw/` contra su `.exp` escrito a mano**: todos en modo completo, los de M7 en `sin_riesgos`, y que los originales con riesgos no pasan sin los mecanismos. También el bloque de estado del ejemplo de `protocolo_debug.md` §4 |
 
 Resultado actual: 118 tests; los 38 programas de `sw/` coinciden con su `.exp` en modo
 completo, ciclos incluidos, y los 26 de M7 en `sin_riesgos`.
@@ -200,4 +200,4 @@ tools/isasim/
 **Si cambia `isa.md`:** se actualizan las tablas de `isa.py` y se agregan casos a
 `test_isa.py`. **Si cambia `pipeline.md`** (campos de un latch, costo de un salto o del
 stall): `latches.py` o `pipeline.py`, y se recalculan a mano los `.exp` afectados; los tests
-de `test_programas.py` dicen cuáles.
+de `test_sw_programas.py` dicen cuáles.
