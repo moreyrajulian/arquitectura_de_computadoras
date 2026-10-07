@@ -29,12 +29,12 @@ fpga/                    Un directorio por diseño: top.v + basys3.xdc
 └── riscv_basys3/        Diseño del trabajo final
 tb/
 ├── unit/                Un testbench por módulo
-└── integration/         Core completo ejecutando programas de sw/
+└── integration/         pipeline_tb: banco incremental, etapa por etapa y core completo
 sw/                      Programas en ensamblador (con HALT) y su resultado esperado
 tools/
 ├── assembler/           Traductor asm -> código máquina
 └── debugger/            Cliente UART e interfaz (CLI/TUI/GUI)
-scripts/                 create_project.tcl
+scripts/                 create_project.tcl, prep_tb.py (prepara un programa para pipeline_tb)
 docs/
 ├── spec/                ISA soportada, protocolo de debug, diseño del pipeline
 ├── decisiones/          Una nota por decisión de diseño y su porqué

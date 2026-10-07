@@ -321,8 +321,8 @@ mecanismo y hay que agregar uno. I-40 lo hace para el forwarding; I-43 para el r
 | Qué | Nombre | Ejemplo |
 |---|---|---|
 | Testbench de un módulo | `tb/unit/<módulo>_tb.v`, módulo superior `<módulo>_tb` | `tb/unit/regfile_tb.v` |
-| Testbench de integración por etapa | `tb/integration/stage_<if\|id\|ex\|mem\|wb>_tb.v` | `stage_id_tb.v` |
-| Testbench del core completo | `tb/integration/core_tb.v`, con el programa por parámetro `PROGRAM` | — |
+| Banco de pruebas incremental (niveles 2 y 3) | `tb/integration/pipeline_tb.v`, un único testbench para todas las etapas; el programa se elige con `+DIR` (§8) | — |
+| Archivos que lee el banco | `build/tb/<nombre>/`, generados por `scripts/prep_tb.py`; **no se versionan** | `build/tb/indep_alu_r/` |
 | Programa de prueba | `sw/<nombre>.s`, en minúsculas y `_` | `fwd_exmem.s` |
 | Programa con instrucciones independientes (§4.3) | `sw/indep_<grupo>.s` | `indep_cargas.s` |
 | Variante con `nop` para M7 (§4.3) | `sw/<nombre>_nops.s` | `fwd_exmem_nops.s` |
@@ -360,3 +360,126 @@ renombrara las señales, cada comparación necesitaría una tabla de traducción
   cubre.
 - `exp_` y `ref_` no están en la plantilla: se agregan acá para los testbenches que comparan
   contra un valor calculado o contra el modelo de referencia.
+
+---
+
+## 8. Banco de pruebas incremental (`pipeline_tb`)
+
+Un único testbench, `tb/integration/pipeline_tb.v` (I-17), valida cada etapa al integrarla y
+queda como regresión de las siguientes. Compara los registros de segmentación contra la
+traza del modelo de referencia (nivel 2) y, con `+FINAL`, el estado final contra el `.exp`
+escrito a mano (nivel 3). El porqué de cada elección está en la decisión
+[021](../decisiones/021_banco-incremental.md).
+
+### 8.1 Uso
+
+```sh
+# 1. Preparar el programa: ensambla, corre el modelo y convierte el .exp
+python scripts/prep_tb.py sw/indep_alu_r.s                  # --modo sin_riesgos (M3 a M7)
+python scripts/prep_tb.py sw/fwd_exmem.s --modo completo    # M8 en adelante
+```
+
+`prep_tb.py` escribe en `build/tb/<nombre>/` los archivos de la tabla y, al final, la línea
+para pasarle el directorio a xsim:
+
+| Archivo | Contenido |
+|---|---|
+| `imem.hex` | El programa, 1024 palabras rellenas con HALT (como `LOAD`) |
+| `regs_init.hex`, `dmem_init.hex` | Estado inicial: `sw/estado_inicial/` para los `indep_*`, ceros para el resto |
+| `modelo.ciclo.<latch>.hex`, `.mask.hex` | Traza por ciclo del modelo y su máscara (decisión [020](../decisiones/020_modelo-de-referencia.md)) |
+| `modelo.traza.txt` | La misma traza, legible: sirve para depurar un fallo |
+| `corte.hex` | Líneas de la traza, ciclo en que el HALT llega a cada latch y ciclo del primer salto tomado (§8.3) |
+| `exp_regs.hex`, `exp_dmem.hex`, `exp_misc.hex` | El `.exp` **escrito a mano**, convertido a `$readmemh` (no la salida del modelo, §2) |
+
+```sh
+# 2. Simular: el directorio va por plusarg, con ruta absoluta
+xsim <snapshot> --runall -testplusarg "DIR=C:/.../build/tb/indep_alu_r"
+xsim <snapshot> --runall -testplusarg "DIR=..." -testplusarg FINAL     # + estado final (desde M7)
+```
+
+En el proyecto de Vivado, el plusarg va en *Simulation Settings → xsim.simulate.xsim.more_options*
+(`prep_tb.py` imprime el `set_property` listo para la consola Tcl). La ruta es absoluta porque
+xsim corre en `build/vivado_<diseño>/…/xsim`.
+
+| Plusarg | Efecto |
+|---|---|
+| `DIR=<ruta>` | Obligatorio: directorio de `prep_tb.py` |
+| `FINAL` | Al terminar la traza, sigue hasta `halted` y compara el estado final (necesita `STAGE_WB`) |
+
+Parámetro `MAX_CYCLES` (por defecto 2000): watchdog sobre los ciclos con `cpu_en = 1`. La
+carga y la lectura final no cuentan.
+
+### 8.2 Etapas integradas
+
+Cada integración agrega su define al principio de `pipeline_tb.v` (o con `-d` en xvlog). Son
+acumulativos: definir uno define los anteriores.
+
+| Define | Issue | Qué agrega al banco |
+|---|---|---|
+| `STAGE_IF` | I-22 | Compara IF/ID; carga `imem` por el puerto B |
+| `STAGE_ID` | I-27 | Compara ID/EX; carga el banco de registros por jerarquía (`` `REGFILE ``) |
+| `STAGE_EX` | I-31 | Compara EX/MEM |
+| `STAGE_MEM` | I-34 | Compara MEM/WB; carga `dmem` por el puerto B |
+| `STAGE_WB` | I-35 | Habilita `+FINAL` (registros, `halted`, avisos) |
+| `STAGE_REDIRECT` | I-36 | Sin corte por saltos (§8.3) |
+| `STAGE_HALT` | I-37 | Sin corte por HALT: se comparan todas las líneas, foto final incluida |
+
+### 8.3 Hasta qué ciclo se compara
+
+El modelo simula siempre el pipeline completo. Mientras falte una parte, el RTL se aparta de
+la traza por una razón conocida, y el banco deja de comparar **ese latch** en ese punto:
+
+- **Sin `STAGE_HALT`** no hay parada por HALT (`pipeline.md` §3.4): cada latch se compara
+  hasta el ciclo en que el HALT llega a él. Después el modelo carga burbujas y el RTL sigue
+  buscando.
+- **Sin `STAGE_REDIRECT`** el salto tomado no cambia el PC (I-19 deja la entrada en 0 hasta
+  I-36): con `r` el ciclo en que el primer salto tomado está en EX, el latch `k` (0 = IF/ID)
+  se compara hasta el ciclo `r + 1 + k`. El banco lo avisa con una línea `INFO:`. De M3 a M6
+  afecta solo a `indep_saltos`, que se compara completo recién en I-36.
+
+El ciclo 1 es el primero después del reset (latches en burbuja, PC = 0), como la línea 1 de
+la traza. Se compara en el flanco de bajada.
+
+### 8.4 Qué informa
+
+- Ante la primera discrepancia, una línea por campo distinto en ese ciclo, y termina:
+  `[<tiempo>] ERROR ciclo <t> <latch>.<campo> | dut=0x<…> esperado=0x<…>`.
+- Con `+FINAL`, una línea `ERROR` por cada valor distinto (`halted`, `pipeline_vacio`,
+  avisos, `ciclos`, `x1`…`x31`, `dmem 0x<dirección>`).
+- La línea final de §6: `TEST PASSED` / `TEST FAILED`.
+
+### 8.5 Interfaz que espera de `riscv_core`
+
+La define este banco y la implementa I-22. Los nombres siguen `memoria.md` §3.3:
+
+| Desde | Puertos |
+|---|---|
+| `STAGE_IF` | `i_clk`, `i_rst`, `i_cpu_en`, `i_imem_b_en`, `i_imem_b_we`, `i_imem_b_addr[9:0]`, `i_imem_b_din[31:0]`, `o_halted` |
+| `STAGE_MEM` | `i_dmem_b_en`, `i_dmem_b_we[3:0]`, `i_dmem_b_addr[9:0]`, `i_dmem_b_din[31:0]`, `o_dmem_b_dout[31:0]` |
+| `STAGE_WB` | `o_imem_fault`, `o_dmem_oob`, `o_dmem_misaligned` |
+
+Los campos de los latches se leen por jerarquía: tienen que ser señales del módulo superior
+del core, con el nombre `<latch>_<campo>` de `pipeline.md` §8. Las señales de control también
+llevan el prefijo del latch: `u_dut.id_ex_alu_ctrl`, `u_dut.ex_mem_reg_write`,
+`u_dut.mem_wb_mem_to_reg`. El banco de registros se lee y se escribe por el camino de
+`` `REGFILE `` (por defecto `u_dut.u_regfile.regs`, a ajustar en I-27).
+
+### 8.6 Probar el banco sin el core
+
+`tb/integration/_riscv_core_stub.v` es un `riscv_core` falso que reproduce la traza del modelo
+(el `_` lo deja fuera del proyecto de Vivado). Toma `if_id_instr` de la `imem` que cargó el
+banco, así que también prueba la carga. Se compila a mano con el banco:
+
+```sh
+xvlog [-d STAGE_...] tb/integration/_riscv_core_stub.v tb/integration/pipeline_tb.v
+xelab -debug off pipeline_tb -s pipeline_stub
+xsim pipeline_stub --runall -testplusarg "DIR=..." [-testplusarg FINAL]
+```
+
+El stub tiene el banco de registros en `u_dut.u_regfile.regs`, el camino por defecto de
+`` `REGFILE ``, así que no hace falta pasar ningún `-d REGFILE=...`. En Windows, `xvlog.bat`,
+`xelab.bat` y `xsim.bat` parten los argumentos en el `=`: el plusarg va entre
+comillas dobles (`-testplusarg "DIR=..."`), y PowerShell las pierde antes de llegar al `.bat`: desde ahí se envuelve el comando en `cmd /c '...'`. En Linux no hace falta nada de esto.
+
+Con `-testplusarg STUB_ERROR=<ciclo>` invierte un bit de `if_id_pc` en ese ciclo, y con
+`STUB_SIN_HALT` nunca activa `halted`: sirven para ver que el banco falla cuando debe.
