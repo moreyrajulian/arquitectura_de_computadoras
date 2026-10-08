@@ -228,6 +228,7 @@ module pipeline_tb;
 
     integer errors;
     integer checks;
+    integer errores_antes;
     integer i;
     integer lineas;
     integer ciclo;
@@ -572,6 +573,17 @@ module pipeline_tb;
                 chk_latch(L_IF_ID,  dut_if_id,  ref_if_id[ciclo-1],  ref_if_id_mask[ciclo-1]);
 `endif
 `ifdef STAGE_ID
+            // Ciclo 2: el banco conserva la carga. Ya pasó el primer flanco sin
+            // reset, y WB todavía no escribe (MEM/WB era burbuja en el ciclo 1)
+            if (ciclo == 2) begin
+                errores_antes = errors;
+                for (i = 1; i < N_REGS; i = i + 1) begin
+                    $sformat(fname, "ciclo 2 banco x%0d", i);
+                    chk(fname[8*32-1:0], `REGFILE[i], regs_init[i]);
+                end
+                if (errors != errores_antes)
+                    fallo = 1'b1;
+            end
             if (ciclo <= lim[L_ID_EX])
                 chk_latch(L_ID_EX,  dut_id_ex,  ref_id_ex[ciclo-1],  ref_id_ex_mask[ciclo-1]);
 `endif

@@ -20,7 +20,8 @@
 //     banco por el puerto B, no de la traza: así también se prueba la carga.
 //   - La dmem y el banco de registros son arreglos: el banco los carga, y
 //     cuando el HALT llega a WB el stub copia el estado final esperado
-//     (exp_*.hex) para probar el modo +FINAL.
+//     (exp_*.hex) para probar el modo +FINAL. El reset pone el banco de
+//     registros en cero, como el real.
 //
 // Fallas a propósito (plusargs):
 //   +STUB_ERROR=<ciclo>  invierte el bit 2 de if_id_pc en ese ciclo
@@ -58,7 +59,10 @@ module riscv_core (
     reg [31:0]  dmem       [0:1023];
 
     // Mismo camino que el banco usa por defecto (`REGFILE = u_dut.u_regfile.regs)
-    regfile_stub u_regfile ();
+    regfile_stub u_regfile (
+        .i_clk (i_clk),
+        .i_rst (i_rst)
+    );
 
     reg [8*512-1:0] dir;
     reg [8*600-1:0] fname;
@@ -172,9 +176,20 @@ module riscv_core (
 
 endmodule
 
-// Arreglo de registros que carga y lee el banco por jerarquía
-module regfile_stub;
+// Arreglo de registros que carga y lee el banco por jerarquía. El reset lo
+// pone en cero como el banco real (decisión 007), para que el banco de
+// pruebas detecte una carga hecha con el reset todavía activo.
+module regfile_stub (
+    input wire i_clk,
+    input wire i_rst
+);
     reg [31:0] regs [0:31];
+    integer k;
+
+    always @(posedge i_clk)
+        if (i_rst)
+            for (k = 0; k < 32; k = k + 1)
+                regs[k] <= 32'h0;
 endmodule
 
 `default_nettype wire

@@ -444,6 +444,10 @@ la traza. Se compara en el flanco de bajada.
 
 - Ante la primera discrepancia, una línea por campo distinto en ese ciclo, y termina:
   `[<tiempo>] ERROR ciclo <t> <latch>.<campo> | dut=0x<…> esperado=0x<…>`.
+- Con `STAGE_ID`, en el ciclo 2 compara el banco de registros con el estado inicial: el
+  primer flanco sin reset ya pasó y WB todavía no escribe. Detecta una carga que borró el
+  reset o un camino de `` `REGFILE `` equivocado. Una línea por registro distinto
+  (`ciclo 2 banco x<n>`), y termina.
 - Con `+FINAL`, una línea `ERROR` por cada valor distinto (`halted`, `pipeline_vacio`,
   avisos, `ciclos`, `x1`…`x31`, `dmem 0x<dirección>`).
 - La línea final de §6: `TEST PASSED` / `TEST FAILED`.
@@ -477,7 +481,8 @@ xsim pipeline_stub --runall -testplusarg "DIR=..." [-testplusarg FINAL]
 ```
 
 El stub tiene el banco de registros en `u_dut.u_regfile.regs`, el camino por defecto de
-`` `REGFILE ``, así que no hace falta pasar ningún `-d REGFILE=...`. En Windows, `xvlog.bat`,
+`` `REGFILE ``, así que no hace falta pasar ningún `-d REGFILE=...`. Como el banco real, el
+reset lo pone en cero (decisión 007). En Windows, `xvlog.bat`,
 `xelab.bat` y `xsim.bat` parten los argumentos en el `=`: el plusarg va entre
 comillas dobles (`-testplusarg "DIR=..."`), y PowerShell las pierde antes de llegar al `.bat`: desde ahí se envuelve el comando en `cmd /c '...'`. En Linux no hace falta nada de esto.
 

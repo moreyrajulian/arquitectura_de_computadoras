@@ -80,7 +80,8 @@ Restricciones:
 - **`+DIR=<ruta absoluta>`** elige el programa; `+FINAL` agrega el estado final.
 - **Carga por el puerto B** de `imem` y `dmem`, con el core en reset. El banco de registros,
   que no tiene puerto de escritura de debug, se carga por jerarquía (`` `REGFILE ``) justo
-  después de soltar el reset, porque el reset lo pone en cero (decisión 007).
+  después de soltar el reset, porque el reset lo pone en cero (decisión 007). En el ciclo 2
+  el banco de pruebas comprueba que la carga sigue ahí.
 - **Latches por jerarquía**, con el prefijo del latch también en las señales de control.
 - **Defines acumulativos por etapa**: `STAGE_IF`, `STAGE_ID`, `STAGE_EX`, `STAGE_MEM` y
   `STAGE_WB`, más `STAGE_REDIRECT` (I-36) y `STAGE_HALT` (I-37) para las dos partes del
