@@ -31,7 +31,7 @@
 //     primer salto tomado en EX.
 //
 // Interfaz que espera de riscv_core (la implementa I-22, verificacion.md §8):
-//   i_clk, i_rst, i_cpu_en, i_imem_b_{en,we,addr,din}, o_halted
+//   i_clk, i_rst, i_enable, i_imem_b_{en,we,addr,din}, o_halted
 //   + STAGE_MEM: i_dmem_b_{en,we,addr,din}, o_dmem_b_dout
 //   + STAGE_WB : o_imem_fault, o_dmem_oob, o_dmem_misaligned
 //   y los campos de los latches como señales del módulo superior, con el
@@ -94,7 +94,7 @@ module pipeline_tb;
     localparam integer MEM_WORDS  = 1024;
     localparam integer N_REGS     = 32;
 
-    parameter  integer MAX_CYCLES = 2000;       // watchdog: ciclos con cpu_en = 1
+    parameter  integer MAX_CYCLES = 2000;       // watchdog: ciclos con enable = 1
     localparam integer MAX_LINES  = MAX_CYCLES + 2;
 
     // Anchos de los latches (pipeline.md §8)
@@ -125,7 +125,7 @@ module pipeline_tb;
     //------------------------------------------------------------------
     reg                tb_clk;
     reg                tb_rst;
-    reg                tb_cpu_en;
+    reg                tb_enable;
     reg                tb_imem_b_en;
     reg                tb_imem_b_we;
     reg  [NB_ADDR-1:0] tb_imem_b_addr;
@@ -147,7 +147,7 @@ module pipeline_tb;
     riscv_core u_dut (
         .i_clk             (tb_clk),
         .i_rst             (tb_rst),
-        .i_cpu_en          (tb_cpu_en),
+        .i_enable          (tb_enable),
         .i_imem_b_en       (tb_imem_b_en),
         .i_imem_b_we       (tb_imem_b_we),
         .i_imem_b_addr     (tb_imem_b_addr),
@@ -451,7 +451,7 @@ module pipeline_tb;
         fallo          = 1'b0;
         ciclos_run     = 0;
         tb_rst         = 1'b1;
-        tb_cpu_en      = 1'b0;
+        tb_enable      = 1'b0;
         tb_imem_b_en   = 1'b0;
         tb_imem_b_we   = 1'b0;
         tb_imem_b_addr = {NB_ADDR{1'b0}};
@@ -554,16 +554,17 @@ module pipeline_tb;
         tb_dmem_b_en = 1'b0;
         tb_dmem_b_we = 4'b0000;
 `endif
-`ifdef STAGE_ID
-        // El banco no se resetea (es datapath): se carga por jerarquía
-        for (i = 1; i < N_REGS; i = i + 1)
-            `REGFILE[i] = regs_init[i];
-`endif
         @(negedge tb_clk);
 
         // Ciclo 1: latches en burbuja por el reset, PC = 0
         tb_rst    = 1'b0;
-        tb_cpu_en = 1'b1;
+`ifdef STAGE_ID
+        // El reset pone el banco en cero (decisión 007): se carga por jerarquía
+        // después de soltarlo, antes del primer flanco
+        for (i = 1; i < N_REGS; i = i + 1)
+            `REGFILE[i] = regs_init[i];
+`endif
+        tb_enable = 1'b1;
         ciclo     = 1;
         while (ciclo <= ultimo && !fallo) begin
 `ifdef STAGE_IF
@@ -593,7 +594,7 @@ module pipeline_tb;
             while (!tb_o_halted)
                 @(negedge tb_clk);
             // primer ciclo con halted = 1: el pipeline tiene que estar vacío
-            tb_cpu_en = 1'b0;
+            tb_enable = 1'b0;
             chk("halted", {{(NB_DATA-1){1'b0}}, tb_o_halted}, exp_misc[E_HALTED]);
             chk("pipeline_vacio",
                 {{(NB_DATA-1){1'b0}}, ~(u_dut.if_id_valid | u_dut.id_ex_valid |
@@ -630,7 +631,7 @@ module pipeline_tb;
 
     // Ciclos con enable = 1 hasta el HALT en WB inclusive (verificacion.md §5)
     always @(posedge tb_clk)
-        if (!tb_rst && tb_cpu_en && !tb_o_halted)
+        if (!tb_rst && tb_enable && !tb_o_halted)
             ciclos_run <= ciclos_run + 1;
 
     // Watchdog: cuenta solo los ciclos con el core andando, no la carga ni la lectura
@@ -639,7 +640,7 @@ module pipeline_tb;
         n = 0;
         while (n < MAX_CYCLES) begin
             @(posedge tb_clk);
-            if (!tb_rst && tb_cpu_en)
+            if (!tb_rst && tb_enable)
                 n = n + 1;
         end
         $display("TEST FAILED: timeout de %0d ciclos", MAX_CYCLES);

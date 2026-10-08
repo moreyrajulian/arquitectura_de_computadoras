@@ -406,7 +406,7 @@ xsim corre en `build/vivado_<diseño>/…/xsim`.
 | `DIR=<ruta>` | Obligatorio: directorio de `prep_tb.py` |
 | `FINAL` | Al terminar la traza, sigue hasta `halted` y compara el estado final (necesita `STAGE_WB`) |
 
-Parámetro `MAX_CYCLES` (por defecto 2000): watchdog sobre los ciclos con `cpu_en = 1`. La
+Parámetro `MAX_CYCLES` (por defecto 2000): watchdog sobre los ciclos con `enable = 1`. La
 carga y la lectura final no cuentan.
 
 ### 8.2 Etapas integradas
@@ -417,7 +417,7 @@ acumulativos: definir uno define los anteriores.
 | Define | Issue | Qué agrega al banco |
 |---|---|---|
 | `STAGE_IF` | I-22 | Compara IF/ID; carga `imem` por el puerto B |
-| `STAGE_ID` | I-27 | Compara ID/EX; carga el banco de registros por jerarquía (`` `REGFILE ``) |
+| `STAGE_ID` | I-27 | Compara ID/EX; carga el banco de registros por jerarquía (`` `REGFILE ``) al soltar el reset |
 | `STAGE_EX` | I-31 | Compara EX/MEM |
 | `STAGE_MEM` | I-34 | Compara MEM/WB; carga `dmem` por el puerto B |
 | `STAGE_WB` | I-35 | Habilita `+FINAL` (registros, `halted`, avisos) |
@@ -454,7 +454,7 @@ La define este banco y la implementa I-22. Los nombres siguen `memoria.md` §3.3
 
 | Desde | Puertos |
 |---|---|
-| `STAGE_IF` | `i_clk`, `i_rst`, `i_cpu_en`, `i_imem_b_en`, `i_imem_b_we`, `i_imem_b_addr[9:0]`, `i_imem_b_din[31:0]`, `o_halted` |
+| `STAGE_IF` | `i_clk`, `i_rst`, `i_enable`, `i_imem_b_en`, `i_imem_b_we`, `i_imem_b_addr[9:0]`, `i_imem_b_din[31:0]`, `o_halted` |
 | `STAGE_MEM` | `i_dmem_b_en`, `i_dmem_b_we[3:0]`, `i_dmem_b_addr[9:0]`, `i_dmem_b_din[31:0]`, `o_dmem_b_dout[31:0]` |
 | `STAGE_WB` | `o_imem_fault`, `o_dmem_oob`, `o_dmem_misaligned` |
 

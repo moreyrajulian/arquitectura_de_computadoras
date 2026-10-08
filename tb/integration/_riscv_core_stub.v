@@ -15,7 +15,7 @@
 //
 // Comportamiento:
 //   - Reproduce la traza del modelo (+DIR, los mismos archivos que lee el
-//     banco): en cada ciclo con cpu_en = 1 avanza una línea.
+//     banco): en cada ciclo con enable = 1 avanza una línea.
 //   - if_id_instr de una instrucción válida sale de la imem que cargó el
 //     banco por el puerto B, no de la traza: así también se prueba la carga.
 //   - La dmem y el banco de registros son arreglos: el banco los carga, y
@@ -30,7 +30,7 @@
 module riscv_core (
     input  wire        i_clk,
     input  wire        i_rst,
-    input  wire        i_cpu_en,
+    input  wire        i_enable,
     input  wire        i_imem_b_en,
     input  wire        i_imem_b_we,
     input  wire [9:0]  i_imem_b_addr,
@@ -85,13 +85,13 @@ module riscv_core (
     always @(posedge i_clk) begin
         if (i_rst)
             t_reg <= 0;
-        else if (i_cpu_en && t_reg < lineas - 1 && !(sin_halt && t_reg == lineas - 2))
+        else if (i_enable && t_reg < lineas - 1 && !(sin_halt && t_reg == lineas - 2))
             t_reg <= t_reg + 1;
     end
 
     // Al llegar el HALT a WB, el estado final esperado
     always @(posedge i_clk) begin
-        if (!i_rst && i_cpu_en && !sin_halt && t_reg == lineas - 2) begin
+        if (!i_rst && i_enable && !sin_halt && t_reg == lineas - 2) begin
             $sformat(fname, "%0s/exp_regs.hex", dir); $readmemh(fname, u_regfile.regs);
             $sformat(fname, "%0s/exp_dmem.hex", dir); $readmemh(fname, dmem);
             $sformat(fname, "%0s/exp_misc.hex", dir); $readmemh(fname, exp_misc);
