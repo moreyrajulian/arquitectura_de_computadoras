@@ -641,6 +641,14 @@ usan en la etapa siguiente: solo se copian al próximo registro.
 
 Todos los registros tienen las entradas `rst`, `en` y `flush` de §2.
 
+En el RTL cada campo lleva el prefijo de su registro, también las señales de control: la
+columna `alu_ctrl` de ID/EX es `id_ex_alu_ctrl`, y `reg_write` de EX/MEM es `ex_mem_reg_write`
+(decisión [010](../decisiones/010_convenciones-rtl.md)). Con ese nombre los lee el banco de
+pruebas incremental ([`verificacion.md`](verificacion.md) §8.5). El orden de las filas de
+cada tabla es el del empaquetado de la traza del modelo de referencia, el primero en los bits
+más altos (decisión [020](../decisiones/020_modelo-de-referencia.md)): **cambiar un campo o
+su orden cambia `tools/isasim/isasim/latches.py` y `tb/integration/pipeline_tb.v`.**
+
 ### IF/ID — 65 bits
 
 | Campo | Ancho | Lo produce | Lo usa |

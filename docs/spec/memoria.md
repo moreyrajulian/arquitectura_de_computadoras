@@ -170,8 +170,14 @@ el IP y un cambio de configuración no toque el resto del RTL.
 | B (Debug Unit) | `addrb[9:0]` | `dmem_b_addr` | |
 | | `enb` | `dmem_b_en` | |
 | | `web[3:0]` | `1111` al limpiar, `0000` al leer | |
-| | `dinb[31:0]` | `0` | La Debug Unit solo escribe ceros |
+| | `dinb[31:0]` | `dmem_b_din` | La Debug Unit lo ata a `0`: solo escribe ceros |
 | | `doutb[31:0]` | Debug Unit | `READ_DMEM`, `READ_DMEM_USED`, `READ_ALL` |
+
+El core expone el puerto B de las dos memorias como entradas (`i_imem_b_*`, `i_dmem_b_*`) y
+`o_dmem_b_dout` como salida, sin fijar ningún valor adentro: el cero de `dinb` lo pone la
+Debug Unit. Así el banco de pruebas incremental puede cargar el estado inicial de `dmem` por
+el mismo puerto ([`verificacion.md`](verificacion.md) §8.5, decisión
+[021](../decisiones/021_banco-incremental.md)).
 
 ### 3.4 Latencia de lectura y efecto sobre el pipeline
 
