@@ -10,7 +10,8 @@
 // (scripts/create_project.tcl): se compila a mano junto con
 // pipeline_tb.v (ver verificacion.md §8).
 //
-// Tiene todos los puertos de la interfaz completa: el banco conecta solo
+// Tiene todos los puertos que usa el banco (no las salidas de debug
+// o_pc y o_<latch>_latch, decisión 023): el banco conecta solo
 // los de las etapas integradas y el resto queda flotante.
 //
 // Comportamiento:
