@@ -15,10 +15,16 @@
 //     su tabla, el primero en los bits altos.
 //   - Estado final (+FINAL, desde M7): registros, dmem, halted, pipeline
 //     vacío, avisos y ciclos contra el .exp escrito a mano (§5).
+//   - Pausas (+PAUSAS=<semilla>): entre ciclos de la traza baja enable
+//     durante 1 a 3 ciclos al azar (semilla fija) y comprueba que ningún
+//     latch integrado cambia; después la traza tiene que seguir
+//     coincidiendo. Detecta un elemento con estado que no respeta enable
+//     (decisión 018, pipeline.md §10.4).
 //
 // Uso:
 //   python scripts/prep_tb.py sw/<programa>.s [--modo sin_riesgos|completo]
 //   xsim ... -testplusarg DIR=<build/tb/<programa>, ruta absoluta> [-testplusarg FINAL]
+//            [-testplusarg PAUSAS=<semilla>]
 //
 // Etapas: cada integración agrega su define (abajo, o con -d en xvlog). Los
 // defines son acumulativos: definir una etapa define las anteriores.
@@ -203,6 +209,20 @@ module pipeline_tb;
     };
 `endif
 
+    // Foto de los latches al empezar una pausa (+PAUSAS)
+`ifdef STAGE_IF
+    reg [NB_IF_ID-1:0]  foto_if_id;
+`endif
+`ifdef STAGE_ID
+    reg [NB_ID_EX-1:0]  foto_id_ex;
+`endif
+`ifdef STAGE_EX
+    reg [NB_EX_MEM-1:0] foto_ex_mem;
+`endif
+`ifdef STAGE_MEM
+    reg [NB_MEM_WB-1:0] foto_mem_wb;
+`endif
+
     //------------------------------------------------------------------
     // Archivos de prep_tb.py
     //------------------------------------------------------------------
@@ -235,7 +255,11 @@ module pipeline_tb;
     integer ultimo;
     integer lim [0:3];
     integer ciclos_run;
+    integer semilla;
+    integer n_pausa;
+    integer p;
     reg     final_mode;
+    reg     pausas;
     reg     fallo;
 
     //------------------------------------------------------------------
@@ -424,6 +448,60 @@ module pipeline_tb;
         end
     endtask
 
+    // Pausa con enable = 0 (+PAUSAS): los latches integrados no cambian.
+    // Se llama en un flanco de bajada, con los chequeos del ciclo hechos;
+    // vuelve con enable = 1, listo para el flanco que avanza la traza.
+    task pausa;
+        input integer n;
+        integer j;
+        begin
+`ifdef STAGE_IF
+            foto_if_id  = dut_if_id;
+`endif
+`ifdef STAGE_ID
+            foto_id_ex  = dut_id_ex;
+`endif
+`ifdef STAGE_EX
+            foto_ex_mem = dut_ex_mem;
+`endif
+`ifdef STAGE_MEM
+            foto_mem_wb = dut_mem_wb;
+`endif
+            tb_enable = 1'b0;
+            for (j = 0; j < n; j = j + 1) begin
+                @(negedge tb_clk);
+`ifdef STAGE_IF
+                chk_pausa(L_IF_ID,  dut_if_id,  foto_if_id);
+`endif
+`ifdef STAGE_ID
+                chk_pausa(L_ID_EX,  dut_id_ex,  foto_id_ex);
+`endif
+`ifdef STAGE_EX
+                chk_pausa(L_EX_MEM, dut_ex_mem, foto_ex_mem);
+`endif
+`ifdef STAGE_MEM
+                chk_pausa(L_MEM_WB, dut_mem_wb, foto_mem_wb);
+`endif
+            end
+            tb_enable = 1'b1;
+        end
+    endtask
+
+    task chk_pausa;
+        input integer        l;
+        input [NB_LATCH-1:0] dut;
+        input [NB_LATCH-1:0] foto;
+        begin
+            checks = checks + 1;
+            if (dut !== foto) begin
+                errors = errors + 1;
+                fallo  = 1'b1;
+                $display("[%0t] ERROR ciclo %0d %0s cambió con enable = 0 | dut=0x%0h antes=0x%0h",
+                         $time, ciclo, nombre_latch(l), dut, foto);
+            end
+        end
+    endtask
+
     //------------------------------------------------------------------
     // Lectura de archivos
     //------------------------------------------------------------------
@@ -467,6 +545,7 @@ module pipeline_tb;
         if (!$value$plusargs("DIR=%s", dir))
             terminar_mal("falta +DIR=<directorio de scripts/prep_tb.py>");
         final_mode = $test$plusargs("FINAL");
+        pausas     = $value$plusargs("PAUSAS=%d", semilla);
 `ifndef STAGE_WB
         if (final_mode)
             terminar_mal("+FINAL necesita STAGE_WB");
@@ -532,6 +611,8 @@ module pipeline_tb;
 `endif
         $display("INFO: %0s, %0d líneas de traza, se comparan los ciclos 1 a %0d",
                  dir, lineas, ultimo);
+        if (pausas)
+            $display("INFO: pausas con enable = 0, semilla %0d", semilla);
 
         // Carga con el core en reset, como LOAD (memoria.md §3.5 y §4)
         repeat (2) @(negedge tb_clk);
@@ -595,8 +676,18 @@ module pipeline_tb;
             if (ciclo <= lim[L_MEM_WB])
                 chk_latch(L_MEM_WB, dut_mem_wb, ref_mem_wb[ciclo-1], ref_mem_wb_mask[ciclo-1]);
 `endif
-            if (ciclo < ultimo && !fallo)
-                @(negedge tb_clk);
+            if (ciclo < ultimo && !fallo) begin
+                // Una pausa cada ~4 ciclos, de 1 a 3 ciclos con enable = 0
+                if (pausas) begin
+                    p = $random(semilla);
+                    if ((p & 3) == 0) begin
+                        n_pausa = 1 + ((p >> 2) & 3) % 3;
+                        pausa(n_pausa);
+                    end
+                end
+                if (!fallo)
+                    @(negedge tb_clk);
+            end
             ciclo = ciclo + 1;
         end
 
