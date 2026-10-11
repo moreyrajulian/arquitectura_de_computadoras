@@ -71,6 +71,7 @@ agregar más, no quitar.
 | PC y próxima dirección (`pc_logic`) | I-19 | `pc_logic_tb.v` | Reset a `0x0000_0000`; `pc + 4`; `redirect` gana sobre todo; `stop_fetch` retiene; `en_pc = 0` retiene; prioridad `redirect` > `stop_fetch` (§3.1) |
 | Memoria de programa (`imem`) | I-20 | `imem_tb.v` | Latencia de lectura de un ciclo; el dato de la dirección *a* aparece un ciclo después; `ena` en 0 conserva la salida; escritura por el puerto B (`LOAD`) y lectura posterior; contenido inicial HALT (`memoria.md` §3.2, §3.6); alias de direcciones fuera de rango (`memoria.md` §6.1) |
 | Registro IF/ID | I-21 | `if_id_reg_tb.v` | Prioridad `rst` > `en` > `flush` (`pipeline.md` §2); `flush` carga burbuja (`valid = 0`); `en = 0` conserva aunque `flush = 1` |
+| Etapa IF (`if_stage`) | I-22 | `if_stage_tb.v` | Carga por el puerto B y arranque (`memoria.md` §4.4): el primer ciclo habilitado trae `instr(0)` con `if_id_pc = 0`; secuencia `pc`, `pc + 4`; `en = 0` conserva PC e IF/ID bit a bit, también con `flush = 1`; `flush` deja burbuja; salto tomado (`redirect` + `flush`) y destino; `stop_fetch` retiene el PC y solo entran burbujas; `redirect` > `stop_fetch`; aleatorio con semilla fija contra un modelo de §3 |
 | Banco de registros (`regfile`) | I-23 | `regfile_tb.v` | `x0` siempre 0 (se lee 0 aunque se escriba); escribir y leer los 31 registros; dos lecturas simultáneas; **bypass WB→ID**: leer el registro que se escribe en el mismo ciclo entrega el dato nuevo ([007](../decisiones/007_banco-registros.md)); tercer puerto de lectura de la Debug Unit |
 | Unidad de control (`control_unit`) | I-24 | `control_unit_tb.v` | **Exhaustivo**: para cada fila de la tabla de verdad de §4.4 (R, I aritmética, load, store, branch, `jal`, `jalr`, `lui`, HALT, no reconocida, burbuja) verifica las 12 señales; `halt` solo con `valid = 1`; `0x0000_0000` y `ecall` se comportan como NOP |
 | Generador de inmediatos (`imm_gen`) | I-25 | `imm_gen_tb.v` | Los cinco formatos de `isa.md` con inmediato positivo, negativo, máximo y mínimo; el bit de signo siempre es `instr[31]`; comparado contra las fórmulas de `isa.md` |
@@ -405,6 +406,7 @@ xsim corre en `build/vivado_<diseño>/…/xsim`.
 |---|---|
 | `DIR=<ruta>` | Obligatorio: directorio de `prep_tb.py` |
 | `FINAL` | Al terminar la traza, sigue hasta `halted` y compara el estado final (necesita `STAGE_WB`) |
+| `PAUSAS=<semilla>` | Entre ciclos de la traza baja `enable` de 1 a 3 ciclos al azar (en promedio una pausa cada 4 ciclos) y comprueba que ningún latch integrado cambia. Después la traza tiene que seguir coincidiendo, y así se detecta un elemento con estado que no respeta `enable` (decisión [018](../decisiones/018_paso-a-paso-sin-clock.md)). Las pausas no cuentan para el watchdog ni para `ciclos` |
 
 Parámetro `MAX_CYCLES` (por defecto 2000): watchdog sobre los ciclos con `enable = 1`. La
 carga y la lectura final no cuentan.
@@ -461,6 +463,10 @@ La define este banco y la implementa I-22. Los nombres siguen `memoria.md` §3.3
 | `STAGE_IF` | `i_clk`, `i_rst`, `i_enable`, `i_imem_b_en`, `i_imem_b_we`, `i_imem_b_addr[9:0]`, `i_imem_b_din[31:0]`, `o_halted` |
 | `STAGE_MEM` | `i_dmem_b_en`, `i_dmem_b_we[3:0]`, `i_dmem_b_addr[9:0]`, `i_dmem_b_din[31:0]`, `o_dmem_b_dout[31:0]` |
 | `STAGE_WB` | `o_imem_fault`, `o_dmem_oob`, `o_dmem_misaligned` |
+
+Además, el core tiene salidas para la Debug Unit que el banco no conecta: `o_pc[31:0]` y un
+bus por latch, `o_<latch>_latch`, con todo su contenido en el orden de `pipeline.md` §8
+(decisión [023](../decisiones/023_interfaz-debug-del-core.md)).
 
 Los campos de los latches se leen por jerarquía: tienen que ser señales del módulo superior
 del core, con el nombre `<latch>_<campo>` de `pipeline.md` §8. Las señales de control también

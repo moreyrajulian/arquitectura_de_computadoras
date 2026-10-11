@@ -983,6 +983,7 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 | Banco de registros y conflicto ID/WB | [`decisiones/007_banco-registros.md`](../decisiones/007_banco-registros.md) |
 | Detección de riesgos, stall y forwarding | §10 y [`decisiones/011_deteccion-load-use.md`](../decisiones/011_deteccion-load-use.md) |
 | Paso a paso sin intervenir el clock (`enable`) | §10.4 y [`decisiones/018_paso-a-paso-sin-clock.md`](../decisiones/018_paso-a-paso-sin-clock.md) |
+| Interfaz de debug del core (buses de latch) y módulo `if_stage` | [`decisiones/023_interfaz-debug-del-core.md`](../decisiones/023_interfaz-debug-del-core.md) |
 | Resolución de saltos | §5.3, §10.5 y [`decisiones/012_resolucion-saltos.md`](../decisiones/012_resolucion-saltos.md) |
 | Tamaños, direcciones, BRAM y política de acceso a memoria | [`memoria.md`](memoria.md) y decisiones [013](../decisiones/013_tamano-y-mapa-de-memorias.md) a [016](../decisiones/016_acceso-por-byte.md) |
 | Contenido del dump de latches | I-06 (`protocolo_debug.md`) |

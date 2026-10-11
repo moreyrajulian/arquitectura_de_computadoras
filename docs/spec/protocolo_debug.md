@@ -424,7 +424,7 @@ Señales hacia el core y las memorias (coinciden con el diagrama de sistema):
 | `core_rst` | DU → core | Reset síncrono: PC = 0, registros = 0, latches a burbuja |
 | `halt` | core → DU | HALT llegó a WB |
 | `dbg_reg_addr[4:0]` / `dbg_reg_data[31:0]` | DU ↔ core | Puerto de lectura extra del banco de registros |
-| `dbg_latch_sel` / `dbg_latch_data[31:0]` | DU ↔ core | Selección de palabra de latch y su valor |
+| `if_id_latch[64:0]`, `id_ex_latch[160:0]`, `ex_mem_latch[108:0]`, `mem_wb_latch[109:0]` | core → DU | Contenido completo de cada registro de segmentación, en el orden de [`pipeline.md`](pipeline.md) §8. La Debug Unit los parte en las palabras de `READ_LATCHES` (decisión [023](../decisiones/023_interfaz-debug-del-core.md)) |
 | `pc[31:0]` | core → DU | Para el bloque de estado |
 | `imem_b_*` | DU → BRAM | Puerto B de la memoria de programa (escritura) |
 | `dmem_b_*` | DU ↔ BRAM | Puerto B de la memoria de datos (lectura y limpieza) |
