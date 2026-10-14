@@ -276,13 +276,18 @@ Cuando una instrucción no usa un campo, esos bits tienen otra cosa. Por ejemplo
 Reconstruye el inmediato según el formato que indica `imm_sel` y lo **extiende con signo**
 a 32 bits usando `instr[31]`:
 
-| `imm_sel` | Instrucciones | Inmediato de 32 bits |
-|---|---|---|
-| `I` | aritméticas con inmediato, loads, `jalr` | `{{20{i[31]}}, i[31:20]}` |
-| `S` | `sb`, `sh`, `sw` | `{{20{i[31]}}, i[31:25], i[11:7]}` |
-| `B` | `beq`, `bne` | `{{19{i[31]}}, i[31], i[7], i[30:25], i[11:8], 1'b0}` |
-| `U` | `lui` | `{i[31:12], 12'b0}` |
-| `J` | `jal` | `{{11{i[31]}}, i[31], i[19:12], i[20], i[30:21], 1'b0}` |
+| `imm_sel` | Código | Instrucciones | Inmediato de 32 bits |
+|---|---|---|---|
+| `I` | `000` | aritméticas con inmediato, loads, `jalr` | `{{20{i[31]}}, i[31:20]}` |
+| `S` | `001` | `sb`, `sh`, `sw` | `{{20{i[31]}}, i[31:25], i[11:7]}` |
+| `B` | `010` | `beq`, `bne` | `{{19{i[31]}}, i[31], i[7], i[30:25], i[11:8], 1'b0}` |
+| `U` | `011` | `lui` | `{i[31:12], 12'b0}` |
+| `J` | `100` | `jal` | `{{11{i[31]}}, i[31], i[19:12], i[20], i[30:21], 1'b0}` |
+
+Los códigos son las constantes `IMM_*` de `rtl/common/riscv_defs.vh`, la interfaz entre la
+unidad de control y el generador de inmediatos. Donde la tabla de verdad de §4.4 dice `x`
+(tipo R, HALT, no reconocida, burbuja), `imm_sel` vale `000`; el inmediato que resulta no
+se usa.
 
 En B y J el bit 0 es siempre 0, porque los saltos van a direcciones pares. En `sltiu` el
 inmediato también se extiende con signo; la comparación sin signo se hace después, en la ALU.
@@ -328,6 +333,11 @@ segmentación hasta su etapa y ahí deja de viajar.
 - `lui` calcula `0 + inmediato`: `alu_src_a = 1` pone un cero en el operando A.
 - Una instrucción **no reconocida** (por ejemplo `0x0000_0000` o `ecall`) no tiene ningún
   efecto: se comporta como NOP.
+- La unidad de control decodifica **solo por `opcode`** (y la palabra completa para HALT).
+  "No reconocida" es un opcode que no está en la tabla, o uno SYSTEM distinto de HALT. Una
+  palabra con opcode conocido y `funct3`/`funct7` fuera de [`isa.md`](isa.md) (por ejemplo
+  `blt` o `mul`) no se anula: recibe el control de la fila de su opcode y su resultado no
+  está especificado (decisión [024](../decisiones/024_instrucciones-no-soportadas.md)).
 - `halt` solo se activa si `if_id_valid = 1`, para que la basura que queda después de un
   reset no se confunda con un HALT.
 
@@ -979,6 +989,7 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 | Tema | Dónde |
 |---|---|
 | Codificación y comportamiento de HALT | [`decisiones/001_instruccion-halt.md`](../decisiones/001_instruccion-halt.md) |
+| Instrucciones no reconocidas y `funct3`/`funct7` no soportados | [`decisiones/024_instrucciones-no-soportadas.md`](../decisiones/024_instrucciones-no-soportadas.md) |
 | Integración de memorias sincrónicas | [`decisiones/009_memorias-sincronicas.md`](../decisiones/009_memorias-sincronicas.md) |
 | Banco de registros y conflicto ID/WB | [`decisiones/007_banco-registros.md`](../decisiones/007_banco-registros.md) |
 | Detección de riesgos, stall y forwarding | §10 y [`decisiones/011_deteccion-load-use.md`](../decisiones/011_deteccion-load-use.md) |
