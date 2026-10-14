@@ -287,6 +287,10 @@ a 32 bits usando `instr[31]`:
 En B y J el bit 0 es siempre 0, porque los saltos van a direcciones pares. En `sltiu` el
 inmediato también se extiende con signo; la comparación sin signo se hace después, en la ALU.
 
+Un código de `imm_sel` que no corresponde a ningún formato da `imm = 0`. Las instrucciones
+sin inmediato (R-type, HALT, no reconocidas) reciben el `imm_sel` que fije la tabla de §4.4,
+y su `id_ex_imm` no se usa ni se compara contra el modelo.
+
 ### 4.4 Unidad de control
 Mira `opcode` (y `funct3` e `instr[30]` para la ALU) y genera las señales de control.
 Las señales se agrupan según la etapa que las usa. Cada grupo viaja por los registros de
