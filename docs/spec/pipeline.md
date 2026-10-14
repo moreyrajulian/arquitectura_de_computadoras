@@ -270,7 +270,22 @@ Cuando una instrucción no usa un campo, esos bits tienen otra cosa. Por ejemplo
                                                  regs[rs1]
   (ídem para rs2)
   ```
-- **Tercer puerto de lectura** para el dump de la Debug Unit (interfaz en I-06).
+
+  La condición usa `wb_reg_write` y no `we`: con `enable = 0` ID/EX no carga, así que el
+  resultado es el mismo y `enable` queda fuera del camino de lectura.
+- **Tercer puerto de lectura** para el dump de la Debug Unit (`dbg_reg_addr` /
+  `dbg_reg_data`, [`protocolo_debug.md`](protocolo_debug.md) §7). Es asíncrono, lee `x0` como 0
+  y entrega el valor **guardado, sin bypass**: con el core detenido, una instrucción retenida
+  en MEM/WB todavía no escribió, y el dump lo muestra así (decisión
+  [018](../decisiones/018_paso-a-paso-sin-clock.md)).
+- **Reset:** `core_rst` pone los 32 registros en 0 y gana sobre `enable` (decisión 007). Es
+  la excepción a "no resetear caminos de datos" de la decisión
+  [010](../decisiones/010_convenciones-rtl.md).
+- **Módulo** `rtl/common/regfile.v`: `i_rs1_addr`, `i_rs2_addr` → `o_rs1_data`, `o_rs2_data`;
+  escritura `i_we` (`wb_reg_write`), `i_rd_addr` (`wb_rd`), `i_rd_data` (`wb_data`) e `i_en`
+  (`enable`); debug `i_dbg_reg_addr` → `o_dbg_reg_data`. El arreglo `regs` no tiene
+  `$readmemh`: el banco de pruebas lo carga por jerarquía después del reset (decisión
+  [021](../decisiones/021_banco-incremental.md)).
 
 ### 4.3 Generador de inmediatos
 Reconstruye el inmediato según el formato que indica `imm_sel` y lo **extiende con signo**
