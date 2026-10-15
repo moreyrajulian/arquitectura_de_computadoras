@@ -1,8 +1,9 @@
 //======================================================================
 // riscv_defs.vh
 //
-// Codificaciones compartidas del RV32I soportado (docs/spec/isa.md) y del
-// control de la ALU (docs/spec/pipeline.md §4.5). Es el único
+// Codificaciones compartidas del RV32I soportado (docs/spec/isa.md), del
+// control de la ALU (docs/spec/pipeline.md §4.5) y del formato del
+// inmediato (docs/spec/pipeline.md §4.3). Es el único
 // include de codificaciones de la decisión 010: ningún módulo repite estas
 // constantes.
 //
@@ -15,7 +16,7 @@
 //     puertos ANSI. Por lo mismo, no declarar un parameter con un nombre de
 //     este archivo.
 //
-// Si cambia isa.md o pipeline.md §4.5, actualizar este archivo.
+// Si cambia isa.md, pipeline.md §4.3 o §4.5, actualizar este archivo.
 //======================================================================
 
 // Opcodes (instr[6:0])
@@ -78,4 +79,12 @@ localparam [3:0] ALU_SRL  = 4'b0101;
 localparam [3:0] ALU_SRA  = 4'b1101;
 localparam [3:0] ALU_OR   = 4'b0110;
 localparam [3:0] ALU_AND  = 4'b0111;
+
+// imm_sel: formato del inmediato (pipeline.md §4.3). Lo genera control_unit
+// y lo usa imm_gen. Donde la tabla de §4.4 dice "x" vale 0 (IMM_I).
+localparam [2:0] IMM_I = 3'b000;               // aritméticas con inmediato, loads, jalr
+localparam [2:0] IMM_S = 3'b001;               // sb, sh, sw
+localparam [2:0] IMM_B = 3'b010;               // beq, bne
+localparam [2:0] IMM_U = 3'b011;               // lui
+localparam [2:0] IMM_J = 3'b100;               // jal
 
