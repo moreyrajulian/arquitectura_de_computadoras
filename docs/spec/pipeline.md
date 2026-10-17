@@ -408,6 +408,23 @@ En las I aritméticas, `instr[30]` es un bit del inmediato. Solo se usa en `srli
 | `id_ex_halt` | 1 | HALT en vuelo. |
 | **Total** | **161** | |
 
+### 4.7 Módulo `id_stage`
+`rtl/pipeline/id_stage.v` es la etapa completa: `regfile`, `control_unit`, `imm_gen` e
+`id_ex_reg`, con el mismo criterio que `if_stage` (decisión
+[023](../decisiones/023_interfaz-debug-del-core.md)). El banco de registros va adentro porque la
+dirección (`rs1`, `rs2`) y el dato leído son de ID. Si quedara en `riscv_core`, el cable saldría
+de la etapa y volvería a entrar. El banco de pruebas lo encuentra en
+`u_id_stage.u_regfile.regs` ([`verificacion.md`](verificacion.md) §8.5).
+
+- **No calcula enables ni flush:** recibe `en_id_ex` y `flush_id_ex` ya calculados (§10.4), y
+  además `enable` para la escritura del banco. Son señales distintas: con un stall, ID/EX carga
+  una burbuja y el banco puede seguir escribiendo.
+- **Escritura del banco:** entra desde WB (`wb_reg_write`, `wb_rd`, `wb_data`, §7.2). Hasta I-35
+  `riscv_core` la deja en 0.
+- **Salidas:** los 20 campos `id_ex_*` de §8, el bus `o_id_ex_latch` para la Debug Unit, el
+  puerto de lectura del banco (`dbg_reg_addr` / `dbg_reg_data`) e `id_is_halt` (el `halt` de la
+  unidad de control, para `stop_fetch`, §3.4).
+
 ---
 
 ## 5. Etapa EX — Execute
