@@ -27,7 +27,12 @@
 //            [-testplusarg PAUSAS=<semilla>]
 //
 // Etapas: cada integración agrega su define (abajo, o con -d en xvlog). Los
-// defines son acumulativos: definir una etapa define las anteriores.
+// defines son acumulativos: definir una etapa define las anteriores. IF
+// está siempre. Con -d STAGES_CLI se ignoran los defines de este archivo y
+// las etapas salen solo de la línea de comandos: así se corre un nivel
+// anterior sin editar el archivo, por ejemplo la regresión de IF/ID con
+// programas que la etapa nueva todavía no puede ejecutar
+// (xvlog -d STAGES_CLI ...  ->  solo IF).
 //
 // Cortes de la traza (el modelo simula siempre el pipeline completo):
 //   - sin STAGE_HALT (I-37) no hay parada por HALT: cada latch se compara
@@ -37,7 +42,8 @@
 //     primer salto tomado en EX.
 //
 // Interfaz que espera de riscv_core (la implementa I-22, verificacion.md §8):
-//   i_clk, i_rst, i_enable, i_imem_b_{en,we,addr,din}, o_halted
+//   i_clk, i_rst, i_enable, i_imem_b_{en,we,addr,din}, o_halted,
+//   i_dbg_reg_addr, o_dbg_reg_data (desde I-27; se leen con STAGE_ID)
 //   + STAGE_MEM: i_dmem_b_{en,we,addr,din}, o_dmem_b_dout
 //   + STAGE_WB : o_imem_fault, o_dmem_oob, o_dmem_misaligned
 //   y los campos de los latches como señales del módulo superior, con el
@@ -51,14 +57,18 @@
 // Etapas integradas. Descomentar la de cada integración.
 //----------------------------------------------------------------------
 `ifndef STAGE_IF
-`define STAGE_IF                // I-22: IF/ID
+`define STAGE_IF                // I-22: IF/ID (siempre)
 `endif
-// `define STAGE_ID             // I-27: ID/EX y banco de registros
+`ifndef STAGES_CLI
+`ifndef STAGE_ID
+`define STAGE_ID                // I-27: ID/EX y banco de registros
+`endif
 // `define STAGE_EX             // I-31: EX/MEM
 // `define STAGE_MEM            // I-34: MEM/WB y memoria de datos
 // `define STAGE_WB             // I-35: escritura del banco, halted y avisos
 // `define STAGE_REDIRECT       // I-36: el salto tomado cambia el PC
 // `define STAGE_HALT           // I-37: parada por HALT (stop_fetch)
+`endif
 
 `ifdef STAGE_HALT
 `ifndef STAGE_WB
@@ -87,9 +97,9 @@
 `endif
 
 // Arreglo del banco de registros dentro del core (carga del estado inicial
-// y lectura del estado final). I-27 lo ajusta si el camino es otro.
+// y lectura del estado final): regfile dentro de id_stage (I-27).
 `ifndef REGFILE
-`define REGFILE u_dut.u_regfile.regs
+`define REGFILE u_dut.u_id_stage.u_regfile.regs
 `endif
 
 module pipeline_tb;
@@ -137,6 +147,11 @@ module pipeline_tb;
     reg  [NB_ADDR-1:0] tb_imem_b_addr;
     reg  [NB_DATA-1:0] tb_imem_b_din;
     wire               tb_o_halted;
+    // El core tiene el puerto de la Debug Unit desde I-27: se conecta
+    // siempre, así la regresión de IF (-d STAGES_CLI) no deja la entrada
+    // flotante. Se usa con STAGE_ID
+    reg  [4:0]         tb_dbg_reg_addr;
+    wire [NB_DATA-1:0] tb_o_dbg_reg_data;
 `ifdef STAGE_MEM
     reg                tb_dmem_b_en;
     reg  [3:0]         tb_dmem_b_we;
@@ -158,6 +173,8 @@ module pipeline_tb;
         .i_imem_b_we       (tb_imem_b_we),
         .i_imem_b_addr     (tb_imem_b_addr),
         .i_imem_b_din      (tb_imem_b_din),
+        .i_dbg_reg_addr    (tb_dbg_reg_addr),
+        .o_dbg_reg_data    (tb_o_dbg_reg_data),
 `ifdef STAGE_MEM
         .i_dmem_b_en       (tb_dmem_b_en),
         .i_dmem_b_we       (tb_dmem_b_we),
@@ -535,6 +552,7 @@ module pipeline_tb;
         tb_imem_b_we   = 1'b0;
         tb_imem_b_addr = {NB_ADDR{1'b0}};
         tb_imem_b_din  = {NB_DATA{1'b0}};
+        tb_dbg_reg_addr = 5'd0;
 `ifdef STAGE_MEM
         tb_dmem_b_en   = 1'b0;
         tb_dmem_b_we   = 4'b0000;
@@ -645,6 +663,20 @@ module pipeline_tb;
         // después de soltarlo, antes del primer flanco
         for (i = 1; i < N_REGS; i = i + 1)
             `REGFILE[i] = regs_init[i];
+        // Puerto de lectura de la Debug Unit (decisión 023), como READ_REGS:
+        // con el core detenido, x0..x31 contra el estado inicial. Con
+        // enable = 0 nada cambia, así que el ciclo 1 sigue siendo el mismo
+        errores_antes = errors;
+        for (i = 0; i < N_REGS; i = i + 1) begin
+            tb_dbg_reg_addr = i[4:0];
+            #1;
+            $sformat(fname, "puerto debug x%0d", i);
+            chk(fname[8*32-1:0], tb_o_dbg_reg_data,
+                (i == 0) ? {NB_DATA{1'b0}} : regs_init[i]);
+        end
+        if (errors != errores_antes)
+            fallo = 1'b1;
+        @(negedge tb_clk);
 `endif
         tb_enable = 1'b1;
         ciclo     = 1;
