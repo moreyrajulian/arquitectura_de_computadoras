@@ -44,6 +44,19 @@ def single_error(src: str):
     ("beq x1, x2, 6", 1, "no es multiplo de 4"),
     ("li x1, 0x100000000", 1, "inmediato de 'li' fuera de rango"),
     (".word 0x100000000", 1, "valor de '.word' fuera de rango"),
+    # .word: solo instrucciones de isa.md (decision 025)
+    (".word 0x00004063", 1, "branch con funct3 = 100"),                        # blt x0, x0, 0
+    (".word 0x023100B3", 1, "tipo R con funct3 = 000 y funct7 = 0000001"),     # mul x1, x2, x3
+    (".word 0x000110E7", 1, "jalr con funct3 = 001"),
+    (".word 0x40111093", 1, "I aritmetica con funct3 = 001 y funct7 = 0100000"),  # slli
+    (".word 0x00003003", 1, "load con funct3 = 011"),
+    (".word 0x00003023", 1, "store con funct3 = 011"),
+    (".word 0", 1, "opcode 0000000 fuera de la tabla"),
+    (".word 0x00000097", 1, "opcode 0010111 fuera de la tabla"),               # auipc x1, 0
+    (".word 0x00000073", 1, "SYSTEM distinta de halt"),                        # ecall
+    (".word -1", 1, "opcode 1111111 fuera de la tabla"),
+    ("nop\n.word 0x00000013, 0x00004063", 2, "'.word 0x00004063'"),
+    ("fin: .word fin", 1, "la etiqueta 'fin' no se puede usar como inmediato"),
     # etiquetas
     ("j nada", 1, "etiqueta no definida 'nada'"),
     ("a: nop\na: nop", 2, "etiqueta 'a' duplicada (definida en la linea 1)"),
@@ -91,6 +104,21 @@ def test_error_text_has_file_line_and_source():
     text = str(err)
     assert text.startswith("prog.s:2: error: registro inexistente 'x32'")
     assert "2 | add x1, x2, x32   # suma" in text
+
+
+def test_word_error_says_what_the_hardware_would_do():
+    # decision 024: opcode fuera de la tabla -> NOP; opcode conocido -> no especificado
+    nop = single_error(".word 0x00000097").message
+    assert nop.startswith("'.word 0x00000097' (0x00000097) no es una instruccion de isa.md")
+    assert "el hardware la ejecutaria como NOP" in nop
+    unspecified = single_error(".word 0x00004063").message
+    assert "segun su opcode, con resultado no especificado (decision 024)" in unspecified
+
+
+def test_word_error_shows_the_value_of_a_constant():
+    err = single_error(".equ ECALL, 0x73\n.word ECALL")
+    assert err.line == 2
+    assert err.message.startswith("'.word ECALL' (0x00000073)")
 
 
 def test_program_too_large():

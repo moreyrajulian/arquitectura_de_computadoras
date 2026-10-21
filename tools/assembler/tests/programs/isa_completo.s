@@ -105,5 +105,5 @@ adelante:
 funcion:
         jr      t0
         ret
-        .word   0x00000013, 0xdeadbeef, -1
+        .word   0x00000013, 0xdeadbeef      # nop y jal x29: .word solo acepta isa.md
         halt
