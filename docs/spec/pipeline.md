@@ -356,7 +356,9 @@ segmentación hasta su etapa y ahí deja de viajar.
   "No reconocida" es un opcode que no está en la tabla, o uno SYSTEM distinto de HALT. Una
   palabra con opcode conocido y `funct3`/`funct7` fuera de [`isa.md`](isa.md) (por ejemplo
   `blt` o `mul`) no se anula: recibe el control de la fila de su opcode y su resultado no
-  está especificado (decisión [024](../decisiones/024_instrucciones-no-soportadas.md)).
+  está especificado (decisión [024](../decisiones/024_instrucciones-no-soportadas.md)). El
+  ensamblador y la interfaz de la PC no generan ni cargan ninguna palabra fuera de `isa.md`,
+  de ninguno de los dos casos (decisión [025](../decisiones/025_filtro-de-palabras-en-el-toolchain.md)).
 - `halt` solo se activa si `if_id_valid = 1`, para que la basura que queda después de un
   reset no se confunda con un HALT.
 
@@ -1025,7 +1027,7 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 | Tema | Dónde |
 |---|---|
 | Codificación y comportamiento de HALT | [`decisiones/001_instruccion-halt.md`](../decisiones/001_instruccion-halt.md) |
-| Instrucciones no reconocidas y `funct3`/`funct7` no soportados | [`decisiones/024_instrucciones-no-soportadas.md`](../decisiones/024_instrucciones-no-soportadas.md) |
+| Instrucciones no reconocidas y `funct3`/`funct7` no soportados | [`decisiones/024_instrucciones-no-soportadas.md`](../decisiones/024_instrucciones-no-soportadas.md); filtro en el toolchain: [`decisiones/025_filtro-de-palabras-en-el-toolchain.md`](../decisiones/025_filtro-de-palabras-en-el-toolchain.md) |
 | Integración de memorias sincrónicas | [`decisiones/009_memorias-sincronicas.md`](../decisiones/009_memorias-sincronicas.md) |
 | Banco de registros y conflicto ID/WB | [`decisiones/007_banco-registros.md`](../decisiones/007_banco-registros.md) |
 | Detección de riesgos, stall y forwarding | §10 y [`decisiones/011_deteccion-load-use.md`](../decisiones/011_deteccion-load-use.md) |

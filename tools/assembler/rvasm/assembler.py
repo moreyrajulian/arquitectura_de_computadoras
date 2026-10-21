@@ -17,8 +17,11 @@ from .isa import (
     INSTRUCTIONS,
     PSEUDO_INSTRUCTIONS,
     REGISTERS,
+    SUPPORTED,
+    UNRECOGNIZED,
     UNSUPPORTED_RV32I,
     InstrSpec,
+    classify,
 )
 
 
@@ -211,7 +214,7 @@ class _Assembler:
                 raise _LineError(f"se esperaba un inmediato y se encontro el registro '{text}'")
             if text in self.labels:
                 raise _LineError(f"la etiqueta '{text}' no se puede usar como inmediato "
-                                 "(solo como destino de salto o en .word)")
+                                 "(solo como destino de salto)")
             raise _LineError(f"simbolo no definido '{text}'")
         return parse_int(text)
 
@@ -349,18 +352,32 @@ class _Assembler:
                              "(ver docs/spec/isa.md)")
         raise _LineError(f"instruccion invalida '{mnemonic}'")
 
+    @staticmethod
+    def _check_word(text: str, word: int) -> None:
+        result = classify(word)
+        if result.kind == SUPPORTED:
+            return
+        if result.kind == UNRECOGNIZED:
+            effect = "el hardware la ejecutaria como NOP (pipeline.md 4.4)"
+        else:
+            effect = "el hardware la ejecutaria segun su opcode, con resultado no especificado (decision 024)"
+        raise _LineError(f"'.word {text}' (0x{word:08X}) no es una instruccion de isa.md: "
+                         f"{result.reason}; {effect}")
+
     # ---- pasada 2 ---------------------------------------------------------
     def encode(self, st: _Statement) -> list[int]:
         m, ops, pc = st.mnemonic, st.operands, st.address
         if m == ".word":
+            # imem solo guarda instrucciones (dmem es otro espacio): un valor que
+            # no es de isa.md es un error (decision 025). Una etiqueta tampoco
+            # puede serlo: su direccion tiene bits[1:0] = 00, un opcode que no existe
             words = []
             for op in ops:
                 op = op.strip()
-                if _SYMBOL_RE.match(op) and op in self.labels:
-                    value = self.labels[op][0]
-                else:
-                    value = _check_range(self.imm(op), -(1 << 31), (1 << 32) - 1, "valor de '.word'")
-                words.append(value & 0xFFFFFFFF)
+                value = _check_range(self.imm(op), -(1 << 31), (1 << 32) - 1, "valor de '.word'")
+                word = value & 0xFFFFFFFF
+                self._check_word(op, word)
+                words.append(word)
             return words
         if m in PSEUDO_INSTRUCTIONS:
             return self._encode_pseudo(m, ops, pc)

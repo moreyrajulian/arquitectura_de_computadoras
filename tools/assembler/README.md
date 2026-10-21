@@ -56,6 +56,18 @@ else:
     program.warnings                # advertencias (no impiden ensamblar)
 ```
 
+Para validar palabras que no salen de un `.s` (por ejemplo, un `.hex` antes de `LOAD`),
+`classify` dice qué haría el hardware con cada una (§3):
+
+```python
+from rvasm import classify
+from rvasm.isa import SUPPORTED, UNRECOGNIZED, UNSPECIFIED
+
+classify(0x0020C063)   # WordClass(kind='unspecified', name=None, reason='branch con funct3 = 100')
+classify(0x003100B3)   # WordClass(kind='supported', name='add', reason='')
+classify(word).kind == UNSPECIFIED    # las constantes valen 'supported', 'unrecognized', 'unspecified'
+```
+
 ## 2. Sintaxis
 
 Es la sintaxis de GNU as / LLVM para RISC-V, con unas pocas extensiones (§2.7). Un programa
@@ -161,7 +173,7 @@ error que lo explica.
 
 | Directiva | Qué hace |
 |---|---|
-| `.word v1, v2, …` | Una palabra por valor (número de 32 bits o etiqueta). Sirve para probar palabras que no son instrucciones del ISA (se ejecutan como NOP, `pipeline.md` §4.4) |
+| `.word v1, v2, …` | Una palabra por valor (número de 32 bits o constante `.equ`). Cada valor tiene que ser una instrucción de `isa.md` (§3); una etiqueta no puede serlo |
 | `.equ NOMBRE, valor` / `.set` | Constante (§2.4) |
 | `.text`, `.globl`, `.global` | Se aceptan y se ignoran (compatibilidad con GNU as) |
 | `.data`, `.byte`, `.section`, … | **Error**: no hay datos inicializados; `LOAD` pone `dmem` en cero y los datos se escriben con stores (`memoria.md` §2.2) |
@@ -175,6 +187,18 @@ Extensiones respecto de GNU as/LLVM: `halt`, comentarios `//` y mayúsculas en r
 | Como máximo **1024 palabras**, contando el HALT y las 2 palabras de cada `li` largo | Tamaño de `imem` (`memoria.md` §2.2) |
 | Al menos una palabra | `LOAD` exige `N ≥ 1` |
 | Sin `halt` → **advertencia**, no error | Después de la última palabra `LOAD` rellena con HALT, así que el programa igual se detiene (`memoria.md` §6.1) |
+| Solo palabras de `isa.md`, también con `.word` | El hardware decodifica por opcode (decisión [024](../../docs/decisiones/024_instrucciones-no-soportadas.md)): un opcode fuera de la tabla se ejecuta como NOP y uno conocido con `funct3`/`funct7` fuera de `isa.md` tiene resultado no especificado. El filtro está en el software y no en el hardware (decisión [025](../../docs/decisiones/025_filtro-de-palabras-en-el-toolchain.md)) |
+
+`classify(palabra)` (en `rvasm/isa.py`) separa las tres clases:
+
+| Clase | Qué palabras | Qué hace el hardware | En `.word` |
+|---|---|---|---|
+| `SUPPORTED` | Instrucciones de `isa.md` y el HALT | Lo especificado | Se acepta |
+| `UNRECOGNIZED` | Opcode fuera de la tabla (`0x00000000`, `auipc`, `fence`, una dirección) o SYSTEM distinta del HALT (`ecall`, `csr*`) | NOP | Error |
+| `UNSPECIFIED` | Opcode de la tabla con `funct3`/`funct7` fuera de `isa.md` (`blt`, `mul`, `jalr` con `funct3 ≠ 000`, …) | Resultado no especificado | Error |
+
+Una dirección nunca es una instrucción: está alineada a 4, así que tiene `bits[1:0] = 00`, y
+todos los opcodes de RV32I terminan en `11`.
 
 ## 4. Formatos de salida
 
@@ -244,6 +268,7 @@ malo.s:6: error: etiqueta no definida 'fin'
 | Etiquetas | `etiqueta no definida`, `etiqueta 'a' duplicada (definida en la linea 1)` |
 | Operandos | `'add' espera 3 operandos y recibio 2`, `se esperaba 'offset(registro)'`, `operando vacio` |
 | Directivas | `directiva desconocida`, `.data` no soportada |
+| `.word` fuera de `isa.md` | `'.word 0x0020C063' (0x0020C063) no es una instruccion de isa.md: branch con funct3 = 100; el hardware la ejecutaria segun su opcode, con resultado no especificado (decision 024)`. Con opcode fuera de la tabla termina en `el hardware la ejecutaria como NOP` |
 | Programa | más de 1024 palabras, programa vacío |
 
 ## 6. Tests
@@ -269,7 +294,8 @@ contra la referencia guardada corre igual.
 |---|---|
 | `test_encoding.py` | Cada instrucción de `isa.md` contra su palabra esperada **obtenida con LLVM** (no con rvasm), con inmediatos negativos, extremos de rango y saltos hacia adelante y hacia atrás hasta los límites de los formatos B y J. Verifica además que `isa.py` coincide con la tabla de `isa.md` |
 | `test_syntax.py` | Etiquetas, comentarios, mayúsculas, nombres ABI, formas de operandos, `.equ`, `.word`, expansión de pseudos y que `li` reconstruye el valor exacto |
-| `test_errors.py` | Cada error, su línea y su mensaje; varios errores juntos; límite de 1024 palabras; advertencia sin HALT |
+| `test_errors.py` | Cada error, su línea y su mensaje (también `.word` fuera de `isa.md`); varios errores juntos; límite de 1024 palabras; advertencia sin HALT |
+| `test_classify.py` | `classify`: toda palabra que genera rvasm es `SUPPORTED` con su nombre, y las tres clases con palabras armadas a mano desde sus campos. `tools/isasim/tests/test_isa.py` además barre opcode × `funct3` × `funct7` y verifica que el modelo decodifica igual |
 | `test_output.py` | Los cuatro formatos, `--fill` y la CLI (archivos, stdout, códigos de salida) |
 | `test_reference.py` | Los programas de `tests/programs/` contra la salida de un ensamblador estándar (§7) |
 
@@ -297,7 +323,7 @@ Busca, en orden: GNU as (`riscv64-unknown-elf-as`, `riscv32-unknown-elf-as`,
 `-march=rv32i` (en zig, `-mcpu=generic_rv32`: sin extensión C) y `-mno-relax`, y extrae `.text`
 con `objcopy`. Antes cambia `halt` por `ebreak` y `//` por `#`.
 
-Resultado actual: con **LLVM (zig 0.16.0)**, `isa_completo.s` (79 palabras) y `fibonacci.s`
+Resultado actual: con **LLVM (zig 0.16.0)**, `isa_completo.s` (78 palabras) y `fibonacci.s`
 (23 palabras) dan **idénticos**.
 
 Diferencias encontradas al validar, que no son errores de rvasm:
@@ -310,8 +336,6 @@ Diferencias encontradas al validar, que no son errores de rvasm:
   a un símbolo global (deja una relocación para el linker y LLVM además convierte el `beq` en
   `bne` + `jal`). rvasm genera la imagen final sin linker, así que en los programas de
   validación no se marca global ninguna etiqueta destino de un salto.
-- **`.word etiqueta`** también deja una relocación en el objeto, así que tampoco está en los
-  programas de validación (lo cubre `test_syntax.py`).
 
 ## 8. Estructura
 
@@ -321,7 +345,7 @@ tools/assembler/
 ├── validate_reference.py   Validación contra GNU as / LLVM
 ├── requirements-dev.txt    pytest (y ziglang, opcional)
 ├── rvasm/
-│   ├── isa.py              Tablas de registros e instrucciones (copia de isa.md)
+│   ├── isa.py              Tablas de registros e instrucciones (copia de isa.md) y classify
 │   ├── assembler.py        Dos pasadas: direcciones y etiquetas, después codificación
 │   ├── output.py           Formatos hex, bin, coe, lst
 │   └── cli.py

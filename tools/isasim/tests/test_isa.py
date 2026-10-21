@@ -3,12 +3,17 @@
 Cada valor esperado se calcula a mano desde isa.md, no con el modelo.
 """
 
+import random
+
 import pytest
 
 from isasim import ModelError, decode
 from isasim.isa import HALT_WORD, IsaSim
 
 from isasim_testutil import words_of
+
+from rvasm import classify  # noqa: E402  (isasim_testutil agrega el ensamblador al path)
+from rvasm.isa import SUPPORTED, UNRECOGNIZED, UNSPECIFIED  # noqa: E402
 
 
 def regs_after(source, regs=None, dmem=None):
@@ -131,3 +136,29 @@ def test_halt_and_unknown_words():
 def test_known_opcode_with_unsupported_funct_is_an_error():
     with pytest.raises(ModelError):
         decode(0x0020_C063)                                # blt x1, x2, 0
+
+
+def test_decode_agrees_with_assembler_classify():
+    """El modelo y el ensamblador decodifican cada uno por su lado (decisión 025):
+    tienen que coincidir en qué palabras son de isa.md, cuáles son NOP y cuáles
+    tienen resultado no especificado. Barre opcode, funct3 y funct7; rd, rs1 y
+    rs2 van al azar con semilla fija."""
+    rng = random.Random(25)
+    words = [HALT_WORD]
+    for opcode in range(128):
+        for funct3 in range(8):
+            for funct7 in range(128):
+                regs = rng.getrandbits(15)                 # rs2, rs1 y rd
+                words.append((funct7 << 25) | ((regs >> 10) << 20) | (((regs >> 5) & 31) << 15)
+                             | (funct3 << 12) | ((regs & 31) << 7) | opcode)
+    for word in words:
+        result = classify(word)
+        try:
+            ins = decode(word)
+        except ModelError:
+            assert result.kind == UNSPECIFIED, f"0x{word:08X}"
+            continue
+        if ins.kind == "NONE":
+            assert result.kind == UNRECOGNIZED, f"0x{word:08X}"
+        else:
+            assert (result.kind, result.name) == (SUPPORTED, ins.name), f"0x{word:08X}"

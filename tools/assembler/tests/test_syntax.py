@@ -103,9 +103,11 @@ def test_ignored_directives():
     assert words(".text\n.globl main\n.global main\nmain: nop") == [0x00000013]
 
 
-def test_word_directive_values_and_labels():
-    prog = assemble("nop\nfin: .word 0xdeadbeef, -1, 7, fin")
-    assert prog.words == [0x00000013, 0xDEADBEEF, 0xFFFFFFFF, 7, 4]
+def test_word_directive_accepts_isa_words():
+    # nop, jal x29 (0xdeadbeef) y la palabra de HALT desde una constante .equ;
+    # lo que no es de isa.md da error (test_errors.py, decision 025)
+    prog = assemble(".equ FIN, 0x00100073\nnop\n.word 0x00000013, 0xdeadbeef, FIN")
+    assert prog.words == [0x00000013, 0x00000013, 0xDEADBEEF, 0x00100073]
 
 
 # ---- pseudo-instrucciones -------------------------------------------------------

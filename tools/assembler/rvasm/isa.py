@@ -132,3 +132,51 @@ UNSUPPORTED_RV32I = {
     "la", "call", "tail", "bgt", "ble", "bgtu", "bleu", "bltz", "bgez",
     "blez", "bgtz",
 }
+
+
+# --------------------------------------------------------------------------
+# Clasificacion de palabras (decisiones 024 y 025)
+# --------------------------------------------------------------------------
+# Que hace el hardware con una palabra (pipeline.md 4.4):
+#   SUPPORTED     instruccion de isa.md (o el HALT)
+#   UNRECOGNIZED  opcode fuera de la tabla, o SYSTEM distinta del HALT: NOP
+#   UNSPECIFIED   opcode de la tabla con funct3/funct7 fuera de isa.md: se
+#                 ejecuta segun su opcode y el resultado no esta especificado
+SUPPORTED = "supported"
+UNRECOGNIZED = "unrecognized"
+UNSPECIFIED = "unspecified"
+
+# Nombre de cada familia en los mensajes (las de forma U y J no tienen funct3)
+_FAMILIES = {
+    OP_R: "tipo R", OP_I: "I aritmetica", OP_LOAD: "load", OP_STORE: "store",
+    OP_BRANCH: "branch", OP_JALR: "jalr",
+}
+
+
+@dataclass(frozen=True)
+class WordClass:
+    kind: str
+    name: str | None = None   # instruccion de isa.md, solo con SUPPORTED
+    reason: str = ""          # por que no es de isa.md
+
+
+def classify(word: int) -> WordClass:
+    """Clasifica una palabra de 32 bits como la decodifica la unidad de control."""
+    if word == HALT_WORD:
+        return WordClass(SUPPORTED, "halt")
+    opcode, funct3, funct7 = word & 0x7F, (word >> 12) & 0x7, (word >> 25) & 0x7F
+    if opcode == OP_SYSTEM:
+        return WordClass(UNRECOGNIZED, reason="palabra SYSTEM distinta de halt")
+    specs = [(name, spec) for name, spec in INSTRUCTIONS.items() if spec.opcode == opcode]
+    if not specs:
+        return WordClass(UNRECOGNIZED, reason=f"opcode {opcode:07b} fuera de la tabla")
+    for name, spec in specs:
+        if spec.form in ("U", "J"):
+            return WordClass(SUPPORTED, name)
+        if spec.funct3 == funct3 and (spec.form not in ("R", "SHIFT") or spec.funct7 == funct7):
+            return WordClass(SUPPORTED, name)
+    family = _FAMILIES.get(opcode, f"opcode {opcode:07b}")
+    if any(spec.funct3 == funct3 for _, spec in specs):
+        # el funct3 existe: lo que no esta en isa.md es el funct7
+        return WordClass(UNSPECIFIED, reason=f"{family} con funct3 = {funct3:03b} y funct7 = {funct7:07b}")
+    return WordClass(UNSPECIFIED, reason=f"{family} con funct3 = {funct3:03b}")

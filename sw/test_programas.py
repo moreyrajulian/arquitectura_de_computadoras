@@ -19,7 +19,7 @@ import pytest
 SW = Path(__file__).resolve().parent
 sys.path.insert(0, str(SW.parent / "tools" / "assembler"))
 
-from rvasm import assemble  # noqa: E402
+from rvasm import assemble, classify  # noqa: E402
 from rvasm.isa import HALT_WORD, INSTRUCTIONS  # noqa: E402
 
 PROGRAMS = sorted(p.stem for p in SW.glob("*.s"))
@@ -48,24 +48,6 @@ ISA = set(INSTRUCTIONS) - {"ebreak"}
 
 def program(name):
     return assemble((SW / f"{name}.s").read_text(encoding="utf-8"), f"{name}.s")
-
-
-def mnemonic(word):
-    """Nombre de la instruccion de isa.md que codifica la palabra."""
-    if word == HALT_WORD:
-        return "halt"
-    opcode, funct3, funct7 = word & 0x7F, (word >> 12) & 7, word >> 25
-    for name, spec in INSTRUCTIONS.items():
-        if spec.opcode != opcode:
-            continue
-        if spec.form in ("U", "J"):
-            return name
-        if spec.funct3 != funct3:
-            continue
-        if spec.form in ("R", "SHIFT") and spec.funct7 != funct7:
-            continue
-        return name
-    return None
 
 
 def parse_exp(text):
@@ -132,12 +114,12 @@ def test_nops_variants_exist():
 
 def test_every_instruction_is_covered():
     """verificacion.md 4: toda instruccion de isa.md aparece en algun programa."""
-    used = {mnemonic(w) for name in PLAN for w in program(name).words}
+    used = {classify(w).name for name in PLAN for w in program(name).words}
     assert not sorted(ISA - used)
 
 
 def test_every_group_is_covered_by_independent_programs():
-    used = {mnemonic(w) for name in INDEP for w in program(name).words}
+    used = {classify(w).name for name in INDEP for w in program(name).words}
     assert not sorted(ISA - used - {"halt"})
 
 
@@ -146,7 +128,7 @@ def test_independent_programs_do_not_read_written_registers(name):
     """Ninguna instruccion lee un registro que escribe otra (issue I-15)."""
     written, read = set(), set()
     for word in program(name).words:
-        spec = INSTRUCTIONS.get(mnemonic(word))
+        spec = INSTRUCTIONS.get(classify(word).name)
         if spec is None:
             continue
         rd, rs1, rs2 = (word >> 7) & 31, (word >> 15) & 31, (word >> 20) & 31
