@@ -13,6 +13,11 @@ constraints (`basys3.xdc`). Los bloques reutilizables no están acá: viven en `
 Los diseños históricos se conservan como referencia y para poder reproducir lo entregado.
 No se modifican salvo para corregir errores.
 
+Cada diseño histórico tiene su propia copia de la ALU que entregó (`tp1_alu/alu_tp1.v` y
+`tp2_uart/alu_tp2.v`). `rtl/common/alu.v` es la ALU RV32I del procesador (I-28), con otra
+interfaz, y el script de proyecto agrega `rtl/` a todos los diseños. Por eso las copias llevan
+otro nombre de módulo.
+
 ## Abrir un diseño en Vivado
 
 En Vivado, *Tools > Run Tcl Script...* con `scripts/create_project.tcl` (crea `riscv_basys3`).
