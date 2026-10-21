@@ -163,8 +163,11 @@ que todavía no existen y la búsqueda sigue.
 
 **Palabras fuera de `isa.md`.** Una palabra con opcode desconocido (o `ecall`) se ejecuta
 como NOP, igual que en el hardware ([`pipeline.md`](../../docs/spec/pipeline.md) §4.4). Una
-con opcode conocido y `funct3`/`funct7` fuera de `isa.md` (por ejemplo un `blt` escrito con
-`.word`) es un error: el hardware la ejecutaría según su opcode, no como NOP.
+con opcode conocido y `funct3`/`funct7` fuera de `isa.md` (por ejemplo un `blt` en un `.hex`)
+es un error: el hardware la ejecutaría según su opcode, no como NOP. El ensamblador no genera
+ninguna de las dos (decisión [025](../../docs/decisiones/025_filtro-de-palabras-en-el-toolchain.md)),
+así que solo llegan desde un `.hex`. El modelo las decodifica por su cuenta, a propósito, y
+`test_isa.py` verifica que clasifica igual que `classify` del ensamblador.
 
 ## 5. Tests
 
