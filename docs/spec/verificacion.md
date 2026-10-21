@@ -76,6 +76,7 @@ agregar más, no quitar.
 | Unidad de control (`control_unit`) | I-24 | `control_unit_tb.v` | **Exhaustivo**: para cada fila de la tabla de verdad de §4.4 (R, I aritmética, load, store, branch, `jal`, `jalr`, `lui`, HALT, no reconocida, burbuja) verifica las 12 señales; `halt` solo con `valid = 1`; `0x0000_0000` y `ecall` se comportan como NOP |
 | Generador de inmediatos (`imm_gen`) | I-25 | `imm_gen_tb.v` | Los cinco formatos de `isa.md` con inmediato positivo, negativo, máximo y mínimo; el bit de signo siempre es `instr[31]`; un código de `imm_sel` sin formato da 0. Oráculos independientes del RTL (§2): palabras generadas por el ensamblador con el inmediato escrito en la fuente, y un codificador propio del testbench (la función inversa) para lo que el ensamblador no genera: sus saltos son múltiplos de 4, así que nunca ponen en 1 el bit 1 de B y J ni llegan a sus máximos (4094 y 1048574) |
 | Registro ID/EX | I-26 | `id_ex_reg_tb.v` | Igual que IF/ID; además, los 161 bits se conservan intactos con `en = 1` |
+| Etapa ID (`id_stage`) | I-27 | `id_stage_tb.v` | El cableado entre los módulos de ID, sobre todo lo que la traza no ve en M4: una palabra del ensamblador por fila de la tabla de verdad de `pipeline.md` §4.4, con los 20 campos de ID/EX; `id_is_halt` solo con HALT y `valid = 1`; escritura de WB con bypass en `rs1` y en `rs2`, `rd = 0` y `enable = 0` sin escritura, `enable` y `en_id_ex` independientes; puerto de debug sin bypass y `x0` leído como 0; `en = 0` conserva los 161 bits también con `flush = 1`; `flush` deja burbuja; reset con el core detenido; el bus `o_id_ex_latch` igual a los campos; aleatorio con semilla fija contra un modelo de §2 y §4.2 |
 | ALU y control de ALU (`alu`, `alu_control`) | I-28 | `alu_tb.v` (existente, ampliado) y `alu_control_tb.v` | Las 10 operaciones; `slt` contra `sltu` con operandos negativos; desplazamientos con `shamt` 0, 1 y 31 y usando solo los 5 bits bajos de `rs2`; `alu_control`: `{instr[30], funct3}` en R; en I aritmética el bit 30 solo cuenta con `funct3 = 101` (un `addi` con inmediato negativo **no** es una resta) |
 | Lógica de saltos (`branch_unit`) | I-29 | `branch_unit_tb.v` | `taken = branch & (zero ^ funct3[0])` para `beq` y `bne` con `zero` en 0 y en 1; `jal` y `jalr` siempre `redirect`; destino `pc + imm` y `(rs1 + imm) & ~1` (con bit 0 en 1 a la entrada); no salto → `redirect = 0` |
 | Registro EX/MEM | I-30 | `ex_mem_reg_tb.v` | Igual que ID/EX (109 bits) |
@@ -414,17 +415,26 @@ carga y la lectura final no cuentan.
 ### 8.2 Etapas integradas
 
 Cada integración agrega su define al principio de `pipeline_tb.v` (o con `-d` en xvlog). Son
-acumulativos: definir uno define los anteriores.
+acumulativos: definir uno define los anteriores. `STAGE_IF` está siempre.
 
 | Define | Issue | Qué agrega al banco |
 |---|---|---|
 | `STAGE_IF` | I-22 | Compara IF/ID; carga `imem` por el puerto B |
-| `STAGE_ID` | I-27 | Compara ID/EX; carga el banco de registros por jerarquía (`` `REGFILE ``) al soltar el reset |
+| `STAGE_ID` | I-27 | Compara ID/EX; carga el banco de registros por jerarquía (`` `REGFILE ``) al soltar el reset y lo lee por el puerto de la Debug Unit antes del ciclo 1 |
 | `STAGE_EX` | I-31 | Compara EX/MEM |
 | `STAGE_MEM` | I-34 | Compara MEM/WB; carga `dmem` por el puerto B |
 | `STAGE_WB` | I-35 | Habilita `+FINAL` (registros, `halted`, avisos) |
 | `STAGE_REDIRECT` | I-36 | Sin corte por saltos (§8.3) |
 | `STAGE_HALT` | I-37 | Sin corte por HALT: se comparan todas las líneas, foto final incluida |
+
+**Correr un nivel anterior.** Con `-d STAGES_CLI` el banco ignora los defines del archivo y las
+etapas salen solo de la línea de comandos (`-d STAGES_CLI` solo es IF; `-d STAGES_CLI -d STAGE_ID`
+es hasta ID). Sirve para la regresión de las etapas ya integradas con los programas que la etapa
+nueva todavía no puede ejecutar, sin editar el archivo. Por ejemplo, con `STAGE_ID` y sin WB,
+ID/EX solo coincide con la traza en los `indep_*`, `halt_basico` y `jump_nops`. En los demás,
+alguna instrucción lee un registro que escribió otra, y sin WB el banco no cambia: fallan en
+`id_ex.rs1_data` o `id_ex.rs2_data` hasta I-35. Su IF/ID se sigue comparando con
+`-d STAGES_CLI`.
 
 ### 8.3 Hasta qué ciclo se compara
 
@@ -446,6 +456,10 @@ la traza. Se compara en el flanco de bajada.
 
 - Ante la primera discrepancia, una línea por campo distinto en ese ciclo, y termina:
   `[<tiempo>] ERROR ciclo <t> <latch>.<campo> | dut=0x<…> esperado=0x<…>`.
+- Con `STAGE_ID`, antes del ciclo 1 y con `enable = 0`, lee `x0`…`x31` por el puerto de la
+  Debug Unit (`i_dbg_reg_addr` / `o_dbg_reg_data`, como `READ_REGS`) y los compara con el
+  estado inicial (`x0` = 0). Una línea por registro distinto (`puerto debug x<n>`), y
+  termina. Como nada cambia con `enable = 0`, el ciclo 1 es el mismo.
 - Con `STAGE_ID`, en el ciclo 2 compara el banco de registros con el estado inicial: el
   primer flanco sin reset ya pasó y WB todavía no escribe. Detecta una carga que borró el
   reset o un camino de `` `REGFILE `` equivocado. Una línea por registro distinto
@@ -461,6 +475,7 @@ La define este banco y la implementa I-22. Los nombres siguen `memoria.md` §3.3
 | Desde | Puertos |
 |---|---|
 | `STAGE_IF` | `i_clk`, `i_rst`, `i_enable`, `i_imem_b_en`, `i_imem_b_we`, `i_imem_b_addr[9:0]`, `i_imem_b_din[31:0]`, `o_halted` |
+| `STAGE_ID` | `i_dbg_reg_addr[4:0]`, `o_dbg_reg_data[31:0]` (puerto de lectura del banco para la Debug Unit). El core los tiene desde I-27 y el banco los conecta siempre, también con `-d STAGES_CLI`, para no dejar la entrada flotante; los lee solo con `STAGE_ID` |
 | `STAGE_MEM` | `i_dmem_b_en`, `i_dmem_b_we[3:0]`, `i_dmem_b_addr[9:0]`, `i_dmem_b_din[31:0]`, `o_dmem_b_dout[31:0]` |
 | `STAGE_WB` | `o_imem_fault`, `o_dmem_oob`, `o_dmem_misaligned` |
 
@@ -472,7 +487,8 @@ Los campos de los latches se leen por jerarquía: tienen que ser señales del m�
 del core, con el nombre `<latch>_<campo>` de `pipeline.md` §8. Las señales de control también
 llevan el prefijo del latch: `u_dut.id_ex_alu_ctrl`, `u_dut.ex_mem_reg_write`,
 `u_dut.mem_wb_mem_to_reg`. El banco de registros se lee y se escribe por el camino de
-`` `REGFILE `` (por defecto `u_dut.u_regfile.regs`, a ajustar en I-27).
+`` `REGFILE `` (por defecto `u_dut.u_id_stage.u_regfile.regs`: el banco está dentro de
+`id_stage`, como `imem` dentro de `if_stage`).
 
 ### 8.6 Probar el banco sin el core
 
@@ -486,7 +502,7 @@ xelab -debug off pipeline_tb -s pipeline_stub
 xsim pipeline_stub --runall -testplusarg "DIR=..." [-testplusarg FINAL]
 ```
 
-El stub tiene el banco de registros en `u_dut.u_regfile.regs`, el camino por defecto de
+El stub tiene el banco de registros en `u_dut.u_id_stage.u_regfile.regs`, el camino por defecto de
 `` `REGFILE ``, así que no hace falta pasar ningún `-d REGFILE=...`. Como el banco real, el
 reset lo pone en cero (decisión 007). En Windows, `xvlog.bat`,
 `xelab.bat` y `xsim.bat` parten los argumentos en el `=`: el plusarg va entre

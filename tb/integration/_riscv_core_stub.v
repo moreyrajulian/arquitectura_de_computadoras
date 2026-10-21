@@ -23,6 +23,9 @@
 //     cuando el HALT llega a WB el stub copia el estado final esperado
 //     (exp_*.hex) para probar el modo +FINAL. El reset pone el banco de
 //     registros en cero, como el real.
+//   - El banco de registros está en u_id_stage.u_regfile.regs, el mismo
+//     camino que en el core real (`REGFILE), y el puerto de lectura de la
+//     Debug Unit lo lee sin bypass, como regfile.
 //
 // Fallas a propósito (plusargs):
 //   +STUB_ERROR=<ciclo>  invierte el bit 2 de if_id_pc en ese ciclo
@@ -37,6 +40,8 @@ module riscv_core (
     input  wire        i_imem_b_we,
     input  wire [9:0]  i_imem_b_addr,
     input  wire [31:0] i_imem_b_din,
+    input  wire [4:0]  i_dbg_reg_addr,
+    output wire [31:0] o_dbg_reg_data,
     input  wire        i_dmem_b_en,
     input  wire [3:0]  i_dmem_b_we,
     input  wire [9:0]  i_dmem_b_addr,
@@ -59,10 +64,13 @@ module riscv_core (
     reg [31:0]  imem       [0:1023];
     reg [31:0]  dmem       [0:1023];
 
-    // Mismo camino que el banco usa por defecto (`REGFILE = u_dut.u_regfile.regs)
-    regfile_stub u_regfile (
-        .i_clk (i_clk),
-        .i_rst (i_rst)
+    // Mismo camino que el banco usa por defecto
+    // (`REGFILE = u_dut.u_id_stage.u_regfile.regs)
+    id_stage_stub u_id_stage (
+        .i_clk          (i_clk),
+        .i_rst          (i_rst),
+        .i_dbg_reg_addr (i_dbg_reg_addr),
+        .o_dbg_reg_data (o_dbg_reg_data)
     );
 
     reg [8*512-1:0] dir;
@@ -97,7 +105,7 @@ module riscv_core (
     // Al llegar el HALT a WB, el estado final esperado
     always @(posedge i_clk) begin
         if (!i_rst && i_enable && !sin_halt && t_reg == lineas - 2) begin
-            $sformat(fname, "%0s/exp_regs.hex", dir); $readmemh(fname, u_regfile.regs);
+            $sformat(fname, "%0s/exp_regs.hex", dir); $readmemh(fname, u_id_stage.u_regfile.regs);
             $sformat(fname, "%0s/exp_dmem.hex", dir); $readmemh(fname, dmem);
             $sformat(fname, "%0s/exp_misc.hex", dir); $readmemh(fname, exp_misc);
         end
@@ -175,6 +183,22 @@ module riscv_core (
     wire        mem_wb_mem_to_reg = l_mem_wb[1];
     wire        mem_wb_halt       = l_mem_wb[0];
 
+endmodule
+
+// Solo para que el banco de registros quede en el camino del core real
+// (u_id_stage.u_regfile.regs) y para el puerto de lectura de la Debug Unit.
+module id_stage_stub (
+    input  wire        i_clk,
+    input  wire        i_rst,
+    input  wire [4:0]  i_dbg_reg_addr,
+    output wire [31:0] o_dbg_reg_data
+);
+    regfile_stub u_regfile (
+        .i_clk (i_clk),
+        .i_rst (i_rst)
+    );
+
+    assign o_dbg_reg_data = (i_dbg_reg_addr == 5'd0) ? 32'h0 : u_regfile.regs[i_dbg_reg_addr];
 endmodule
 
 // Arreglo de registros que carga y lee el banco por jerarquía. El reset lo
