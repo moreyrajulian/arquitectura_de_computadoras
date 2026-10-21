@@ -72,7 +72,7 @@ Los que no corresponden al estado actual se muestran deshabilitados en el footer
 | Control | Tecla | Comandos enviados | Estados en que se puede |
 |---|---|---|---|
 | Conectar / desconectar | `F1` | Abrir puerto, `INFO` (verifica `proto_version`), `STATUS`, `READ_ALL` | Siempre |
-| **Cargar programa** | `F2` | Elige un `.s` (o `.hex`/`.bin`), lo ensambla, muestra errores con línea; si está bien, `LOAD` + `READ_ALL` | Todos (en `RUNNING` pide confirmación) |
+| **Cargar programa** | `F2` | Elige un `.s` (o `.hex`/`.bin`), lo ensambla, muestra errores con línea; si está bien, `LOAD` + `READ_ALL`. Un `.hex`/`.bin` no se ensambla: se valida con `classify` de `rvasm` y se rechaza si tiene una palabra fuera de [`isa.md`](isa.md), con su dirección (decisión [025](../decisiones/025_filtro-de-palabras-en-el-toolchain.md)) | Todos (en `RUNNING` pide confirmación) |
 | **Ejecutar** (continuo) | `F5` | `RUN` y espera `EVT_HALTED` (§5) | `READY`, `PAUSED` |
 | **Paso a paso** (un ciclo) | `F10` | `STEP` + `READ_ALL` (§4) | `READY`, `PAUSED` |
 | Paso ×N | `Shift+F10` | N veces `STEP`; un solo `READ_ALL` al final. Se detiene antes si llega a `HALTED` | `READY`, `PAUSED` |
