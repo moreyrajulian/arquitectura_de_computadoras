@@ -1,6 +1,6 @@
 # 024 - Instrucciones no soportadas: decodificación solo por opcode
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-14
 - **Autores:** Moreyra, Julián
 
