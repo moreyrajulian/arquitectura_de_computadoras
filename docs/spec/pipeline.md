@@ -504,6 +504,11 @@ redirect_pc = jalr ? {alu_out[31:1], 1'b0}       (rs1 + imm, con el bit 0 en cer
 - **Penalización:** un salto tomado (`beq`/`bne` tomado, `jal`, `jalr`) pierde **2 ciclos**;
   uno no tomado, **0** (tabla completa en §10.5).
 - Por qué en EX y no en ID ni con predicción: decisión [012](../decisiones/012_resolucion-saltos.md).
+- **Módulo** `rtl/pipeline/branch_unit.v`, combinacional: `i_branch`, `i_jal`, `i_jalr`,
+  `i_funct3`, `i_pc` e `i_imm` (de ID/EX), `i_zero` e `i_alu_out` (de la ALU, §5.2) →
+  `o_redirect`, `o_redirect_pc`. No mira `valid`: una burbuja trae `branch`, `jal` y `jalr`
+  en 0 (§2). La dirección de retorno (`PC + 4`) no sale de acá: es el mux de resultado
+  (§5.4). Hasta I-36 sus salidas no llegan a IF.
 
 ### 5.4 Resultado
 ```
