@@ -5,8 +5,8 @@
 // riscv_core
 //
 // Procesador RV32I segmentado (docs/spec/pipeline.md). Se integra etapa
-// por etapa (docs/planificacion.md); esta versión tiene IF (I-22) e ID
-// (I-27).
+// por etapa (docs/planificacion.md); esta versión tiene IF (I-22), ID
+// (I-27) y EX (I-31).
 //
 // Función:
 //   Instancia las etapas y genera las señales de control del pipeline
@@ -17,8 +17,11 @@
 //     stop_fetch  = 0   hasta I-37      (parada por HALT)
 //     halted      = 0   hasta I-35      (registro halted en WB)
 //     wb_*        = 0   hasta I-35      (escritura del banco desde WB)
-//   Con eso, en M4: en_pc = en_if_id = en_id_ex = enable,
-//   flush_if_id = flush_id_ex = 0, y el banco conserva lo que tenga.
+//     fwd_a/fwd_b = 00  hasta I-39      (unidad de forwarding)
+//   Con eso, en M5: en_pc = en_if_id = en_id_ex = en_ex_mem = enable,
+//   flush_if_id = flush_id_ex = flush_ex_mem = 0, el banco conserva lo
+//   que tenga y EX opera con lo leído en ID. La salida de branch_unit
+//   (ex_redirect, ex_redirect_pc) existe pero no vuelve a IF hasta I-36.
 //
 //   Los campos de los registros de segmentación son señales de este
 //   módulo con el nombre <latch>_<campo> de pipeline.md §8: el banco de
@@ -36,7 +39,8 @@
 //   o_pc                      : pc_reg, para el bloque de estado
 //   o_if_id_latch             : IF/ID agrupado, {valid, pc, instr}
 //   o_id_ex_latch             : ID/EX agrupado, en el orden de §8
-//   Cada integración agrega su bus de latch (o_ex_mem_latch, ...), el
+//   o_ex_mem_latch            : EX/MEM agrupado, en el orden de §8
+//   Cada integración agrega su bus de latch (o_mem_wb_latch), el
 //   puerto B de dmem (I-34) y los avisos (I-35).
 //
 // Parámetros:
@@ -62,10 +66,12 @@
 //   o_if_id_latch  : IF/ID para READ_LATCHES                 [NB_PC+NB_INSTR:0]
 //   o_id_ex_latch  : ID/EX para READ_LATCHES (161 bits)
 //                    [NB_PC+3*NB_DATA+3*NB_ADDR+NB_FUNCT3+NB_ALU_CTRL+10:0]
+//   o_ex_mem_latch : EX/MEM para READ_LATCHES (109 bits)
+//                    [NB_PC+2*NB_DATA+NB_ADDR+NB_FUNCT3+4:0]
 //
 // Latencia: la instrucción de la dirección p llega a IF/ID un ciclo con
-//           enable = 1 después de que pc_reg = p, y a ID/EX un ciclo
-//           con enable = 1 después.
+//           enable = 1 después de que pc_reg = p, y a ID/EX y a EX/MEM
+//           un ciclo con enable = 1 después de cada una.
 // Reset   : PC = 0x0000_0000, banco de registros en 0, todos los
 //           registros de segmentación en burbuja (valid = 0), halted = 0.
 //======================================================================
@@ -93,10 +99,13 @@ module riscv_core
     output wire [NB_PC-1:0]        o_pc,
     output wire [NB_PC+NB_INSTR:0] o_if_id_latch,
     // 1 + 32 + 3*32 + 3*5 + 3 + 4 + 10 = 161 bits (pipeline.md §8)
-    output wire [NB_PC+3*NB_DATA+3*NB_ADDR+NB_FUNCT3+NB_ALU_CTRL+10:0] o_id_ex_latch
+    output wire [NB_PC+3*NB_DATA+3*NB_ADDR+NB_FUNCT3+NB_ALU_CTRL+10:0] o_id_ex_latch,
+    // 1 + 32 + 2*32 + 5 + 3 + 4 = 109 bits (pipeline.md §8)
+    output wire [NB_PC+2*NB_DATA+NB_ADDR+NB_FUNCT3+4:0] o_ex_mem_latch
 );
 
     localparam integer NB_IMM_SEL = 3;  // imm_sel no sale de ID (§4.3)
+    localparam integer NB_FWD     = 2;  // fwd_a / fwd_b (§5.1)
 
     //------------------------------------------------------------------
     // Señales de control del pipeline (pipeline.md §9.2 y §10.4)
@@ -107,11 +116,13 @@ module riscv_core
     wire             stop_fetch  = 1'b0;            // I-37
     wire             halted      = 1'b0;            // I-35
 
-    wire en_pc       = i_enable & ~stall;
-    wire en_if_id    = i_enable & ~stall;
-    wire en_id_ex    = i_enable;
-    wire flush_if_id = redirect | stop_fetch;
-    wire flush_id_ex = redirect | stall;
+    wire en_pc        = i_enable & ~stall;
+    wire en_if_id     = i_enable & ~stall;
+    wire en_id_ex     = i_enable;
+    wire en_ex_mem    = i_enable;
+    wire flush_if_id  = redirect | stop_fetch;
+    wire flush_id_ex  = redirect | stall;
+    wire flush_ex_mem = 1'b0;
 
     //------------------------------------------------------------------
     // Escritura del banco desde WB (pipeline.md §7.2): I-35
@@ -119,6 +130,13 @@ module riscv_core
     wire               wb_reg_write = 1'b0;
     wire [NB_ADDR-1:0] wb_rd        = {NB_ADDR{1'b0}};
     wire [NB_DATA-1:0] wb_data      = {NB_DATA{1'b0}};
+
+    //------------------------------------------------------------------
+    // Selectores de forwarding (pipeline.md §10.2): I-39. En 00 (FWD_ID_EX)
+    // EX usa lo leído en ID
+    //------------------------------------------------------------------
+    wire [NB_FWD-1:0] fwd_a = {NB_FWD{1'b0}};
+    wire [NB_FWD-1:0] fwd_b = {NB_FWD{1'b0}};
 
     //------------------------------------------------------------------
     // IF e IF/ID
@@ -220,6 +238,69 @@ module riscv_core
         .o_id_ex_mem_to_reg (id_ex_mem_to_reg),
         .o_id_ex_halt       (id_ex_halt),
         .o_id_ex_latch      (o_id_ex_latch)
+    );
+
+    //------------------------------------------------------------------
+    // EX y EX/MEM
+    //------------------------------------------------------------------
+    wire                 ex_redirect;     // a IF en I-36
+    wire [NB_PC-1:0]     ex_redirect_pc;  // a IF en I-36
+    wire                 ex_mem_valid;
+    wire [NB_PC-1:0]     ex_mem_pc;
+    wire [NB_DATA-1:0]   ex_mem_result;
+    wire [NB_DATA-1:0]   ex_mem_store_data;
+    wire [NB_ADDR-1:0]   ex_mem_rd;
+    wire [NB_FUNCT3-1:0] ex_mem_funct3;
+    wire                 ex_mem_mem_write;
+    wire                 ex_mem_reg_write;
+    wire                 ex_mem_mem_to_reg;
+    wire                 ex_mem_halt;
+
+    ex_stage #(
+        .NB_PC       (NB_PC),
+        .NB_DATA     (NB_DATA),
+        .NB_ADDR     (NB_ADDR),
+        .NB_FUNCT3   (NB_FUNCT3),
+        .NB_ALU_CTRL (NB_ALU_CTRL),
+        .NB_FWD      (NB_FWD)
+    ) u_ex_stage (
+        .i_clk               (i_clk),
+        .i_rst               (i_rst),
+        .i_en_ex_mem         (en_ex_mem),
+        .i_flush             (flush_ex_mem),
+        .i_fwd_a             (fwd_a),
+        .i_fwd_b             (fwd_b),
+        .i_wb_data           (wb_data),
+        .i_id_ex_valid       (id_ex_valid),
+        .i_id_ex_pc          (id_ex_pc),
+        .i_id_ex_rs1_data    (id_ex_rs1_data),
+        .i_id_ex_rs2_data    (id_ex_rs2_data),
+        .i_id_ex_imm         (id_ex_imm),
+        .i_id_ex_rd          (id_ex_rd),
+        .i_id_ex_funct3      (id_ex_funct3),
+        .i_id_ex_alu_ctrl    (id_ex_alu_ctrl),
+        .i_id_ex_alu_src_a   (id_ex_alu_src_a),
+        .i_id_ex_alu_src_b   (id_ex_alu_src_b),
+        .i_id_ex_branch      (id_ex_branch),
+        .i_id_ex_jal         (id_ex_jal),
+        .i_id_ex_jalr        (id_ex_jalr),
+        .i_id_ex_mem_write   (id_ex_mem_write),
+        .i_id_ex_reg_write   (id_ex_reg_write),
+        .i_id_ex_mem_to_reg  (id_ex_mem_to_reg),
+        .i_id_ex_halt        (id_ex_halt),
+        .o_redirect          (ex_redirect),
+        .o_redirect_pc       (ex_redirect_pc),
+        .o_ex_mem_valid      (ex_mem_valid),
+        .o_ex_mem_pc         (ex_mem_pc),
+        .o_ex_mem_result     (ex_mem_result),
+        .o_ex_mem_store_data (ex_mem_store_data),
+        .o_ex_mem_rd         (ex_mem_rd),
+        .o_ex_mem_funct3     (ex_mem_funct3),
+        .o_ex_mem_mem_write  (ex_mem_mem_write),
+        .o_ex_mem_reg_write  (ex_mem_reg_write),
+        .o_ex_mem_mem_to_reg (ex_mem_mem_to_reg),
+        .o_ex_mem_halt       (ex_mem_halt),
+        .o_ex_mem_latch      (o_ex_mem_latch)
     );
 
     //------------------------------------------------------------------
