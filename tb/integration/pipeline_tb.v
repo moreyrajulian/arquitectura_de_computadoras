@@ -63,7 +63,9 @@
 `ifndef STAGE_ID
 `define STAGE_ID                // I-27: ID/EX y banco de registros
 `endif
-// `define STAGE_EX             // I-31: EX/MEM
+`ifndef STAGE_EX
+`define STAGE_EX                // I-31: EX/MEM
+`endif
 // `define STAGE_MEM            // I-34: MEM/WB y memoria de datos
 // `define STAGE_WB             // I-35: escritura del banco, halted y avisos
 // `define STAGE_REDIRECT       // I-36: el salto tomado cambia el PC
