@@ -80,6 +80,7 @@ agregar más, no quitar.
 | ALU (`alu`) | I-28 | `alu_tb.v` | Las 10 operaciones; `zero` en 1 y en 0, mirando los 32 bits; `slt` contra `sltu` con operandos negativos; desplazamientos con `shamt` 0, 1 y 31 y usando solo los 5 bits bajos de `rs2`. El control de la ALU no es un módulo aparte (decisión [026](../decisiones/026_control-de-alu-en-id.md)): sus casos (`{instr[30], funct3}` en R; en I aritmética el bit 30 solo cuenta con `funct3 = 101`, así que un `addi` con inmediato negativo **no** es una resta) los cubre `control_unit_tb.v` (I-24) |
 | Lógica de saltos (`branch_unit`) | I-29 | `branch_unit_tb.v` | `taken = branch & (zero ^ funct3[0])` para `beq` y `bne` con `zero` en 0 y en 1; `jal` y `jalr` siempre `redirect`; destino `pc + imm` y `(rs1 + imm) & ~1` (con bit 0 en 1 a la entrada); no salto → `redirect = 0` |
 | Registro EX/MEM | I-30 | `ex_mem_reg_tb.v` | Igual que ID/EX (109 bits) |
+| Etapa EX (`ex_stage`) | I-31 | `ex_stage_tb.v` | El cableado entre los módulos de EX, sobre todo lo que la traza no ve en M5: las 10 operaciones con operandos de registro, `addi` con inmediato negativo, `lui` (`alu_a = 0`), dirección de `lw` y `sw` con `store_data = rs2_val`; `beq` y `bne` tomados y no tomados, `jal` y `jalr` con `result = pc + 4`, y `redirect` / `redirect_pc` en todos los casos (no son campos de EX/MEM); forwarding `10` y `01` en A, en B, en los dos a la vez, en `store_data`, en el operando que el control descarta y en los saltos, y `11` como `00` (`pipeline.md` §5.6); `en = 0` conserva los 109 bits también con `flush = 1`; `flush` deja burbuja; reset con el core detenido; el bus `o_ex_mem_latch` igual a los campos; aleatorio con semilla fija contra un modelo de §5 y §2, con filas de la tabla de §4.4 |
 | Memoria de datos (`dmem`) | I-32 | `dmem_tb.v` | `sb`, `sh`, `sw` con sus *byte enables* en cada alineación válida; little-endian; los bytes no escritos no cambian; accesos desalineados y fuera de rango con el comportamiento y los avisos de `memoria.md` §6.1 y §6.2; mapa de palabras usadas (`memoria.md` §7); latencia de lectura de un ciclo |
 | Registro MEM/WB | I-33 | `mem_wb_reg_tb.v` | Igual que ID/EX (110 bits) |
 | Write back (`write_back`) | I-35 | `write_back_tb.v` | Extensión de `lb`, `lbu`, `lh`, `lhu`, `lw` con bit de signo 0 y 1 y en cada posición del byte; elección entre resultado de EX y dato de memoria; `reg_write = 0` no escribe; registro `halted` (se activa solo con `valid & halt` y no se desactiva hasta el reset, `pipeline.md` §7.3) |
@@ -434,7 +435,8 @@ nueva todavía no puede ejecutar, sin editar el archivo. Por ejemplo, con `STAGE
 ID/EX solo coincide con la traza en los `indep_*`, `halt_basico` y `jump_nops`. En los demás,
 alguna instrucción lee un registro que escribió otra, y sin WB el banco no cambia: fallan en
 `id_ex.rs1_data` o `id_ex.rs2_data` hasta I-35. Su IF/ID se sigue comparando con
-`-d STAGES_CLI`.
+`-d STAGES_CLI`. Con `STAGE_EX` pasan los mismos programas: EX/MEM sale de ID/EX, y sin
+forwarding (I-39) ni WB no tiene otra fuente.
 
 ### 8.3 Hasta qué ciclo se compara
 
