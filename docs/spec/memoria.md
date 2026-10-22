@@ -9,7 +9,7 @@ accesos por byte, desalineados o fuera de rango. Es la referencia para escribir
 |---|---|
 | **Issue** | I-07 — Mapa de memoria |
 | **Estado** | aceptada |
-| **Decisiones** | [013](../decisiones/013_tamano-y-mapa-de-memorias.md) tamaño y mapa · [014](../decisiones/014_bram-y-escritura-de-programa.md) BRAM y escritura de la memoria de programa · [015](../decisiones/015_accesos-desalineados-y-fuera-de-rango.md) desalineados y fuera de rango · [016](../decisiones/016_acceso-por-byte.md) acceso por byte y media palabra · [022](../decisiones/022_imem-sin-reset-de-salida-y-contenido-inicial.md) `imem` sin reset de salida y contenido inicial |
+| **Decisiones** | [013](../decisiones/013_tamano-y-mapa-de-memorias.md) tamaño y mapa · [014](../decisiones/014_bram-y-escritura-de-programa.md) BRAM y escritura de la memoria de programa · [015](../decisiones/015_accesos-desalineados-y-fuera-de-rango.md) desalineados y fuera de rango · [016](../decisiones/016_acceso-por-byte.md) acceso por byte y media palabra · [022](../decisiones/022_imem-sin-reset-de-salida-y-contenido-inicial.md) `imem` sin reset de salida y contenido inicial · [027](../decisiones/027_logica-de-mem-en-dmem.md) qué lógica de MEM va en `dmem` |
 | **Depende de** | [`pipeline.md`](pipeline.md) (§3.2, §6, §7.1), [`protocolo_debug.md`](protocolo_debug.md) (`LOAD`, `RESET`, `READ_DMEM*`), decisiones [004](../decisiones/004_carga-y-reprogramacion.md), [005](../decisiones/005_memoria-de-datos-usada.md) y [009](../decisiones/009_memorias-sincronicas.md) |
 
 ---
@@ -178,6 +178,23 @@ El core expone el puerto B de las dos memorias como entradas (`i_imem_b_*`, `i_d
 Debug Unit. Así el banco de pruebas incremental puede cargar el estado inicial de `dmem` por
 el mismo puerto ([`verificacion.md`](verificacion.md) §8.5, decisión
 [021](../decisiones/021_banco-incremental.md)).
+
+**Módulo `rtl/memory/dmem.v`.** Envuelve `dmem_bram`, arma `wea` y `dina` a partir del store
+(`pipeline.md` §6.2) y tiene los avisos `dmem_oob` y `dmem_misaligned` de §6.2 (decisión
+[027](../decisiones/027_logica-de-mem-en-dmem.md)). Entrega la palabra completa: la extensión
+de los loads se hace en WB.
+
+| Puerto | Conectado a | Notas |
+|---|---|---|
+| `i_rst` | `core_rst` | Borra los avisos; la BRAM no se resetea |
+| `i_a_en` | `en_mem_wb` (`= enable`) | `ena` de la BRAM y *enable* de los avisos |
+| `i_a_addr[31:0]` | `ex_mem_result` | A la BRAM llegan los bits `[11:2]`; los demás dan el alias (§6.1) |
+| `i_a_funct3[2:0]` | `ex_mem_funct3` | Tamaño del store y de los avisos |
+| `i_a_store`, `i_a_load` | `ex_mem_mem_write`, `ex_mem_mem_to_reg` | `i_a_load` solo cuenta para los avisos: la BRAM lee en todos los ciclos con `ena = 1` |
+| `i_a_store_data[31:0]` | `ex_mem_store_data` | Sin replicar |
+| `o_a_dout[31:0]` | `mem_wb_read_data` | En el ciclo de un store, la palabra anterior (`READ_FIRST`) |
+| `o_oob`, `o_misaligned` | `dmem_oob`, `dmem_misaligned` | §6.2 |
+| `i_b_en`, `i_b_we[3:0]`, `i_b_addr[9:0]`, `i_b_din[31:0]`, `o_b_dout[31:0]` | `dmem_b_*` | Puerto B, directo al IP |
 
 ### 3.4 Latencia de lectura y efecto sobre el pipeline
 
@@ -406,8 +423,9 @@ cuando no lo hacen el aviso lo deja a la vista.
 
 ### 6.2 Avisos de acceso
 
-Tres flip-flops del core, junto al registro `halted`. Se ponen en 1 y quedan así hasta el
-próximo `core_rst` (`LOAD` o `RESET`):
+Tres flip-flops del core: `dmem_oob` y `dmem_misaligned` en `dmem`, en MEM, e `imem_fault` en
+WB, junto al registro `halted` (decisión [027](../decisiones/027_logica-de-mem-en-dmem.md)). Se
+ponen en 1 y quedan así hasta el próximo `core_rst` (`LOAD` o `RESET`):
 
 ```verilog
 // MEM: los loads/stores en MEM ya no pueden ser anulados por un salto
@@ -450,7 +468,10 @@ La Debug Unit **sí valida** las direcciones que recibe de la PC, porque puede r
 ## 7. Mapa de palabras usadas
 
 `READ_DMEM_USED` necesita saber qué palabras de `dmem` escribió el programa (decisión
-[005](../decisiones/005_memoria-de-datos-usada.md)). Se implementa como:
+[005](../decisiones/005_memoria-de-datos-usada.md)). El mapa es de la Debug Unit
+([`protocolo_debug.md`](protocolo_debug.md) §7), no de `dmem`: el core le pasa
+`dmem_we = enable & ex_mem_mem_write` y `dmem_addr = ex_mem_result[11:2]`, que salen de EX/MEM
+(decisión [027](../decisiones/027_logica-de-mem-en-dmem.md)). Se implementa como:
 
 - **Memoria de 1024 × 1 bit en RAM distribuida** (LUTRAM, inferida desde Verilog), ~20 LUT. Lectura
   asíncrona; un puerto de escritura.

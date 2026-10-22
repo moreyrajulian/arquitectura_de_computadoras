@@ -637,6 +637,12 @@ avisos.
 | `mem_wb_halt` | 1 | HALT en vuelo. |
 | **Total** | **110** | (78 en flip-flops + 32 de la BRAM) |
 
+### 6.6 Módulo `dmem`
+`rtl/memory/dmem.v` reúne la BRAM, la máscara y la replicación de §6.2 y los avisos de §6.4
+(decisión [027](../decisiones/027_logica-de-mem-en-dmem.md)). Recibe los campos de EX/MEM y
+entrega la palabra completa como `mem_wb_read_data`; la extensión es de WB (§7.1). Sus puertos
+están en [`memoria.md`](memoria.md) §3.3.
+
 ---
 
 ## 7. Etapa WB — Write Back
@@ -1050,4 +1056,5 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 | Control de la ALU en ID, sin módulo `alu_control` | §4.5 y [`decisiones/026_control-de-alu-en-id.md`](../decisiones/026_control-de-alu-en-id.md) |
 | Resolución de saltos | §5.3, §10.5 y [`decisiones/012_resolucion-saltos.md`](../decisiones/012_resolucion-saltos.md) |
 | Tamaños, direcciones, BRAM y política de acceso a memoria | [`memoria.md`](memoria.md) y decisiones [013](../decisiones/013_tamano-y-mapa-de-memorias.md) a [016](../decisiones/016_acceso-por-byte.md) |
+| Qué lógica de MEM va en `dmem` (extensión en WB, mapa de usadas en la Debug Unit) | §6.6 y [`decisiones/027_logica-de-mem-en-dmem.md`](../decisiones/027_logica-de-mem-en-dmem.md) |
 | Contenido del dump de latches | I-06 (`protocolo_debug.md`) |
