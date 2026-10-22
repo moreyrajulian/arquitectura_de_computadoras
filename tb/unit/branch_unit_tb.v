@@ -17,8 +17,9 @@
 // Las señales de control de cada instrucción son las de la tabla de
 // pipeline.md §4.4 (branch, jal, jalr). Solo se usan las combinaciones
 // que genera control_unit: a lo sumo una de las tres en 1. Con branch = 1
-// solo se prueban funct3 = 000 (beq) y 001 (bne): un blt recibe la fila
-// de branch y su resultado no está especificado (decisión 024).
+// solo se prueban funct3 = 000 (beq) y 001 (bne), y con jalr = 1 solo
+// funct3 = 000: un blt o un jalr con otro funct3 recibe la fila de su
+// opcode y su resultado no está especificado (decisiones 024 y 025).
 // redirect_pc se compara solo cuando hay salto: IF lo usa únicamente con
 // redirect = 1 (§3.1).
 //
@@ -26,7 +27,8 @@
 //   - beq y bne, tomados y no tomados, con zero en 0 y en 1
 //   - Salto hacia atrás (inmediato negativo), máximos de B y J, y pc + imm
 //     que pasa por 2^32
-//   - jal y jalr siempre redirect, con cualquier zero y funct3
+//   - jal y jalr siempre redirect, con cualquier zero (jal también con
+//     cualquier funct3: en J esos bits son del inmediato)
 //   - jalr con el bit 0 en 1 a la entrada; destino que no depende de
 //     pc + imm, y jal y branch que no dependen de alu_out
 //   - Sin salto -> redirect = 0, con cualquier zero y funct3
@@ -268,8 +270,9 @@ module branch_unit_tb;
             for (z = 0; z < 2; z = z + 1) begin
                 for (f = 0; f < (1 << NB_FUNCT3); f = f + 1) begin
                     f3 = f;
-                    // beq solo con 000 y bne solo con 001 (decisión 024)
-                    if (!((t == T_BEQ && f3 != 3'b000) || (t == T_BNE && f3 != 3'b001))) begin
+                    // beq y jalr solo con 000 y bne solo con 001 (decisiones 024 y 025)
+                    if (!((t == T_BEQ  && f3 != 3'b000) || (t == T_BNE && f3 != 3'b001) ||
+                          (t == T_JALR && f3 != 3'b000))) begin
                         for (k = 0; k < N_BARRIDO; k = k + 1) begin
                             pc = $random(seed);
                             r  = $random(seed);
