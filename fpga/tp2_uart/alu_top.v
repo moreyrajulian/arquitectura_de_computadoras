@@ -36,7 +36,7 @@ module alu_top
 
     // instanciación estructural: fuera de cualquier always, conectada
     // permanentemente a los registros de operandos/opcode
-    alu #(.NB_DATA(NB_DATA)) alu_unit (
+    alu_tp2 #(.NB_DATA(NB_DATA)) alu_unit (
         .i_a      (a_reg),
         .i_b      (b_reg),
         .i_op     (op_reg),

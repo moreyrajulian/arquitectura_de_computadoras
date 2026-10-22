@@ -363,8 +363,9 @@ segmentación hasta su etapa y ahí deja de viajar.
   reset no se confunda con un HALT.
 
 ### 4.5 Control de la ALU
-La operación de la ALU se decide completa en ID. A EX solo viajan los 4 bits de
-`alu_ctrl`, y el código es `{instr[30], funct3}`:
+La operación de la ALU se decide completa en ID, dentro de la unidad de control, sin un módulo
+`alu_control` aparte (decisión [026](../decisiones/026_control-de-alu-en-id.md)). A EX solo
+viajan los 4 bits de `alu_ctrl`, y el código es `{instr[30], funct3}`:
 
 | Operación | `alu_ctrl` | Instrucciones |
 |---|---|---|
@@ -484,6 +485,14 @@ alu_b = alu_src_b ? imm : rs2_val
 ALU de 32 bits con las 10 operaciones de §4.5, seleccionadas por `alu_ctrl`.
 Salidas: `alu_out` (resultado) y `zero` (1 si `alu_out == 0`). En los desplazamientos
 usa solo `alu_b[4:0]`.
+
+- Suma y resta son módulo 2^32, sin acarreo ni desborde. `slt` y `sltu` dan 1 o 0.
+- Un código de `alu_ctrl` que no está en §4.5 da `alu_out = 0`. Ninguna palabra de
+  [`isa.md`](isa.md) lo genera, y su resultado no está especificado (decisión
+  [024](../decisiones/024_instrucciones-no-soportadas.md)).
+- **Módulo** `rtl/common/alu.v`, combinacional: `i_a` (`alu_a`), `i_b` (`alu_b`) e
+  `i_alu_ctrl` → `o_result` (`alu_out`) y `o_zero`. Los códigos son las constantes `ALU_*` de
+  `rtl/common/riscv_defs.vh`.
 
 ### 5.3 Resolución de saltos
 Hay un sumador dedicado para `PC + imm`; la ALU queda libre para comparar o calcular
@@ -1038,6 +1047,7 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 | Detección de riesgos, stall y forwarding | §10 y [`decisiones/011_deteccion-load-use.md`](../decisiones/011_deteccion-load-use.md) |
 | Paso a paso sin intervenir el clock (`enable`) | §10.4 y [`decisiones/018_paso-a-paso-sin-clock.md`](../decisiones/018_paso-a-paso-sin-clock.md) |
 | Interfaz de debug del core (buses de latch) y módulo `if_stage` | [`decisiones/023_interfaz-debug-del-core.md`](../decisiones/023_interfaz-debug-del-core.md) |
+| Control de la ALU en ID, sin módulo `alu_control` | §4.5 y [`decisiones/026_control-de-alu-en-id.md`](../decisiones/026_control-de-alu-en-id.md) |
 | Resolución de saltos | §5.3, §10.5 y [`decisiones/012_resolucion-saltos.md`](../decisiones/012_resolucion-saltos.md) |
 | Tamaños, direcciones, BRAM y política de acceso a memoria | [`memoria.md`](memoria.md) y decisiones [013](../decisiones/013_tamano-y-mapa-de-memorias.md) a [016](../decisiones/016_acceso-por-byte.md) |
 | Contenido del dump de latches | I-06 (`protocolo_debug.md`) |
