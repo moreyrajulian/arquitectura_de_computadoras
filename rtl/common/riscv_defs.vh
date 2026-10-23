@@ -2,8 +2,9 @@
 // riscv_defs.vh
 //
 // Codificaciones compartidas del RV32I soportado (docs/spec/isa.md), del
-// control de la ALU (docs/spec/pipeline.md §4.5) y del formato del
-// inmediato (docs/spec/pipeline.md §4.3). Es el único
+// control de la ALU (docs/spec/pipeline.md §4.5), del formato del
+// inmediato (docs/spec/pipeline.md §4.3) y de los selectores de
+// forwarding (docs/spec/pipeline.md §5.1). Es el único
 // include de codificaciones de la decisión 010: ningún módulo repite estas
 // constantes.
 //
@@ -16,7 +17,7 @@
 //     puertos ANSI. Por lo mismo, no declarar un parameter con un nombre de
 //     este archivo.
 //
-// Si cambia isa.md, pipeline.md §4.3 o §4.5, actualizar este archivo.
+// Si cambia isa.md, pipeline.md §4.3, §4.5 o §5.1, actualizar este archivo.
 //======================================================================
 
 // Opcodes (instr[6:0])
@@ -88,3 +89,8 @@ localparam [2:0] IMM_B = 3'b010;               // beq, bne
 localparam [2:0] IMM_U = 3'b011;               // lui
 localparam [2:0] IMM_J = 3'b100;               // jal
 
+// fwd_a / fwd_b: valor de rs1 / rs2 que entra a EX (pipeline.md §5.1). Los
+// genera la unidad de forwarding (§10.2, I-39) y los usa ex_stage.
+localparam [1:0] FWD_ID_EX  = 2'b00;            // lo leído en ID (id_ex_rs*_data)
+localparam [1:0] FWD_EX_MEM = 2'b10;            // ex_mem_result
+localparam [1:0] FWD_WB     = 2'b01;            // wb_data

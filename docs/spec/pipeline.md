@@ -469,7 +469,7 @@ operando pasa por un mux de tres entradas:
 Los selectores los genera la unidad de forwarding (§10.2). La codificación es la habitual
 para esta unidad: `10` toma el dato de EX/MEM y `01` el de MEM/WB. Si las dos
 instrucciones anteriores escriben el mismo registro, gana EX/MEM porque es el valor más
-reciente.
+reciente. Los códigos son las constantes `FWD_*` de `rtl/common/riscv_defs.vh`.
 
 A la salida de estos muxes están `rs1_val` y `rs2_val`, los valores **correctos** de los
 registros fuente.
@@ -557,6 +557,23 @@ memoria.
 > comparar con un comparador de igualdad en lugar de la resta y `zero` (solo hay `beq` y
 > `bne`), registrar `redirect` y aplicarlo desde MEM (3 ciclos de penalización), o bajar la
 > frecuencia.
+
+### 5.6 Módulo `ex_stage`
+`rtl/pipeline/ex_stage.v` es la etapa completa: los muxes de forwarding y de operandos (§5.1),
+`alu` (§5.2), `branch_unit` (§5.3), el mux de resultado (§5.4) y `ex_mem_reg`, con el mismo
+criterio que `id_stage` (§4.7, decisión [023](../decisiones/023_interfaz-debug-del-core.md)).
+Los muxes de forwarding van adentro porque §5.1 los pone en EX y su entrada `10` es la salida
+del propio EX/MEM; la unidad que elige el selector (§10.2, I-39) queda afuera.
+
+- **No calcula enables, flush ni forwarding:** recibe `en_ex_mem` y `flush_ex_mem` ya
+  calculados (§10.4), `fwd_a` / `fwd_b` y `wb_data` (§7.2). Hasta I-39 `riscv_core` deja los
+  selectores en `00` y hasta I-35 `wb_data` en 0. El código `11` no lo genera la unidad de
+  forwarding; si llega, toma lo leído en ID, como `00`.
+- **De ID/EX** entran los campos que usa EX y los que pasan a EX/MEM. `rs1`, `rs2` y
+  `mem_read` no entran: los usan la unidad de forwarding (§10.2) y la detección de load-use
+  (§10.3).
+- **Salidas:** los 10 campos `ex_mem_*` de §8, el bus `o_ex_mem_latch` para la Debug Unit y
+  `redirect` / `redirect_pc` de `branch_unit` hacia IF. Hasta I-36 `riscv_core` no los conecta.
 
 ---
 
