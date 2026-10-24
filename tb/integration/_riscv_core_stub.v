@@ -21,8 +21,10 @@
 //     banco por el puerto B, no de la traza: así también se prueba la carga.
 //   - La dmem y el banco de registros son arreglos: el banco los carga, y
 //     cuando el HALT llega a WB el stub copia el estado final esperado
-//     (exp_*.hex) para probar el modo +FINAL. El reset pone el banco de
-//     registros en cero, como el real.
+//     (exp_*.hex) para probar el modo +FINAL. La dmem del .exp ya la copia
+//     cuando el HALT llega a MEM/WB, que es cuando el banco la compara con
+//     STAGE_MEM (verificacion.md §8.3): el stub no ejecuta los stores. El
+//     reset pone el banco de registros en cero, como el real.
 //   - El banco de registros está en u_id_stage.u_regfile.regs, el mismo
 //     camino que en el core real (`REGFILE), y el puerto de lectura de la
 //     Debug Unit lo lee sin bypass, como regfile.
@@ -100,6 +102,14 @@ module riscv_core (
             t_reg <= 0;
         else if (i_enable && t_reg < lineas - 1 && !(sin_halt && t_reg == lineas - 2))
             t_reg <= t_reg + 1;
+    end
+
+    // Al llegar el HALT a MEM/WB (corte[4], primer ciclo con el HALT ahí),
+    // la dmem esperada: ya escribieron todos los stores
+    always @(posedge i_clk) begin
+        if (!i_rst && i_enable && corte[4] > 1 && t_reg == corte[4] - 2) begin
+            $sformat(fname, "%0s/exp_dmem.hex", dir); $readmemh(fname, dmem);
+        end
     end
 
     // Al llegar el HALT a WB, el estado final esperado

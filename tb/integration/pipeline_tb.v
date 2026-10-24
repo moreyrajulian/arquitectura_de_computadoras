@@ -15,6 +15,10 @@
 //     su tabla, el primero en los bits altos.
 //   - Estado final (+FINAL, desde M7): registros, dmem, halted, pipeline
 //     vacío, avisos y ciclos contra el .exp escrito a mano (§5).
+//   - Memoria de datos (STAGE_MEM, sin +FINAL): al terminar la traza, si
+//     no hubo corte por salto, dmem por el puerto B contra el .exp. En
+//     ese ciclo el HALT está en MEM/WB: ya escribieron todos los stores
+//     anteriores y ninguno posterior.
 //   - Pausas (+PAUSAS=<semilla>): entre ciclos de la traza baja enable
 //     durante 1 a 3 ciclos al azar (semilla fija) y comprueba que ningún
 //     latch integrado cambia; después la traza tiene que seguir
@@ -66,7 +70,9 @@
 `ifndef STAGE_EX
 `define STAGE_EX                // I-31: EX/MEM
 `endif
-// `define STAGE_MEM            // I-34: MEM/WB y memoria de datos
+`ifndef STAGE_MEM
+`define STAGE_MEM               // I-34: MEM/WB y memoria de datos
+`endif
 // `define STAGE_WB             // I-35: escritura del banco, halted y avisos
 // `define STAGE_REDIRECT       // I-36: el salto tomado cambia el PC
 // `define STAGE_HALT           // I-37: parada por HALT (stop_fetch)
@@ -521,6 +527,25 @@ module pipeline_tb;
         end
     endtask
 
+`ifdef STAGE_MEM
+    // dmem por el puerto B, como READ_DMEM (un ciclo de latencia), contra
+    // la del .exp
+    task leer_dmem;
+        begin
+            tb_dmem_b_en   = 1'b1;
+            tb_dmem_b_we   = 4'b0000;
+            tb_dmem_b_addr = {NB_ADDR{1'b0}};
+            for (i = 0; i < MEM_WORDS; i = i + 1) begin
+                @(negedge tb_clk);
+                $sformat(fname, "dmem 0x%03h", 4 * i);
+                chk(fname[8*32-1:0], tb_o_dmem_b_dout, exp_dmem[i]);
+                tb_dmem_b_addr = i + 1;
+            end
+            tb_dmem_b_en = 1'b0;
+        end
+    endtask
+`endif
+
     //------------------------------------------------------------------
     // Lectura de archivos
     //------------------------------------------------------------------
@@ -595,11 +620,17 @@ module pipeline_tb;
         if (final_mode) begin
             for (i = 0; i < 4; i = i + 1) exp_misc[i] = 0;
             leer("exp_regs.hex", fname); $readmemh(fname, exp_regs);
-            leer("exp_dmem.hex", fname); $readmemh(fname, exp_dmem);
             leer("exp_misc.hex", fname); $readmemh(fname, exp_misc);
             if (exp_misc[E_CICLOS] == 0)
                 terminar_mal("no se pudo leer exp_misc.hex (¿el programa tiene .exp?)");
         end
+`ifdef STAGE_MEM
+        // dmem esperada: para +FINAL y para la comparación al final de la traza
+        for (i = 0; i < MEM_WORDS; i = i + 1) exp_dmem[i] = {NB_DATA{1'bx}};
+        leer("exp_dmem.hex", fname); $readmemh(fname, exp_dmem);
+        if (exp_dmem[0] === {NB_DATA{1'bx}})
+            terminar_mal("no se pudo leer exp_dmem.hex (¿el programa tiene .exp?)");
+`endif
 
         // Hasta qué ciclo se compara cada latch (ver encabezado)
         for (i = 0; i < 4; i = i + 1) begin
@@ -725,6 +756,23 @@ module pipeline_tb;
             ciclo = ciclo + 1;
         end
 
+`ifdef STAGE_MEM
+        // dmem al terminar la traza (verificacion.md §8.3), con el core
+        // detenido. Con +FINAL se compara con el estado final, más abajo
+        if (!final_mode && !fallo) begin
+`ifndef STAGE_REDIRECT
+            if (corte[C_REDIRECT] != 0)
+                $display("INFO: dmem no se compara: salto tomado en EX en el ciclo %0d sin STAGE_REDIRECT",
+                         corte[C_REDIRECT]);
+            else
+`endif
+            begin
+                tb_enable = 1'b0;
+                leer_dmem;
+            end
+        end
+`endif
+
 `ifdef STAGE_WB
         // Estado final contra el .exp (verificacion.md §5)
         if (final_mode && !fallo) begin
@@ -745,17 +793,7 @@ module pipeline_tb;
                 $sformat(fname, "x%0d", i);
                 chk(fname[8*32-1:0], `REGFILE[i], exp_regs[i]);
             end
-            // dmem por el puerto B, como READ_DMEM (un ciclo de latencia)
-            tb_dmem_b_en   = 1'b1;
-            tb_dmem_b_we   = 4'b0000;
-            tb_dmem_b_addr = {NB_ADDR{1'b0}};
-            for (i = 0; i < MEM_WORDS; i = i + 1) begin
-                @(negedge tb_clk);
-                $sformat(fname, "dmem 0x%03h", 4 * i);
-                chk(fname[8*32-1:0], tb_o_dmem_b_dout, exp_dmem[i]);
-                tb_dmem_b_addr = i + 1;
-            end
-            tb_dmem_b_en = 1'b0;
+            leer_dmem;
         end
 `endif
 
