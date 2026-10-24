@@ -32,9 +32,10 @@ PLAN = [
     "loaduse_rs1_rs2", "loaduse_sw_beq", "load_sin_dep", "salto_depende",
     "halt_stall", "halt_camino_equivocado", "mixto_lazo",
 ]
-# La issue I-15: un programa independiente por grupo de instrucciones
+# La issue I-15: un programa independiente por grupo de instrucciones, y
+# la I-34: un store seguido de un load a la misma direccion
 INDEP = ["indep_alu_r", "indep_alu_i", "indep_cargas", "indep_stores",
-         "indep_saltos", "indep_lui"]
+         "indep_saltos", "indep_lui", "indep_store_load"]
 # Programas de riesgos y de saltos que no corren sin forwarding, stall o flush
 NOPS = ["fwd_exmem", "fwd_memwb", "fwd_prioridad", "loaduse_rs1_rs2",
         "loaduse_sw_beq", "load_sin_dep", "branch_cond", "jump",
