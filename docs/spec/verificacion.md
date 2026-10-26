@@ -82,8 +82,8 @@ agregar más, no quitar.
 | Registro EX/MEM | I-30 | `ex_mem_reg_tb.v` | Igual que ID/EX (109 bits) |
 | Memoria de datos (`dmem`) | I-32 | `dmem_tb.v` | `sb`, `sh`, `sw` con sus *byte enables* en cada alineación válida; little-endian; los bytes no escritos no cambian; accesos desalineados y fuera de rango con el comportamiento y los avisos `dmem_oob` y `dmem_misaligned` de `memoria.md` §6.1 y §6.2 (persisten, una burbuja o `enable = 0` no los levantan, el reset los borra); `READ_FIRST` en el ciclo de un store (`memoria.md` §3.2); un load entrega la palabra completa, porque la extensión es de I-35; `ena = 0` no lee ni escribe; carga y volcado por el puerto B; latencia de lectura de un ciclo en los dos puertos. El mapa de palabras usadas es de la Debug Unit (I-46, I-48; decisión [027](../decisiones/027_logica-de-mem-en-dmem.md)) |
 | Etapa EX (`ex_stage`) | I-31 | `ex_stage_tb.v` | El cableado entre los módulos de EX, sobre todo lo que la traza no ve en M5: las 10 operaciones con operandos de registro, `addi` con inmediato negativo, `lui` (`alu_a = 0`), dirección de `lw` y `sw` con `store_data = rs2_val`; `beq` y `bne` tomados y no tomados, `jal` y `jalr` con `result = pc + 4`, y `redirect` / `redirect_pc` en todos los casos (no son campos de EX/MEM); forwarding `10` y `01` en A, en B, en los dos a la vez, en `store_data`, en el operando que el control descarta y en los saltos, y `11` como `00` (`pipeline.md` §5.6); `en = 0` conserva los 109 bits también con `flush = 1`; `flush` deja burbuja; reset con el core detenido; el bus `o_ex_mem_latch` igual a los campos; aleatorio con semilla fija contra un modelo de §5 y §2, con filas de la tabla de §4.4 |
-| Memoria de datos (`dmem`) | I-32 | `dmem_tb.v` | `sb`, `sh`, `sw` con sus *byte enables* en cada alineación válida; little-endian; los bytes no escritos no cambian; accesos desalineados y fuera de rango con el comportamiento y los avisos de `memoria.md` §6.1 y §6.2; mapa de palabras usadas (`memoria.md` §7); latencia de lectura de un ciclo |
 | Registro MEM/WB | I-33 | `mem_wb_reg_tb.v` | Igual que ID/EX (110 bits) |
+| Etapa MEM (`mem_stage`) | I-34 | `mem_stage_tb.v` | El cableado entre `dmem` y `mem_wb_reg` (`pipeline.md` §6.7), sobre todo lo que la traza no ve en M6: `mem_wb_read_data` llega con el resto de MEM/WB en el mismo flanco; `offset = result[1:0]`; un store seguido de un load a la misma dirección devuelve el dato escrito, también en `sb` y `sh` sobre una palabra con datos; `en = 0` conserva los 110 bits, `read_data` incluido, y no escribe; `flush` deja burbuja sin impedir el store; reset con el core detenido; avisos `dmem_oob` y `dmem_misaligned` a la salida; puerto B; el bus `o_mem_wb_latch` igual a los campos; aleatorio con semilla fija contra un modelo de memoria por bytes y de §2. Usa el IP: corre en xsim |
 | Write back (`write_back`) | I-35 | `write_back_tb.v` | Extensión de `lb`, `lbu`, `lh`, `lhu`, `lw` con bit de signo 0 y 1 y en cada posición del byte; elección entre resultado de EX y dato de memoria; `reg_write = 0` no escribe; registro `halted` (se activa solo con `valid & halt` y no se desactiva hasta el reset, `pipeline.md` §7.3) |
 
 ### 3.2 Riesgos (M8)
@@ -174,7 +174,7 @@ Los 22 programas necesitan el pipeline completo. Para las etapas anteriores hay 
 
 | Programas | Para qué nivel | Qué tienen de distinto |
 |---|---|---|
-| `indep_alu_r`, `indep_alu_i`, `indep_cargas`, `indep_stores`, `indep_saltos`, `indep_lui` | 2, de IF a MEM (M3 a M6), antes de que exista WB | Ninguna instrucción lee un registro que escribe otra: parten de un **estado inicial** de registros y de `dmem` (`sw/estado_inicial/`, en formato `$readmemh`) y cada resultado se ve en el registro de segmentación de su etapa |
+| `indep_alu_r`, `indep_alu_i`, `indep_cargas`, `indep_stores`, `indep_store_load`, `indep_saltos`, `indep_lui` | 2, de IF a MEM (M3 a M6), antes de que exista WB | Ninguna instrucción lee un registro que escribe otra: parten de un **estado inicial** de registros y de `dmem` (`sw/estado_inicial/`, en formato `$readmemh`) y cada resultado se ve en el registro de segmentación de su etapa |
 | `<nombre>_nops`, de los programas de riesgos y de saltos | 3 sin riesgos (I-38, M7): pipeline completo sin forwarding, stall ni flush | Llevan `nop` para que toda dependencia quede a distancia 3 y detrás de cada salto haya dos `nop`. Mismo estado final que el original y los mismos ciclos en M7 y en M8 |
 
 En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en M8
@@ -424,7 +424,7 @@ acumulativos: definir uno define los anteriores. `STAGE_IF` está siempre.
 | `STAGE_IF` | I-22 | Compara IF/ID; carga `imem` por el puerto B |
 | `STAGE_ID` | I-27 | Compara ID/EX; carga el banco de registros por jerarquía (`` `REGFILE ``) al soltar el reset y lo lee por el puerto de la Debug Unit antes del ciclo 1 |
 | `STAGE_EX` | I-31 | Compara EX/MEM |
-| `STAGE_MEM` | I-34 | Compara MEM/WB; carga `dmem` por el puerto B |
+| `STAGE_MEM` | I-34 | Compara MEM/WB; carga `dmem` por el puerto B y, al terminar la traza, la compara con el `.exp` (§8.3) |
 | `STAGE_WB` | I-35 | Habilita `+FINAL` (registros, `halted`, avisos) |
 | `STAGE_REDIRECT` | I-36 | Sin corte por saltos (§8.3) |
 | `STAGE_HALT` | I-37 | Sin corte por HALT: se comparan todas las líneas, foto final incluida |
@@ -436,8 +436,9 @@ nueva todavía no puede ejecutar, sin editar el archivo. Por ejemplo, con `STAGE
 ID/EX solo coincide con la traza en los `indep_*`, `halt_basico` y `jump_nops`. En los demás,
 alguna instrucción lee un registro que escribió otra, y sin WB el banco no cambia: fallan en
 `id_ex.rs1_data` o `id_ex.rs2_data` hasta I-35. Su IF/ID se sigue comparando con
-`-d STAGES_CLI`. Con `STAGE_EX` pasan los mismos programas: EX/MEM sale de ID/EX, y sin
-forwarding (I-39) ni WB no tiene otra fuente.
+`-d STAGES_CLI`. Con `STAGE_EX` y con `STAGE_MEM` pasan los mismos programas: EX/MEM sale de
+ID/EX, y sin forwarding (I-39) ni WB no tiene otra fuente. Desde I-34 la lista incluye
+`indep_store_load`.
 
 ### 8.3 Hasta qué ciclo se compara
 
@@ -449,8 +450,15 @@ la traza por una razón conocida, y el banco deja de comparar **ese latch** en e
   buscando.
 - **Sin `STAGE_REDIRECT`** el salto tomado no cambia el PC (I-19 deja la entrada en 0 hasta
   I-36): con `r` el ciclo en que el primer salto tomado está en EX, el latch `k` (0 = IF/ID)
-  se compara hasta el ciclo `r + 1 + k`. El banco lo avisa con una línea `INFO:`. De M3 a M6
-  afecta solo a `indep_saltos`, que se compara completo recién en I-36.
+  se compara hasta el ciclo `r + 1 + k`. El banco lo avisa con una línea `INFO:`. De M3 a M6,
+  entre los programas que pasan, afecta a `indep_saltos` y `jump_nops`, que se comparan
+  completos recién en I-36.
+- **Memoria de datos con `STAGE_MEM`.** Sin `+FINAL`, al terminar la traza el banco detiene
+  el core y lee `dmem` por el puerto B (como `READ_DMEM`) para compararla con la del `.exp`.
+  En ese ciclo el HALT está en MEM/WB: ya escribieron todos los stores anteriores y ninguno
+  posterior. Sin `STAGE_REDIRECT`, si hubo un salto tomado no se compara (el RTL siguió por el
+  camino equivocado) y lo avisa con una línea `INFO:`. Con `+FINAL` la compara el estado
+  final (§8.4).
 
 El ciclo 1 es el primero después del reset (latches en burbuja, PC = 0), como la línea 1 de
 la traza. Se compara en el flanco de bajada.
@@ -467,6 +475,8 @@ la traza. Se compara en el flanco de bajada.
   primer flanco sin reset ya pasó y WB todavía no escribe. Detecta una carga que borró el
   reset o un camino de `` `REGFILE `` equivocado. Una línea por registro distinto
   (`ciclo 2 banco x<n>`), y termina.
+- Con `STAGE_MEM` y sin `+FINAL`, una línea `ERROR` por palabra distinta de `dmem`
+  (`dmem 0x<dirección>`), o una `INFO:` si no se compara por un salto (§8.3).
 - Con `+FINAL`, una línea `ERROR` por cada valor distinto (`halted`, `pipeline_vacio`,
   avisos, `ciclos`, `x1`…`x31`, `dmem 0x<dirección>`).
 - La línea final de §6: `TEST PASSED` / `TEST FAILED`.

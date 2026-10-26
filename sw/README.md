@@ -83,6 +83,7 @@ programa normal no puede ni armar sus operandos. Los programas `indep_*` lo resu
 | `indep_alu_i` | Con inmediato, incluidos los desplazamientos |
 | `indep_cargas` | `lb lh lw lbu lhu` sobre la `dmem` precargada |
 | `indep_stores` | `sb sh sw`, también sobre palabras precargadas (los vecinos no cambian) |
+| `indep_store_load` | Un store seguido de un load a la misma dirección: el load ve el dato nuevo (I-34) |
 | `indep_saltos` | `beq bne jal jalr`, tomados y no tomados, hacia adelante y hacia atrás |
 | `indep_lui` | `lui` |
 

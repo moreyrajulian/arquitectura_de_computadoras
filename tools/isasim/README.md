@@ -182,8 +182,8 @@ python -m pytest tools/isasim
 | `test_pipeline.py` | Capa 2: anchos de §8, la fórmula de ciclos, el valor viejo en `id_ex_rs1_data`, bypass del banco, burbuja del stall, flush de saltos, HALT, máscaras y modos |
 | `test_sw_programas.py` | **Los programas de `sw/` contra su `.exp` escrito a mano**: todos en modo completo, los de M7 en `sin_riesgos`, y que los originales con riesgos no pasan sin los mecanismos. También el bloque de estado del ejemplo de `protocolo_debug.md` §4 |
 
-Resultado actual: 118 tests; los 38 programas de `sw/` coinciden con su `.exp` en modo
-completo, ciclos incluidos, y los 26 de M7 en `sin_riesgos`.
+Resultado actual: 121 tests; los 39 programas de `sw/` coinciden con su `.exp` en modo
+completo, ciclos incluidos, y los 27 de M7 en `sin_riesgos`.
 
 ## 6. Estructura
 

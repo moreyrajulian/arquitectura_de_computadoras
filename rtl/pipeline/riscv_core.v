@@ -6,7 +6,7 @@
 //
 // Procesador RV32I segmentado (docs/spec/pipeline.md). Se integra etapa
 // por etapa (docs/planificacion.md); esta versión tiene IF (I-22), ID
-// (I-27) y EX (I-31).
+// (I-27), EX (I-31) y MEM (I-34).
 //
 // Función:
 //   Instancia las etapas y genera las señales de control del pipeline
@@ -18,9 +18,11 @@
 //     halted      = 0   hasta I-35      (registro halted en WB)
 //     wb_*        = 0   hasta I-35      (escritura del banco desde WB)
 //     fwd_a/fwd_b = 00  hasta I-39      (unidad de forwarding)
-//   Con eso, en M5: en_pc = en_if_id = en_id_ex = en_ex_mem = enable,
-//   flush_if_id = flush_id_ex = flush_ex_mem = 0, el banco conserva lo
-//   que tenga y EX opera con lo leído en ID. La salida de branch_unit
+//   Con eso, en M6: en_pc = en_if_id = en_id_ex = en_ex_mem = en_mem_wb
+//   = enable, flush_if_id = flush_id_ex = flush_ex_mem = flush_mem_wb
+//   = 0, el banco conserva lo que tenga y EX opera con lo leído en ID.
+//   Los avisos dmem_oob y dmem_misaligned ya se calculan en mem_stage,
+//   pero salen como puertos recién en I-35, junto con imem_fault. La salida de branch_unit
 //   (ex_redirect, ex_redirect_pc) existe pero no vuelve a IF hasta I-36.
 //
 //   Los campos de los registros de segmentación son señales de este
@@ -33,6 +35,9 @@
 //                               cpu_en, decisión 018). En 0 nada con
 //                               estado cambia; i_rst gana sobre él
 //   i_imem_b_*                : puerto B de imem para LOAD (memoria.md §4)
+//   i_dmem_b_*, o_dmem_b_dout : puerto B de dmem: limpieza y volcado
+//                               (memoria.md §3.3); el banco de pruebas
+//                               carga por acá el estado inicial
 //   i_dbg_reg_addr            : registro que lee la Debug Unit
 //   o_dbg_reg_data            : su valor guardado, sin bypass (decisión 018)
 //   o_halted                  : HALT llegó a WB
@@ -40,8 +45,8 @@
 //   o_if_id_latch             : IF/ID agrupado, {valid, pc, instr}
 //   o_id_ex_latch             : ID/EX agrupado, en el orden de §8
 //   o_ex_mem_latch            : EX/MEM agrupado, en el orden de §8
-//   Cada integración agrega su bus de latch (o_mem_wb_latch), el
-//   puerto B de dmem (I-34) y los avisos (I-35).
+//   o_mem_wb_latch            : MEM/WB agrupado, en el orden de §8
+//   Falta la salida de los avisos (I-35).
 //
 // Parámetros:
 //   NB_PC       : ancho del PC y de las direcciones
@@ -59,6 +64,11 @@
 //   i_imem_b_we    : puerto B de imem: escritura
 //   i_imem_b_addr  : puerto B de imem: índice de palabra     [9:0]
 //   i_imem_b_din   : puerto B de imem: palabra a escribir    [NB_INSTR-1:0]
+//   i_dmem_b_en    : puerto B de dmem: habilita
+//   i_dmem_b_we    : puerto B de dmem: escritura por byte    [3:0]
+//   i_dmem_b_addr  : puerto B de dmem: índice de palabra     [9:0]
+//   i_dmem_b_din   : puerto B de dmem: palabra a escribir    [NB_DATA-1:0]
+//   o_dmem_b_dout  : puerto B de dmem: palabra leída         [NB_DATA-1:0]
 //   i_dbg_reg_addr : registro que lee la Debug Unit          [NB_ADDR-1:0]
 //   o_dbg_reg_data : valor guardado del registro             [NB_DATA-1:0]
 //   o_halted       : HALT en WB; 0 hasta I-35
@@ -68,12 +78,15 @@
 //                    [NB_PC+3*NB_DATA+3*NB_ADDR+NB_FUNCT3+NB_ALU_CTRL+10:0]
 //   o_ex_mem_latch : EX/MEM para READ_LATCHES (109 bits)
 //                    [NB_PC+2*NB_DATA+NB_ADDR+NB_FUNCT3+4:0]
+//   o_mem_wb_latch : MEM/WB para READ_LATCHES (110 bits)
+//                    [NB_PC+2*NB_DATA+NB_ADDR+NB_FUNCT3+5:0]
 //
 // Latencia: la instrucción de la dirección p llega a IF/ID un ciclo con
-//           enable = 1 después de que pc_reg = p, y a ID/EX y a EX/MEM
-//           un ciclo con enable = 1 después de cada una.
+//           enable = 1 después de que pc_reg = p, y a ID/EX, EX/MEM y
+//           MEM/WB un ciclo con enable = 1 después de cada una.
 // Reset   : PC = 0x0000_0000, banco de registros en 0, todos los
-//           registros de segmentación en burbuja (valid = 0), halted = 0.
+//           registros de segmentación en burbuja (valid = 0), avisos y
+//           halted en 0. Las BRAM no se resetean.
 //======================================================================
 
 module riscv_core
@@ -93,6 +106,11 @@ module riscv_core
     input  wire                    i_imem_b_we,
     input  wire [9:0]              i_imem_b_addr,
     input  wire [NB_INSTR-1:0]     i_imem_b_din,
+    input  wire                    i_dmem_b_en,
+    input  wire [3:0]              i_dmem_b_we,
+    input  wire [9:0]              i_dmem_b_addr,
+    input  wire [NB_DATA-1:0]      i_dmem_b_din,
+    output wire [NB_DATA-1:0]      o_dmem_b_dout,
     input  wire [NB_ADDR-1:0]      i_dbg_reg_addr,
     output wire [NB_DATA-1:0]      o_dbg_reg_data,
     output wire                    o_halted,
@@ -101,7 +119,9 @@ module riscv_core
     // 1 + 32 + 3*32 + 3*5 + 3 + 4 + 10 = 161 bits (pipeline.md §8)
     output wire [NB_PC+3*NB_DATA+3*NB_ADDR+NB_FUNCT3+NB_ALU_CTRL+10:0] o_id_ex_latch,
     // 1 + 32 + 2*32 + 5 + 3 + 4 = 109 bits (pipeline.md §8)
-    output wire [NB_PC+2*NB_DATA+NB_ADDR+NB_FUNCT3+4:0] o_ex_mem_latch
+    output wire [NB_PC+2*NB_DATA+NB_ADDR+NB_FUNCT3+4:0] o_ex_mem_latch,
+    // 1 + 32 + 2*32 + 5 + 3 + 2 + 3 = 110 bits (pipeline.md §8)
+    output wire [NB_PC+2*NB_DATA+NB_ADDR+NB_FUNCT3+5:0] o_mem_wb_latch
 );
 
     localparam integer NB_IMM_SEL = 3;  // imm_sel no sale de ID (§4.3)
@@ -120,9 +140,11 @@ module riscv_core
     wire en_if_id     = i_enable & ~stall;
     wire en_id_ex     = i_enable;
     wire en_ex_mem    = i_enable;
+    wire en_mem_wb    = i_enable;           // también el ena de dmem
     wire flush_if_id  = redirect | stop_fetch;
     wire flush_id_ex  = redirect | stall;
     wire flush_ex_mem = 1'b0;
+    wire flush_mem_wb = 1'b0;
 
     //------------------------------------------------------------------
     // Escritura del banco desde WB (pipeline.md §7.2): I-35
@@ -301,6 +323,62 @@ module riscv_core
         .o_ex_mem_mem_to_reg (ex_mem_mem_to_reg),
         .o_ex_mem_halt       (ex_mem_halt),
         .o_ex_mem_latch      (o_ex_mem_latch)
+    );
+
+    //------------------------------------------------------------------
+    // MEM y MEM/WB
+    //------------------------------------------------------------------
+    wire                 dmem_oob;          // a la salida en I-35
+    wire                 dmem_misaligned;   // a la salida en I-35
+    wire                 mem_wb_valid;
+    wire [NB_PC-1:0]     mem_wb_pc;
+    wire [NB_DATA-1:0]   mem_wb_result;
+    wire [NB_DATA-1:0]   mem_wb_read_data;
+    wire [NB_ADDR-1:0]   mem_wb_rd;
+    wire [NB_FUNCT3-1:0] mem_wb_funct3;
+    wire [1:0]           mem_wb_offset;
+    wire                 mem_wb_reg_write;
+    wire                 mem_wb_mem_to_reg;
+    wire                 mem_wb_halt;
+
+    mem_stage #(
+        .NB_PC     (NB_PC),
+        .NB_DATA   (NB_DATA),
+        .NB_ADDR   (NB_ADDR),
+        .NB_FUNCT3 (NB_FUNCT3)
+    ) u_mem_stage (
+        .i_clk               (i_clk),
+        .i_rst               (i_rst),
+        .i_en_mem_wb         (en_mem_wb),
+        .i_flush             (flush_mem_wb),
+        .i_ex_mem_valid      (ex_mem_valid),
+        .i_ex_mem_pc         (ex_mem_pc),
+        .i_ex_mem_result     (ex_mem_result),
+        .i_ex_mem_store_data (ex_mem_store_data),
+        .i_ex_mem_rd         (ex_mem_rd),
+        .i_ex_mem_funct3     (ex_mem_funct3),
+        .i_ex_mem_mem_write  (ex_mem_mem_write),
+        .i_ex_mem_reg_write  (ex_mem_reg_write),
+        .i_ex_mem_mem_to_reg (ex_mem_mem_to_reg),
+        .i_ex_mem_halt       (ex_mem_halt),
+        .o_mem_wb_valid      (mem_wb_valid),
+        .o_mem_wb_pc         (mem_wb_pc),
+        .o_mem_wb_result     (mem_wb_result),
+        .o_mem_wb_read_data  (mem_wb_read_data),
+        .o_mem_wb_rd         (mem_wb_rd),
+        .o_mem_wb_funct3     (mem_wb_funct3),
+        .o_mem_wb_offset     (mem_wb_offset),
+        .o_mem_wb_reg_write  (mem_wb_reg_write),
+        .o_mem_wb_mem_to_reg (mem_wb_mem_to_reg),
+        .o_mem_wb_halt       (mem_wb_halt),
+        .o_mem_wb_latch      (o_mem_wb_latch),
+        .o_dmem_oob          (dmem_oob),
+        .o_dmem_misaligned   (dmem_misaligned),
+        .i_dmem_b_en         (i_dmem_b_en),
+        .i_dmem_b_we         (i_dmem_b_we),
+        .i_dmem_b_addr       (i_dmem_b_addr),
+        .i_dmem_b_din        (i_dmem_b_din),
+        .o_dmem_b_dout       (o_dmem_b_dout)
     );
 
     //------------------------------------------------------------------

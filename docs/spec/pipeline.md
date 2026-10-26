@@ -660,6 +660,20 @@ avisos.
 entrega la palabra completa como `mem_wb_read_data`; la extensión es de WB (§7.1). Sus puertos
 están en [`memoria.md`](memoria.md) §3.3.
 
+### 6.7 Módulo `mem_stage`
+`rtl/pipeline/mem_stage.v` es la etapa completa: `dmem` (§6.6) y `mem_wb_reg`, con el mismo
+criterio que `id_stage` y `ex_stage` (§4.7, §5.6, decisión
+[023](../decisiones/023_interfaz-debug-del-core.md)). La BRAM va adentro porque su registro de
+salida es el campo `mem_wb_read_data` (§6.3), como `imem` dentro de `if_stage`.
+
+- **No calcula enables ni flush:** recibe `en_mem_wb` y `flush_mem_wb` ya calculados (§10.4).
+  `en_mem_wb` es a la vez el `en` de MEM/WB y el `ena` del puerto A de `dmem`, así que con el
+  core detenido los 110 bits de MEM/WB quedan quietos, `read_data` incluido.
+- **`offset`** es `ex_mem_result[1:0]` (§6.1); lo arma la etapa y `mem_wb_reg` solo lo copia.
+- **Salidas:** los 10 campos `mem_wb_*` de §8, el bus `o_mem_wb_latch` para la Debug Unit, el
+  puerto B de `dmem` (`dmem_b_*`, [`memoria.md`](memoria.md) §3.3) y los avisos `dmem_oob` y
+  `dmem_misaligned`. Hasta I-35 `riscv_core` no saca los avisos como puertos.
+
 ---
 
 ## 7. Etapa WB — Write Back
