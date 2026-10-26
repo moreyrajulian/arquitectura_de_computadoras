@@ -423,6 +423,7 @@ Señales hacia el core y las memorias (coinciden con el diagrama de sistema):
 | `enable` | DU → core | Habilita el avance del pipeline y del PC (1 en `RUNNING`, un ciclo en `STEP`). El clock nunca se detiene: todo elemento con estado del core la respeta (decisión [018](../decisiones/018_paso-a-paso-sin-clock.md), [`pipeline.md`](pipeline.md) §10.4) |
 | `core_rst` | DU → core | Reset síncrono: PC = 0, registros = 0, latches a burbuja |
 | `halt` | core → DU | HALT llegó a WB |
+| `imem_fault`, `dmem_oob`, `dmem_misaligned` | core → DU | Avisos de acceso persistentes, bits 2 a 4 de `flags` en el bloque de estado (§3.1, [`memoria.md`](memoria.md) §6.2) |
 | `dbg_reg_addr[4:0]` / `dbg_reg_data[31:0]` | DU ↔ core | Puerto de lectura extra del banco de registros |
 | `if_id_latch[64:0]`, `id_ex_latch[160:0]`, `ex_mem_latch[108:0]`, `mem_wb_latch[109:0]` | core → DU | Contenido completo de cada registro de segmentación, en el orden de [`pipeline.md`](pipeline.md) §8. La Debug Unit los parte en las palabras de `READ_LATCHES` (decisión [023](../decisiones/023_interfaz-debug-del-core.md)) |
 | `pc[31:0]` | core → DU | Para el bloque de estado |
