@@ -200,6 +200,18 @@ al HALT. Al terminar t+4, `halted = 1` mantiene la parada.
   `rs2` (es el inmediato de `ebreak`), así que un load a `x1` justo antes puede disparar la
   detección de load-use (§10.3). Como `en` tiene prioridad sobre `flush` (§2), IF/ID conserva
   el HALT durante el stall y no se pierde.
+- **Programa sin HALT:** `stop_fetch` no se activa nunca y el PC sigue avanzando. En la
+  práctica no pasa, porque `LOAD` rellena con HALT lo que el programa no ocupa. Solo un
+  programa de 1024 palabras sin HALT llega a `0x1000`, vuelve a `imem[0]` por el alias y
+  levanta `imem_fault` ([`memoria.md`](memoria.md) §6.1, decisiones 001 y
+  [015](../decisiones/015_accesos-desalineados-y-fuera-de-rango.md)). Un bucle infinito
+  tampoco termina: para eso está `STOP` ([`protocolo_debug.md`](protocolo_debug.md) §3.5).
+
+**En el RTL** (I-37), `stop_fetch` se calcula en `riscv_core`, junto con los enables y el
+flush de §10.4. Ningún término necesita combinarse con `valid`: `id_is_halt` sale de
+`id_stage` ya anulado en una burbuja (la unidad de control da todo en 0, §4.4), y una burbuja
+lleva `halt = 0` en ID/EX, EX/MEM y MEM/WB (§2). Con el PC congelado, después de la parada
+`pc_reg` vale `h + 4`, que es el PC que ve la Debug Unit en el bloque de estado.
 
 ### 3.5 Salidas hacia IF/ID
 
@@ -567,8 +579,8 @@ del propio EX/MEM; la unidad que elige el selector (§10.2, I-39) queda afuera.
 
 - **No calcula enables, flush ni forwarding:** recibe `en_ex_mem` y `flush_ex_mem` ya
   calculados (§10.4), `fwd_a` / `fwd_b` y `wb_data` (§7.2). Hasta I-39 `riscv_core` deja los
-  selectores en `00` y hasta I-35 `wb_data` en 0. El código `11` no lo genera la unidad de
-  forwarding; si llega, toma lo leído en ID, como `00`.
+  selectores en `00`; `wb_data` viene de `wb_stage` (§7.4). El código `11` no lo genera la
+  unidad de forwarding; si llega, toma lo leído en ID, como `00`.
 - **De ID/EX** entran los campos que usa EX y los que pasan a EX/MEM. `rs1`, `rs2` y
   `mem_read` no entran: los usan la unidad de forwarding (§10.2) y la detección de load-use
   (§10.3).
