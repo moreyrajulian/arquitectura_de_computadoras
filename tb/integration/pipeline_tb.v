@@ -43,7 +43,10 @@
 //     hasta el ciclo en que el HALT llega a él;
 //   - sin STAGE_REDIRECT (I-36) el salto no vuelve a IF: el latch k
 //     (0 = IF/ID) se compara hasta el ciclo r + 1 + k, con r el ciclo del
-//     primer salto tomado en EX.
+//     primer salto tomado en EX;
+//   - con +FINAL y sin STAGE_HALT no se compara pipeline_vacio: sin
+//     stop_fetch, detrás del HALT siguen entrando instrucciones válidas
+//     (verificacion.md §8.3).
 //
 // Interfaz que espera de riscv_core (la implementa I-22, verificacion.md §8):
 //   i_clk, i_rst, i_enable, i_imem_b_{en,we,addr,din}, o_halted,
@@ -73,7 +76,9 @@
 `ifndef STAGE_MEM
 `define STAGE_MEM               // I-34: MEM/WB y memoria de datos
 `endif
-// `define STAGE_WB             // I-35: escritura del banco, halted y avisos
+`ifndef STAGE_WB
+`define STAGE_WB                // I-35: escritura del banco, halted y avisos
+`endif
 // `define STAGE_REDIRECT       // I-36: el salto tomado cambia el PC
 // `define STAGE_HALT           // I-37: parada por HALT (stop_fetch)
 `endif
@@ -781,10 +786,14 @@ module pipeline_tb;
             // primer ciclo con halted = 1: el pipeline tiene que estar vacío
             tb_enable = 1'b0;
             chk("halted", {{(NB_DATA-1){1'b0}}, tb_o_halted}, exp_misc[E_HALTED]);
+`ifdef STAGE_HALT
             chk("pipeline_vacio",
                 {{(NB_DATA-1){1'b0}}, ~(u_dut.if_id_valid | u_dut.id_ex_valid |
                                          u_dut.ex_mem_valid | u_dut.mem_wb_valid)},
                 exp_misc[E_VACIO]);
+`else
+            $display("INFO: pipeline_vacio no se compara sin STAGE_HALT (verificacion.md §8.3)");
+`endif
             chk("avisos {imem_fault, dmem_oob, dmem_misaligned}",
                 {{(NB_DATA-3){1'b0}}, tb_o_imem_fault, tb_o_dmem_oob, tb_o_dmem_misaligned},
                 exp_misc[E_AVISOS]);

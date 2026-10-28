@@ -6,7 +6,7 @@
 //
 // Procesador RV32I segmentado (docs/spec/pipeline.md). Se integra etapa
 // por etapa (docs/planificacion.md); esta versión tiene IF (I-22), ID
-// (I-27), EX (I-31) y MEM (I-34).
+// (I-27), EX (I-31), MEM (I-34) y WB (I-35).
 //
 // Función:
 //   Instancia las etapas y genera las señales de control del pipeline
@@ -15,14 +15,13 @@
 //     stall       = 0   hasta I-41/I-42 (detección de carga-uso)
 //     redirect    = 0   hasta I-36      (el salto vuelve a IF)
 //     stop_fetch  = 0   hasta I-37      (parada por HALT)
-//     halted      = 0   hasta I-35      (registro halted en WB)
-//     wb_*        = 0   hasta I-35      (escritura del banco desde WB)
 //     fwd_a/fwd_b = 00  hasta I-39      (unidad de forwarding)
-//   Con eso, en M6: en_pc = en_if_id = en_id_ex = en_ex_mem = en_mem_wb
+//   Con eso, en M7: en_pc = en_if_id = en_id_ex = en_ex_mem = en_mem_wb
 //   = enable, flush_if_id = flush_id_ex = flush_ex_mem = flush_mem_wb
-//   = 0, el banco conserva lo que tenga y EX opera con lo leído en ID.
-//   Los avisos dmem_oob y dmem_misaligned ya se calculan en mem_stage,
-//   pero salen como puertos recién en I-35, junto con imem_fault. La salida de branch_unit
+//   = 0 y EX opera con lo leído en ID. WB escribe el banco (wb_*, con el
+//   bypass WB -> ID del banco, decisión 007) y activa halted, pero
+//   halted todavía no detiene la búsqueda: detrás del HALT siguen
+//   entrando instrucciones hasta I-37. La salida de branch_unit
 //   (ex_redirect, ex_redirect_pc) existe pero no vuelve a IF hasta I-36.
 //
 //   Los campos de los registros de segmentación son señales de este
@@ -41,12 +40,13 @@
 //   i_dbg_reg_addr            : registro que lee la Debug Unit
 //   o_dbg_reg_data            : su valor guardado, sin bypass (decisión 018)
 //   o_halted                  : HALT llegó a WB
+//   o_imem_fault, o_dmem_oob,
+//   o_dmem_misaligned         : avisos de acceso (memoria.md §6.2)
 //   o_pc                      : pc_reg, para el bloque de estado
 //   o_if_id_latch             : IF/ID agrupado, {valid, pc, instr}
 //   o_id_ex_latch             : ID/EX agrupado, en el orden de §8
 //   o_ex_mem_latch            : EX/MEM agrupado, en el orden de §8
 //   o_mem_wb_latch            : MEM/WB agrupado, en el orden de §8
-//   Falta la salida de los avisos (I-35).
 //
 // Parámetros:
 //   NB_PC       : ancho del PC y de las direcciones
@@ -71,7 +71,10 @@
 //   o_dmem_b_dout  : puerto B de dmem: palabra leída         [NB_DATA-1:0]
 //   i_dbg_reg_addr : registro que lee la Debug Unit          [NB_ADDR-1:0]
 //   o_dbg_reg_data : valor guardado del registro             [NB_DATA-1:0]
-//   o_halted       : HALT en WB; 0 hasta I-35
+//   o_halted       : HALT llegó a WB (registro halted, §7.3)
+//   o_imem_fault   : aviso imem_fault, de WB
+//   o_dmem_oob     : aviso dmem_oob, de MEM
+//   o_dmem_misaligned : aviso dmem_misaligned, de MEM
 //   o_pc           : pc_reg                                  [NB_PC-1:0]
 //   o_if_id_latch  : IF/ID para READ_LATCHES                 [NB_PC+NB_INSTR:0]
 //   o_id_ex_latch  : ID/EX para READ_LATCHES (161 bits)
@@ -114,6 +117,9 @@ module riscv_core
     input  wire [NB_ADDR-1:0]      i_dbg_reg_addr,
     output wire [NB_DATA-1:0]      o_dbg_reg_data,
     output wire                    o_halted,
+    output wire                    o_imem_fault,
+    output wire                    o_dmem_oob,
+    output wire                    o_dmem_misaligned,
     output wire [NB_PC-1:0]        o_pc,
     output wire [NB_PC+NB_INSTR:0] o_if_id_latch,
     // 1 + 32 + 3*32 + 3*5 + 3 + 4 + 10 = 161 bits (pipeline.md §8)
@@ -134,7 +140,7 @@ module riscv_core
     wire             redirect    = 1'b0;            // I-36
     wire [NB_PC-1:0] redirect_pc = {NB_PC{1'b0}};   // I-36
     wire             stop_fetch  = 1'b0;            // I-37
-    wire             halted      = 1'b0;            // I-35
+    wire             halted;                        // wb_stage (§7.3)
 
     wire en_pc        = i_enable & ~stall;
     wire en_if_id     = i_enable & ~stall;
@@ -147,11 +153,11 @@ module riscv_core
     wire flush_mem_wb = 1'b0;
 
     //------------------------------------------------------------------
-    // Escritura del banco desde WB (pipeline.md §7.2): I-35
+    // Escritura del banco desde WB (pipeline.md §7.2), de wb_stage
     //------------------------------------------------------------------
-    wire               wb_reg_write = 1'b0;
-    wire [NB_ADDR-1:0] wb_rd        = {NB_ADDR{1'b0}};
-    wire [NB_DATA-1:0] wb_data      = {NB_DATA{1'b0}};
+    wire               wb_reg_write;
+    wire [NB_ADDR-1:0] wb_rd;
+    wire [NB_DATA-1:0] wb_data;
 
     //------------------------------------------------------------------
     // Selectores de forwarding (pipeline.md §10.2): I-39. En 00 (FWD_ID_EX)
@@ -328,8 +334,8 @@ module riscv_core
     //------------------------------------------------------------------
     // MEM y MEM/WB
     //------------------------------------------------------------------
-    wire                 dmem_oob;          // a la salida en I-35
-    wire                 dmem_misaligned;   // a la salida en I-35
+    wire                 dmem_oob;
+    wire                 dmem_misaligned;
     wire                 mem_wb_valid;
     wire [NB_PC-1:0]     mem_wb_pc;
     wire [NB_DATA-1:0]   mem_wb_result;
@@ -382,10 +388,44 @@ module riscv_core
     );
 
     //------------------------------------------------------------------
+    // WB
+    //------------------------------------------------------------------
+    wire imem_fault;
+
+    wb_stage #(
+        .NB_PC     (NB_PC),
+        .NB_DATA   (NB_DATA),
+        .NB_ADDR   (NB_ADDR),
+        .NB_FUNCT3 (NB_FUNCT3)
+    ) u_wb_stage (
+        .i_clk               (i_clk),
+        .i_rst               (i_rst),
+        .i_enable            (i_enable),
+        .i_mem_wb_valid      (mem_wb_valid),
+        .i_mem_wb_pc         (mem_wb_pc),
+        .i_mem_wb_result     (mem_wb_result),
+        .i_mem_wb_read_data  (mem_wb_read_data),
+        .i_mem_wb_rd         (mem_wb_rd),
+        .i_mem_wb_funct3     (mem_wb_funct3),
+        .i_mem_wb_offset     (mem_wb_offset),
+        .i_mem_wb_reg_write  (mem_wb_reg_write),
+        .i_mem_wb_mem_to_reg (mem_wb_mem_to_reg),
+        .i_mem_wb_halt       (mem_wb_halt),
+        .o_wb_reg_write      (wb_reg_write),
+        .o_wb_rd             (wb_rd),
+        .o_wb_data           (wb_data),
+        .o_halted            (halted),
+        .o_imem_fault        (imem_fault)
+    );
+
+    //------------------------------------------------------------------
     // Salidas de debug
     //------------------------------------------------------------------
-    assign o_halted = halted;
-    assign o_pc     = if_pc;
+    assign o_halted          = halted;
+    assign o_imem_fault      = imem_fault;
+    assign o_dmem_oob        = dmem_oob;
+    assign o_dmem_misaligned = dmem_misaligned;
+    assign o_pc              = if_pc;
 
 endmodule
 

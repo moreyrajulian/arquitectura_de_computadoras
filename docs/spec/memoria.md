@@ -424,7 +424,7 @@ cuando no lo hacen el aviso lo deja a la vista.
 ### 6.2 Avisos de acceso
 
 Tres flip-flops del core: `dmem_oob` y `dmem_misaligned` en `dmem`, en MEM, e `imem_fault` en
-WB, junto al registro `halted` (decisión [027](../decisiones/027_logica-de-mem-en-dmem.md)). Se
+WB (`wb_stage`, [`pipeline.md`](pipeline.md) §7.4), junto al registro `halted` (decisión [027](../decisiones/027_logica-de-mem-en-dmem.md)). Se
 ponen en 1 y quedan así hasta el próximo `core_rst` (`LOAD` o `RESET`):
 
 ```verilog

@@ -422,8 +422,8 @@ de la etapa y volvería a entrar. El banco de pruebas lo encuentra en
 - **No calcula enables ni flush:** recibe `en_id_ex` y `flush_id_ex` ya calculados (§10.4), y
   además `enable` para la escritura del banco. Son señales distintas: con un stall, ID/EX carga
   una burbuja y el banco puede seguir escribiendo.
-- **Escritura del banco:** entra desde WB (`wb_reg_write`, `wb_rd`, `wb_data`, §7.2). Hasta I-35
-  `riscv_core` la deja en 0.
+- **Escritura del banco:** entra desde WB (`wb_reg_write`, `wb_rd`, `wb_data`, §7.2), que
+  arma `wb_stage` (§7.4).
 - **Salidas:** los 20 campos `id_ex_*` de §8, el bus `o_id_ex_latch` para la Debug Unit, el
   puerto de lectura del banco (`dbg_reg_addr` / `dbg_reg_data`) e `id_is_halt` (el `halt` de la
   unidad de control, para `stop_fetch`, §3.4).
@@ -672,7 +672,7 @@ salida es el campo `mem_wb_read_data` (§6.3), como `imem` dentro de `if_stage`.
 - **`offset`** es `ex_mem_result[1:0]` (§6.1); lo arma la etapa y `mem_wb_reg` solo lo copia.
 - **Salidas:** los 10 campos `mem_wb_*` de §8, el bus `o_mem_wb_latch` para la Debug Unit, el
   puerto B de `dmem` (`dmem_b_*`, [`memoria.md`](memoria.md) §3.3) y los avisos `dmem_oob` y
-  `dmem_misaligned`. Hasta I-35 `riscv_core` no saca los avisos como puertos.
+  `dmem_misaligned`, que `riscv_core` saca como puertos junto con `imem_fault` (§7.4).
 
 ---
 
@@ -731,6 +731,28 @@ Como todo elemento con estado del core, `halted` solo cambia con `enable = 1` (�
 Detrás del HALT solo entraron burbujas (§3.4), así que un ciclo después todos los
 `valid` están en 0: el pipeline está vacío. `halted` es la señal que la Debug Unit mira
 para saber que terminó la ejecución (I-06).
+
+### 7.4 Módulo `wb_stage`
+`rtl/pipeline/wb_stage.v` es la etapa completa: la extensión del load (§7.1), el mux de
+write-back (§7.2), el registro `halted` (§7.3) y el aviso `imem_fault`
+([`memoria.md`](memoria.md) §6.2). Recibe los campos de MEM/WB y no tiene registro de
+segmentación propio: lo que arma va al banco de registros y a EX en el mismo ciclo.
+
+- **Salidas combinacionales:** `wb_reg_write`, `wb_rd` y `wb_data`, sin pasar por ningún
+  flip-flop. `wb_reg_write` no se combina con `mem_wb_valid`: una burbuja ya trae
+  `reg_write = 0` (§2). La escritura respeta `enable` dentro del banco (§4.2), no acá.
+- **`funct3` fuera de la tabla de §7.1:** entrega `read_data`, como `lw`. No llega nunca,
+  porque la unidad de control convierte esos loads en NOP (decisión
+  [024](../decisiones/024_instrucciones-no-soportadas.md)).
+- **No calcula enables ni flush:** recibe `enable` solo para sus dos flip-flops, `halted` e
+  `imem_fault`, que cambian únicamente con `enable = 1`. `core_rst` los pone en 0 y gana sobre
+  `enable`.
+- **`imem_fault`** se levanta con una instrucción válida cuyo `mem_wb_pc` tiene bits en
+  `[31:IMEM_AW+2]` o en `[1:0]`. Una búsqueda en el camino equivocado se anula antes de WB y
+  no lo levanta.
+- **Salidas hacia el core:** `wb_reg_write`, `wb_rd`, `wb_data`, `halted` e `imem_fault`.
+  `riscv_core` saca `o_halted`, `o_imem_fault`, `o_dmem_oob` y `o_dmem_misaligned` para la
+  Debug Unit (decisión [023](../decisiones/023_interfaz-debug-del-core.md)).
 
 ## 8. Registros de segmentación
 
