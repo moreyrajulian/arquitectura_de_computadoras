@@ -14,16 +14,19 @@
 //     (dut ^ ref) & mask, con los campos de pipeline.md §8 en el orden de
 //     su tabla, el primero en los bits altos.
 //   - Estado final (+FINAL, desde M7): registros, dmem, halted, pipeline
-//     vacío, avisos y ciclos contra el .exp escrito a mano (§5).
+//     vacío, avisos y ciclos contra el .exp escrito a mano (§5). Con
+//     STAGE_HALT, además, pc_reg (o_pc) en la dirección del HALT + 4, y
+//     unos ciclos más con enable = 1 en los que el pipeline sigue vacío y
+//     el PC quieto: halted sostiene la parada (pipeline.md §3.4).
 //   - Memoria de datos (STAGE_MEM, sin +FINAL): al terminar la traza, si
 //     no hubo corte por salto, dmem por el puerto B contra el .exp. En
-//     ese ciclo el HALT está en MEM/WB: ya escribieron todos los stores
-//     anteriores y ninguno posterior.
+//     ese ciclo el HALT está en MEM/WB (sin STAGE_HALT) o ya pasó por WB:
+//     escribieron todos los stores anteriores y ninguno posterior.
 //   - Pausas (+PAUSAS=<semilla>): entre ciclos de la traza baja enable
 //     durante 1 a 3 ciclos al azar (semilla fija) y comprueba que ningún
-//     latch integrado cambia; después la traza tiene que seguir
-//     coincidiendo. Detecta un elemento con estado que no respeta enable
-//     (decisión 018, pipeline.md §10.4).
+//     latch integrado cambia, ni halted ni los avisos (STAGE_WB); después
+//     la traza tiene que seguir coincidiendo. Detecta un elemento con
+//     estado que no respeta enable (decisión 018, pipeline.md §10.4).
 //
 // Uso:
 //   python scripts/prep_tb.py sw/<programa>.s [--modo sin_riesgos|completo]
@@ -53,6 +56,7 @@
 //   i_dbg_reg_addr, o_dbg_reg_data (desde I-27; se leen con STAGE_ID)
 //   + STAGE_MEM: i_dmem_b_{en,we,addr,din}, o_dmem_b_dout
 //   + STAGE_WB : o_imem_fault, o_dmem_oob, o_dmem_misaligned
+//   + STAGE_HALT: o_pc
 //   y los campos de los latches como señales del módulo superior, con el
 //   nombre <latch>_<campo> (u_dut.if_id_valid, u_dut.id_ex_alu_ctrl, ...).
 //
@@ -82,7 +86,9 @@
 `ifndef STAGE_REDIRECT
 `define STAGE_REDIRECT          // I-36: el salto tomado cambia el PC
 `endif
-// `define STAGE_HALT           // I-37: parada por HALT (stop_fetch)
+`ifndef STAGE_HALT
+`define STAGE_HALT              // I-37: parada por HALT (stop_fetch)
+`endif
 `endif
 
 `ifdef STAGE_HALT
@@ -151,6 +157,10 @@ module pipeline_tb;
     localparam integer E_AVISOS   = 2;
     localparam integer E_CICLOS   = 3;
 
+    // Ciclos con enable = 1 después de halted (STAGE_HALT, +FINAL): uno más
+    // que los que tarda una instrucción en ir de IF/ID a WB
+    localparam integer N_TRAS_HALT = 5;
+
     //------------------------------------------------------------------
     // DUT
     //------------------------------------------------------------------
@@ -179,6 +189,9 @@ module pipeline_tb;
     wire               tb_o_dmem_oob;
     wire               tb_o_dmem_misaligned;
 `endif
+`ifdef STAGE_HALT
+    wire [NB_DATA-1:0] tb_o_pc;
+`endif
 
     riscv_core u_dut (
         .i_clk             (tb_clk),
@@ -201,6 +214,9 @@ module pipeline_tb;
         .o_imem_fault      (tb_o_imem_fault),
         .o_dmem_oob        (tb_o_dmem_oob),
         .o_dmem_misaligned (tb_o_dmem_misaligned),
+`endif
+`ifdef STAGE_HALT
+        .o_pc              (tb_o_pc),
 `endif
         .o_halted          (tb_o_halted)
     );
@@ -241,6 +257,15 @@ module pipeline_tb;
     };
 `endif
 
+`ifdef STAGE_WB
+    // halted y los avisos, que también se congelan con enable = 0 (§7.3)
+    wire [3:0] dut_misc = {tb_o_halted, tb_o_imem_fault, tb_o_dmem_oob, tb_o_dmem_misaligned};
+`endif
+`ifdef STAGE_HALT
+    wire dut_vacio = ~(u_dut.if_id_valid | u_dut.id_ex_valid |
+                       u_dut.ex_mem_valid | u_dut.mem_wb_valid);
+`endif
+
     // Foto de los latches al empezar una pausa (+PAUSAS)
 `ifdef STAGE_IF
     reg [NB_IF_ID-1:0]  foto_if_id;
@@ -253,6 +278,9 @@ module pipeline_tb;
 `endif
 `ifdef STAGE_MEM
     reg [NB_MEM_WB-1:0] foto_mem_wb;
+`endif
+`ifdef STAGE_WB
+    reg [3:0]           foto_misc;
 `endif
 
     //------------------------------------------------------------------
@@ -293,6 +321,10 @@ module pipeline_tb;
     reg     final_mode;
     reg     pausas;
     reg     fallo;
+`ifdef STAGE_HALT
+    reg [NB_MEM_WB-1:0] mw_halt;                // MEM/WB de la traza con el HALT
+    reg [NB_DATA-1:0]   exp_pc;
+`endif
 
     //------------------------------------------------------------------
     // Campos de cada latch, para informar cuál falló (pipeline.md §8)
@@ -499,6 +531,9 @@ module pipeline_tb;
 `ifdef STAGE_MEM
             foto_mem_wb = dut_mem_wb;
 `endif
+`ifdef STAGE_WB
+            foto_misc   = dut_misc;
+`endif
             tb_enable = 1'b0;
             for (j = 0; j < n; j = j + 1) begin
                 @(negedge tb_clk);
@@ -513,6 +548,15 @@ module pipeline_tb;
 `endif
 `ifdef STAGE_MEM
                 chk_pausa(L_MEM_WB, dut_mem_wb, foto_mem_wb);
+`endif
+`ifdef STAGE_WB
+                checks = checks + 1;
+                if (dut_misc !== foto_misc) begin
+                    errors = errors + 1;
+                    fallo  = 1'b1;
+                    $display("[%0t] ERROR ciclo %0d {halted, imem_fault, dmem_oob, dmem_misaligned} cambió con enable = 0 | dut=0x%0h antes=0x%0h",
+                             $time, ciclo, dut_misc, foto_misc);
+                end
 `endif
             end
             tb_enable = 1'b1;
@@ -789,10 +833,12 @@ module pipeline_tb;
             tb_enable = 1'b0;
             chk("halted", {{(NB_DATA-1){1'b0}}, tb_o_halted}, exp_misc[E_HALTED]);
 `ifdef STAGE_HALT
-            chk("pipeline_vacio",
-                {{(NB_DATA-1){1'b0}}, ~(u_dut.if_id_valid | u_dut.id_ex_valid |
-                                         u_dut.ex_mem_valid | u_dut.mem_wb_valid)},
-                exp_misc[E_VACIO]);
+            chk("pipeline_vacio", {{(NB_DATA-1){1'b0}}, dut_vacio}, exp_misc[E_VACIO]);
+            // pc_reg queda en la dirección del HALT + 4 (§3.4). La del HALT es
+            // el pc de MEM/WB en la traza, en el primer ciclo con el HALT ahí
+            mw_halt = ref_mem_wb[corte[C_HALT + L_MEM_WB] - 1];
+            exp_pc  = mw_halt[NB_MEM_WB-2 -: NB_DATA] + 32'd4;
+            chk("pc", tb_o_pc, exp_pc);
 `else
             $display("INFO: pipeline_vacio no se compara sin STAGE_HALT (verificacion.md §8.3)");
 `endif
@@ -800,6 +846,20 @@ module pipeline_tb;
                 {{(NB_DATA-3){1'b0}}, tb_o_imem_fault, tb_o_dmem_oob, tb_o_dmem_misaligned},
                 exp_misc[E_AVISOS]);
             chk("ciclos", ciclos_run, exp_misc[E_CICLOS]);
+`ifdef STAGE_HALT
+            // halted sostiene la parada (pipeline.md §3.4): con enable = 1 no
+            // entra nada y el PC no se mueve. Los registros y dmem se comparan
+            // después, así que tampoco se escribe nada
+            tb_enable = 1'b1;
+            for (i = 1; i <= N_TRAS_HALT; i = i + 1) begin
+                @(negedge tb_clk);
+                $sformat(fname, "pipeline_vacio, halted + %0d", i);
+                chk(fname[8*32-1:0], {{(NB_DATA-1){1'b0}}, dut_vacio}, 32'd1);
+                $sformat(fname, "pc, halted + %0d", i);
+                chk(fname[8*32-1:0], tb_o_pc, exp_pc);
+            end
+            tb_enable = 1'b0;
+`endif
             for (i = 1; i < N_REGS; i = i + 1) begin
                 $sformat(fname, "x%0d", i);
                 chk(fname[8*32-1:0], `REGFILE[i], exp_regs[i]);

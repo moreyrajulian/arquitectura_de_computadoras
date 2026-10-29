@@ -409,7 +409,7 @@ xsim corre en `build/vivado_<diseño>/…/xsim`.
 |---|---|
 | `DIR=<ruta>` | Obligatorio: directorio de `prep_tb.py` |
 | `FINAL` | Al terminar la traza, sigue hasta `halted` y compara el estado final (necesita `STAGE_WB`) |
-| `PAUSAS=<semilla>` | Entre ciclos de la traza baja `enable` de 1 a 3 ciclos al azar (en promedio una pausa cada 4 ciclos) y comprueba que ningún latch integrado cambia. Después la traza tiene que seguir coincidiendo, y así se detecta un elemento con estado que no respeta `enable` (decisión [018](../decisiones/018_paso-a-paso-sin-clock.md)). Las pausas no cuentan para el watchdog ni para `ciclos` |
+| `PAUSAS=<semilla>` | Entre ciclos de la traza baja `enable` de 1 a 3 ciclos al azar (en promedio una pausa cada 4 ciclos) y comprueba que ningún latch integrado cambia, ni `halted` ni los avisos (con `STAGE_WB`). Después la traza tiene que seguir coincidiendo, y así se detecta un elemento con estado que no respeta `enable` (decisión [018](../decisiones/018_paso-a-paso-sin-clock.md)). Las pausas no cuentan para el watchdog ni para `ciclos` |
 
 Parámetro `MAX_CYCLES` (por defecto 2000): watchdog sobre los ciclos con `enable = 1`. La
 carga y la lectura final no cuentan.
@@ -427,7 +427,7 @@ acumulativos: definir uno define los anteriores. `STAGE_IF` está siempre.
 | `STAGE_MEM` | I-34 | Compara MEM/WB; carga `dmem` por el puerto B y, al terminar la traza, la compara con el `.exp` (§8.3) |
 | `STAGE_WB` | I-35 | Habilita `+FINAL` (registros, `dmem`, `halted`, avisos y ciclos; `pipeline_vacio` recién con `STAGE_HALT`, §8.3) |
 | `STAGE_REDIRECT` | I-36 | Sin corte por saltos (§8.3) |
-| `STAGE_HALT` | I-37 | Sin corte por HALT: se comparan todas las líneas, foto final incluida |
+| `STAGE_HALT` | I-37 | Sin corte por HALT: se comparan todas las líneas, foto final incluida. Con `+FINAL` compara `pipeline_vacio` y `pc_reg`, y sigue unos ciclos después de `halted` |
 
 **Correr un nivel anterior.** Con `-d STAGES_CLI` el banco ignora los defines del archivo y las
 etapas salen solo de la línea de comandos (`-d STAGES_CLI` solo es IF; `-d STAGES_CLI -d STAGE_ID`
@@ -459,6 +459,19 @@ completos los programas con saltos tomados y `+FINAL` suma `branch_cond_nops`, `
 `halt_camino_equivocado` coinciden con la traza pero no con el `.exp` hasta I-42: sin flush
 ejecutan el camino equivocado.
 
+**Con `STAGE_HALT`** detrás del HALT solo entran burbujas, y la traza se compara entera: pasan
+los 30 programas que prepara `prep_tb.py`, con saltos tomados o sin ellos. Con `+FINAL` pasan
+los 20 de la lista de arriba y los 7 de `STAGE_REDIRECT`, ahora también en `pipeline_vacio`, y
+`halt_stall` sigue fallando solo en `ciclos`. Además, con `+FINAL`:
+
+- **`pc_reg`** (`o_pc`) tiene que valer la dirección del HALT + 4 (`pipeline.md` §3.4). La
+  dirección del HALT es el `pc` de MEM/WB en la traza, en el primer ciclo con el HALT ahí.
+- **`halted` sostiene la parada.** El banco sigue 5 ciclos con `enable = 1` después de
+  `halted`: en cada uno los cuatro `valid` tienen que seguir en 0 y `pc_reg` no puede cambiar.
+  Los registros y `dmem` se comparan después, así que tampoco se escribió nada. Sin el término
+  `halted` de `stop_fetch`, el PC vuelve a avanzar en cuanto el HALT sale de WB. Así el core no
+  depende de en qué ciclo baje `enable` la Debug Unit.
+
 ### 8.3 Hasta qué ciclo se compara
 
 El modelo simula siempre el pipeline completo. Mientras falte una parte, el RTL se aparta de
@@ -474,8 +487,9 @@ la traza por una razón conocida, y el banco deja de comparar **ese latch** en e
   completos desde I-36 (§8.2).
 - **Memoria de datos con `STAGE_MEM`.** Sin `+FINAL`, al terminar la traza el banco detiene
   el core y lee `dmem` por el puerto B (como `READ_DMEM`) para compararla con la del `.exp`.
-  En ese ciclo el HALT está en MEM/WB: ya escribieron todos los stores anteriores y ninguno
-  posterior. Sin `STAGE_REDIRECT`, si hubo un salto tomado no se compara (el RTL siguió por el
+  En ese ciclo el HALT está en MEM/WB (sin `STAGE_HALT`) o ya pasó por WB (con `STAGE_HALT`,
+  la foto final): ya escribieron todos los stores anteriores y ninguno posterior. Sin
+  `STAGE_REDIRECT`, si hubo un salto tomado no se compara (el RTL siguió por el
   camino equivocado) y lo avisa con una línea `INFO:`. Con `+FINAL` la compara el estado
   final (§8.4).
 - **`pipeline_vacio` con `+FINAL` y sin `STAGE_HALT`.** Sin `stop_fetch`, detrás del HALT
@@ -483,7 +497,9 @@ la traza por una razón conocida, y el banco deja de comparar **ese latch** en e
   `halted` los `valid` no están en 0. El banco no compara `pipeline_vacio` y lo avisa con una
   línea `INFO:`; el resto del estado final sí se compara. Los registros no cambian, porque
   ninguna de esas instrucciones llegó a WB, y `dmem` tampoco salvo que la instrucción siguiente
-  al HALT sea un store: ningún programa de la lista de §8.2 lo tiene.
+  al HALT sea un store. Lo mismo con los avisos: un load o un store con dirección inválida
+  justo después del HALT levantaría `dmem_oob` o `dmem_misaligned`. Ningún programa de la
+  lista de §8.2 tiene ninguno de los dos casos.
 
 El ciclo 1 es el primero después del reset (latches en burbuja, PC = 0), como la línea 1 de
 la traza. Se compara en el flanco de bajada.
@@ -503,7 +519,11 @@ la traza. Se compara en el flanco de bajada.
 - Con `STAGE_MEM` y sin `+FINAL`, una línea `ERROR` por palabra distinta de `dmem`
   (`dmem 0x<dirección>`), o una `INFO:` si no se compara por un salto (§8.3).
 - Con `+FINAL`, una línea `ERROR` por cada valor distinto (`halted`, `pipeline_vacio`,
-  avisos, `ciclos`, `x1`…`x31`, `dmem 0x<dirección>`).
+  avisos, `ciclos`, `x1`…`x31`, `dmem 0x<dirección>`). Con `STAGE_HALT`, también `pc` y, en
+  los ciclos después de `halted`, `pipeline_vacio, halted + <n>` y `pc, halted + <n>`.
+- Con `+PAUSAS`, una línea por cada latch que cambió con `enable = 0`
+  (`<latch> cambió con enable = 0`), y lo mismo para `{halted, imem_fault, dmem_oob,
+  dmem_misaligned}` con `STAGE_WB`, y termina.
 - La línea final de §6: `TEST PASSED` / `TEST FAILED`.
 
 ### 8.5 Interfaz que espera de `riscv_core`
@@ -516,9 +536,10 @@ La define este banco y la implementa I-22. Los nombres siguen `memoria.md` §3.3
 | `STAGE_ID` | `i_dbg_reg_addr[4:0]`, `o_dbg_reg_data[31:0]` (puerto de lectura del banco para la Debug Unit). El core los tiene desde I-27 y el banco los conecta siempre, también con `-d STAGES_CLI`, para no dejar la entrada flotante; los lee solo con `STAGE_ID` |
 | `STAGE_MEM` | `i_dmem_b_en`, `i_dmem_b_we[3:0]`, `i_dmem_b_addr[9:0]`, `i_dmem_b_din[31:0]`, `o_dmem_b_dout[31:0]` |
 | `STAGE_WB` | `o_imem_fault`, `o_dmem_oob`, `o_dmem_misaligned` |
+| `STAGE_HALT` | `o_pc[31:0]` (`pc_reg`, para comparar el PC después de la parada) |
 
-Además, el core tiene salidas para la Debug Unit que el banco no conecta: `o_pc[31:0]` y un
-bus por latch, `o_<latch>_latch`, con todo su contenido en el orden de `pipeline.md` §8
+Además, el core tiene salidas para la Debug Unit que el banco no conecta: un bus por latch,
+`o_<latch>_latch`, con todo su contenido en el orden de `pipeline.md` §8
 (decisión [023](../decisiones/023_interfaz-debug-del-core.md)).
 
 Los campos de los latches se leen por jerarquía: tienen que ser señales del módulo superior
@@ -547,4 +568,7 @@ reset lo pone en cero (decisión 007). En Windows, `xvlog.bat`,
 comillas dobles (`-testplusarg "DIR=..."`), y PowerShell las pierde antes de llegar al `.bat`: desde ahí se envuelve el comando en `cmd /c '...'`. En Linux no hace falta nada de esto.
 
 Con `-testplusarg STUB_ERROR=<ciclo>` invierte un bit de `if_id_pc` en ese ciclo, y con
-`STUB_SIN_HALT` nunca activa `halted`: sirven para ver que el banco falla cuando debe.
+`STUB_SIN_HALT` nunca activa `halted`: sirven para ver que el banco falla cuando debe. Con
+`STAGE_HALT`, `STUB_SIN_HALT` falla en la última línea de la traza, porque el stub no llega a
+la foto final. Para ver el watchdog de `+FINAL` se compila con `-d STAGES_CLI -d STAGE_WB`.
+`o_pc` vale siempre la dirección del HALT + 4, que es lo único que el banco le compara.
