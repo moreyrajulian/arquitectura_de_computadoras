@@ -19,7 +19,7 @@
 //   el sumador pc + imm es propio, así la ALU queda libre.
 //   No mira valid: una burbuja trae branch, jal y jalr en 0 (§2).
 //   La dirección de retorno (pc + 4) es el mux de resultado de §5.4 y
-//   no sale de acá. redirect y redirect_pc llegan a IF en I-36.
+//   no sale de acá. redirect y redirect_pc llegan a IF desde I-36.
 //
 // Parámetros:
 //   NB_PC     : ancho del PC y de las direcciones

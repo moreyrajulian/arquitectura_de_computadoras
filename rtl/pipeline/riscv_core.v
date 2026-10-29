@@ -6,23 +6,26 @@
 //
 // Procesador RV32I segmentado (docs/spec/pipeline.md). Se integra etapa
 // por etapa (docs/planificacion.md); esta versión tiene IF (I-22), ID
-// (I-27), EX (I-31), MEM (I-34) y WB (I-35).
+// (I-27), EX (I-31), MEM (I-34) y WB (I-35), con los saltos de vuelta
+// a IF (I-36).
 //
 // Función:
 //   Instancia las etapas y genera las señales de control del pipeline
 //   (pipeline.md §9.2, §10.4). Las que todavía no tienen quien las
 //   produzca valen 0 y se indica qué issue las conecta:
-//     stall       = 0   hasta I-41/I-42 (detección de carga-uso)
-//     redirect    = 0   hasta I-36      (el salto vuelve a IF)
-//     stop_fetch  = 0   hasta I-37      (parada por HALT)
-//     fwd_a/fwd_b = 00  hasta I-39      (unidad de forwarding)
+//     stall          = 0   hasta I-41/I-42 (detección de carga-uso)
+//     flush_redirect = 0   hasta I-42      (flush por salto tomado)
+//     stop_fetch     = 0   hasta I-37      (parada por HALT)
+//     fwd_a/fwd_b    = 00  hasta I-39      (unidad de forwarding)
 //   Con eso, en M7: en_pc = en_if_id = en_id_ex = en_ex_mem = en_mem_wb
 //   = enable, flush_if_id = flush_id_ex = flush_ex_mem = flush_mem_wb
 //   = 0 y EX opera con lo leído en ID. WB escribe el banco (wb_*, con el
 //   bypass WB -> ID del banco, decisión 007) y activa halted, pero
 //   halted todavía no detiene la búsqueda: detrás del HALT siguen
-//   entrando instrucciones hasta I-37. La salida de branch_unit
-//   (ex_redirect, ex_redirect_pc) existe pero no vuelve a IF hasta I-36.
+//   entrando instrucciones hasta I-37. El salto tomado en EX (redirect,
+//   redirect_pc de branch_unit) cambia el PC, pero sin flush: las dos
+//   instrucciones que entraron detrás se ejecutan, como en el modo
+//   sin_riesgos del modelo. En I-42, flush_redirect = redirect.
 //
 //   Los campos de los registros de segmentación son señales de este
 //   módulo con el nombre <latch>_<campo> de pipeline.md §8: el banco de
@@ -137,18 +140,23 @@ module riscv_core
     // Señales de control del pipeline (pipeline.md §9.2 y §10.4)
     //------------------------------------------------------------------
     wire             stall       = 1'b0;            // I-41/I-42
-    wire             redirect    = 1'b0;            // I-36
-    wire [NB_PC-1:0] redirect_pc = {NB_PC{1'b0}};   // I-36
+    wire             redirect;                      // ex_stage (§5.3)
+    wire [NB_PC-1:0] redirect_pc;                   // ex_stage (§5.3)
     wire             stop_fetch  = 1'b0;            // I-37
     wire             halted;                        // wb_stage (§7.3)
+
+    // Término del salto en el flush (§10.5): I-42. Hasta M8 el salto
+    // cambia el PC pero no descarta las dos instrucciones que lo siguen,
+    // como el modelo en modo sin_riesgos (los programas llevan dos nop)
+    wire flush_redirect = 1'b0;
 
     wire en_pc        = i_enable & ~stall;
     wire en_if_id     = i_enable & ~stall;
     wire en_id_ex     = i_enable;
     wire en_ex_mem    = i_enable;
     wire en_mem_wb    = i_enable;           // también el ena de dmem
-    wire flush_if_id  = redirect | stop_fetch;
-    wire flush_id_ex  = redirect | stall;
+    wire flush_if_id  = flush_redirect | stop_fetch;
+    wire flush_id_ex  = flush_redirect | stall;
     wire flush_ex_mem = 1'b0;
     wire flush_mem_wb = 1'b0;
 
@@ -271,8 +279,6 @@ module riscv_core
     //------------------------------------------------------------------
     // EX y EX/MEM
     //------------------------------------------------------------------
-    wire                 ex_redirect;     // a IF en I-36
-    wire [NB_PC-1:0]     ex_redirect_pc;  // a IF en I-36
     wire                 ex_mem_valid;
     wire [NB_PC-1:0]     ex_mem_pc;
     wire [NB_DATA-1:0]   ex_mem_result;
@@ -316,8 +322,8 @@ module riscv_core
         .i_id_ex_reg_write   (id_ex_reg_write),
         .i_id_ex_mem_to_reg  (id_ex_mem_to_reg),
         .i_id_ex_halt        (id_ex_halt),
-        .o_redirect          (ex_redirect),
-        .o_redirect_pc       (ex_redirect_pc),
+        .o_redirect          (redirect),
+        .o_redirect_pc       (redirect_pc),
         .o_ex_mem_valid      (ex_mem_valid),
         .o_ex_mem_pc         (ex_mem_pc),
         .o_ex_mem_result     (ex_mem_result),
