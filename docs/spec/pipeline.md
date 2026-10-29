@@ -517,7 +517,8 @@ redirect_pc = jalr ? {alu_out[31:1], 1'b0}       (rs1 + imm, con el bit 0 en cer
   `i_funct3`, `i_pc` e `i_imm` (de ID/EX), `i_zero` e `i_alu_out` (de la ALU, §5.2) →
   `o_redirect`, `o_redirect_pc`. No mira `valid`: una burbuja trae `branch`, `jal` y `jalr`
   en 0 (§2). La dirección de retorno (`PC + 4`) no sale de acá: es el mux de resultado
-  (§5.4). Hasta I-36 sus salidas no llegan a IF.
+  (§5.4). Sus salidas llegan a IF desde I-36; el término `redirect` del flush (§10.5) se
+  agrega en I-42.
 
 ### 5.4 Resultado
 ```
@@ -573,7 +574,9 @@ del propio EX/MEM; la unidad que elige el selector (§10.2, I-39) queda afuera.
   `mem_read` no entran: los usan la unidad de forwarding (§10.2) y la detección de load-use
   (§10.3).
 - **Salidas:** los 10 campos `ex_mem_*` de §8, el bus `o_ex_mem_latch` para la Debug Unit y
-  `redirect` / `redirect_pc` de `branch_unit` hacia IF. Hasta I-36 `riscv_core` no los conecta.
+  `redirect` / `redirect_pc` de `branch_unit` hacia IF. Desde I-36 `riscv_core` los conecta al
+  mux de próximo PC (§3.1); hasta I-42 no hacen flush de IF/ID ni de ID/EX (`flush_redirect = 0`),
+  como el modelo en modo `sin_riesgos`.
 
 ---
 

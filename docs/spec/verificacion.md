@@ -451,6 +451,14 @@ solo sirve para los que no tienen un salto tomado (`corte.hex` con `redirect = 0
 su `ciclos` cuenta el stall del `lw x1` antes del HALT (§5). Ninguno de estos programas levanta
 `imem_fault`: hasta I-36 ese aviso lo cubre solo `wb_stage_tb`.
 
+**Con `STAGE_REDIRECT`** el salto tomado cambia el PC, pero sin flush hasta I-42: las dos
+instrucciones que entraron detrás se ejecutan, como en `--modo sin_riesgos`. Se comparan
+completos los programas con saltos tomados y `+FINAL` suma `branch_cond_nops`, `indep_saltos`,
+`jump_nops`, `loaduse_sw_beq_nops`, `mem_avisos`, `mixto_lazo_nops` y `salto_depende_nops`.
+`mem_avisos` es el que levanta `imem_fault`: su `jalr` salta a `0x1030`. `branch_cond` y
+`halt_camino_equivocado` coinciden con la traza pero no con el `.exp` hasta I-42: sin flush
+ejecutan el camino equivocado.
+
 ### 8.3 Hasta qué ciclo se compara
 
 El modelo simula siempre el pipeline completo. Mientras falte una parte, el RTL se aparta de
@@ -463,7 +471,7 @@ la traza por una razón conocida, y el banco deja de comparar **ese latch** en e
   I-36): con `r` el ciclo en que el primer salto tomado está en EX, el latch `k` (0 = IF/ID)
   se compara hasta el ciclo `r + 1 + k`. El banco lo avisa con una línea `INFO:`. De M3 a M6,
   entre los programas que pasan, afecta a `indep_saltos` y `jump_nops`, que se comparan
-  completos recién en I-36.
+  completos desde I-36 (§8.2).
 - **Memoria de datos con `STAGE_MEM`.** Sin `+FINAL`, al terminar la traza el banco detiene
   el core y lee `dmem` por el puerto B (como `READ_DMEM`) para compararla con la del `.exp`.
   En ese ciclo el HALT está en MEM/WB: ya escribieron todos los stores anteriores y ninguno
