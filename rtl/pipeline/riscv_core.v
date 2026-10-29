@@ -6,7 +6,7 @@
 //
 // Procesador RV32I segmentado (docs/spec/pipeline.md). Se integra etapa
 // por etapa (docs/planificacion.md); esta versión tiene IF (I-22), ID
-// (I-27), EX (I-31), MEM (I-34) y WB (I-35).
+// (I-27), EX (I-31), MEM (I-34), WB (I-35) y la parada por HALT (I-37).
 //
 // Función:
 //   Instancia las etapas y genera las señales de control del pipeline
@@ -14,15 +14,20 @@
 //   produzca valen 0 y se indica qué issue las conecta:
 //     stall       = 0   hasta I-41/I-42 (detección de carga-uso)
 //     redirect    = 0   hasta I-36      (el salto vuelve a IF)
-//     stop_fetch  = 0   hasta I-37      (parada por HALT)
 //     fwd_a/fwd_b = 00  hasta I-39      (unidad de forwarding)
 //   Con eso, en M7: en_pc = en_if_id = en_id_ex = en_ex_mem = en_mem_wb
-//   = enable, flush_if_id = flush_id_ex = flush_ex_mem = flush_mem_wb
-//   = 0 y EX opera con lo leído en ID. WB escribe el banco (wb_*, con el
-//   bypass WB -> ID del banco, decisión 007) y activa halted, pero
-//   halted todavía no detiene la búsqueda: detrás del HALT siguen
-//   entrando instrucciones hasta I-37. La salida de branch_unit
-//   (ex_redirect, ex_redirect_pc) existe pero no vuelve a IF hasta I-36.
+//   = enable, flush_id_ex = flush_ex_mem = flush_mem_wb = 0 y EX opera
+//   con lo leído en ID. WB escribe el banco (wb_*, con el bypass WB -> ID
+//   del banco, decisión 007). La salida de branch_unit (ex_redirect,
+//   ex_redirect_pc) existe pero no vuelve a IF hasta I-36.
+//
+//   Parada por HALT (I-37, pipeline.md §3.4, decisión 001): stop_fetch
+//   es el OR de los bits halt de las cuatro etapas y de halted. Congela
+//   el PC y hace flush de IF/ID, así detrás del HALT solo entran
+//   burbujas; en el flanco en que halted pasa a 1 el pipeline queda
+//   vacío, y halted mantiene la parada. Un HALT en el camino equivocado
+//   de un salto tomado no detiene el core: redirect gana en el PC y el
+//   flush lo convierte en burbuja (I-36, I-42).
 //
 //   Los campos de los registros de segmentación son señales de este
 //   módulo con el nombre <latch>_<campo> de pipeline.md §8: el banco de
@@ -139,7 +144,7 @@ module riscv_core
     wire             stall       = 1'b0;            // I-41/I-42
     wire             redirect    = 1'b0;            // I-36
     wire [NB_PC-1:0] redirect_pc = {NB_PC{1'b0}};   // I-36
-    wire             stop_fetch  = 1'b0;            // I-37
+    wire             stop_fetch;                    // parada por HALT (§3.4)
     wire             halted;                        // wb_stage (§7.3)
 
     wire en_pc        = i_enable & ~stall;
@@ -200,7 +205,7 @@ module riscv_core
     //------------------------------------------------------------------
     // ID e ID/EX
     //------------------------------------------------------------------
-    wire                   id_is_halt;  // para stop_fetch (I-37)
+    wire                   id_is_halt;  // para stop_fetch (§3.4)
     wire                   id_ex_valid;
     wire [NB_PC-1:0]       id_ex_pc;
     wire [NB_DATA-1:0]     id_ex_rs1_data;
@@ -417,6 +422,12 @@ module riscv_core
         .o_halted            (halted),
         .o_imem_fault        (imem_fault)
     );
+
+    //------------------------------------------------------------------
+    // Parada por HALT (pipeline.md §3.4). Los bits halt de ID/EX, EX/MEM y
+    // MEM/WB valen 0 en una burbuja, e id_is_halt ya viene con valid
+    //------------------------------------------------------------------
+    assign stop_fetch = id_is_halt | id_ex_halt | ex_mem_halt | mem_wb_halt | halted;
 
     //------------------------------------------------------------------
     // Salidas de debug

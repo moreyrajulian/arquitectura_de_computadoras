@@ -10,9 +10,9 @@
 // (scripts/create_project.tcl): se compila a mano junto con
 // pipeline_tb.v (ver verificacion.md §8).
 //
-// Tiene todos los puertos que usa el banco (no las salidas de debug
-// o_pc y o_<latch>_latch, decisión 023): el banco conecta solo
-// los de las etapas integradas y el resto queda flotante.
+// Tiene todos los puertos que usa el banco (no los buses de debug
+// o_<latch>_latch, decisión 023): el banco conecta solo los de las
+// etapas integradas y el resto queda flotante.
 //
 // Comportamiento:
 //   - Reproduce la traza del modelo (+DIR, los mismos archivos que lee el
@@ -25,6 +25,9 @@
 //     cuando el HALT llega a MEM/WB, que es cuando el banco la compara con
 //     STAGE_MEM (verificacion.md §8.3): el stub no ejecuta los stores. El
 //     reset pone el banco de registros en cero, como el real.
+//   - o_pc es la dirección del HALT + 4, la de MEM/WB en la traza cuando
+//     el HALT llega ahí: es lo que el banco compara con STAGE_HALT y
+//     +FINAL, después de halted. Antes no se mira.
 //   - El banco de registros está en u_id_stage.u_regfile.regs, el mismo
 //     camino que en el core real (`REGFILE), y el puerto de lectura de la
 //     Debug Unit lo lee sin bypass, como regfile.
@@ -52,6 +55,7 @@ module riscv_core (
     output wire        o_imem_fault,
     output wire        o_dmem_oob,
     output wire        o_dmem_misaligned,
+    output wire [31:0] o_pc,
     output wire        o_halted
 );
 
@@ -137,6 +141,11 @@ module riscv_core (
     assign o_imem_fault      = o_halted & exp_misc[2][2];
     assign o_dmem_oob        = o_halted & exp_misc[2][1];
     assign o_dmem_misaligned = o_halted & exp_misc[2][0];
+
+    // pc_reg después del HALT (pipeline.md §3.4); corte[4] es el primer ciclo
+    // con el HALT en MEM/WB
+    wire [109:0] l_mem_wb_halt = ref_mem_wb[corte[4] - 1];
+    assign o_pc = l_mem_wb_halt[108:77] + 32'd4;
 
     //------------------------------------------------------------------
     // Campos de los latches, con los nombres que lee el banco
