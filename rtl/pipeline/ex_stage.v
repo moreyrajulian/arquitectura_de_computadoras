@@ -29,8 +29,8 @@
 //     flush_ex_mem = 0
 //   rs1, rs2 y mem_read de ID/EX no entran: los usan la unidad de
 //   forwarding (§10.2) y la detección de load-use (§10.3), no EX.
-//   redirect y redirect_pc salen hacia IF; hasta I-36 riscv_core no los
-//   conecta.
+//   redirect y redirect_pc salen hacia IF (riscv_core los conecta desde
+//   I-36).
 //
 // Parámetros:
 //   NB_PC       : ancho del PC
