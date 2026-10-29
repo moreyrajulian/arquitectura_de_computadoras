@@ -79,7 +79,9 @@
 `ifndef STAGE_WB
 `define STAGE_WB                // I-35: escritura del banco, halted y avisos
 `endif
-// `define STAGE_REDIRECT       // I-36: el salto tomado cambia el PC
+`ifndef STAGE_REDIRECT
+`define STAGE_REDIRECT          // I-36: el salto tomado cambia el PC
+`endif
 // `define STAGE_HALT           // I-37: parada por HALT (stop_fetch)
 `endif
 
