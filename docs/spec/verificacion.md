@@ -309,7 +309,7 @@ Cuándo se considera aprobado cada nivel:
 **Regresión.** La regresión (I-43) corre todos los testbenches y todos los programas y la
 aprobación es única: ningún `TEST FAILED` (el timeout también lo imprime). Se corre completa antes de integrar a
 `master` un cambio de RTL. Los testbenches se corren en modo por lotes de `xsim` y el resultado se
-decide leyendo la línea final, que es lo que permite automatizarlo.
+decide leyendo la línea final, que es lo que permite automatizarlo. Para `pipeline_tb` lo hace `scripts/regresion.tcl` (§8.7).
 
 **Que la prueba pueda fallar.** Para cada mecanismo de riesgo (forwarding, bypass del banco,
 stall, flush de saltos, parada por HALT), al menos una vez se lo desactiva a propósito en el RTL y
@@ -572,3 +572,39 @@ Con `-testplusarg STUB_ERROR=<ciclo>` invierte un bit de `if_id_pc` en ese ciclo
 `STAGE_HALT`, `STUB_SIN_HALT` falla en la última línea de la traza, porque el stub no llega a
 la foto final. Para ver el watchdog de `+FINAL` se compila con `-d STAGES_CLI -d STAGE_WB`.
 `o_pc` vale siempre la dirección del HALT + 4, que es lo único que el banco le compara.
+
+### 8.7 Regresión por lotes
+
+`scripts/regresion.py` y `scripts/regresion.tcl` corren `pipeline_tb` con `+FINAL` para una
+lista de programas, uno detrás del otro (decisión [028](../decisiones/028_regresion-por-lotes.md)):
+
+```sh
+python scripts/regresion.py                    # sin_riesgos: los 27 programas de M7 (I-38)
+python scripts/regresion.py --modo completo    # todos los de sw/ (M8, I-43)
+python scripts/regresion.py alu_r fwd_x0       # solo esos
+python scripts/regresion.py --pausas 47        # además, cada uno con +PAUSAS=47
+```
+
+```tcl
+source <ruta-al-repo>/scripts/regresion.tcl    ;# en la Tcl Console de Vivado, o con -mode batch
+```
+
+`regresion.py` prepara cada programa con `prep_tb.py` en el modo elegido y escribe la lista en
+`build/regresion/corridas.txt`. Las listas por modo están en `sw/programas.py`. `sin_riesgos`
+son los 10 programas del plan sin riesgos (§4.3), las 10 variantes `_nops` y los 7 `indep_*`.
+Quedan afuera `halt_stall` y `halt_camino_equivocado`.
+
+`regresion.tcl` usa el proyecto abierto o lo crea con `create_project.tcl`. Compila y elabora
+una vez, corre cada línea con `launch_simulation -step simulate` y guarda el log de cada
+corrida en `build/regresion/logs/<etiqueta>.log`. Una corrida pasa si la última línea del log
+que empieza con `TEST ` es `TEST PASSED...`. El resumen sale por consola y queda en
+`build/regresion/resumen.txt`. Si alguna corrida falla, el script termina con error: en batch,
+Vivado sale con código 1.
+
+`scripts/ondas.tcl` es para mirar, no para aprobar (§6). Lanza un programa (por defecto
+`load_sin_dep_nops`) en la GUI con el PC, los campos principales de cada registro de
+segmentación, la escritura del banco y `halted`, agrupados por etapa y sin el prefijo del
+latch (`id_ex_rs1_data` se ve como `rs1_data` bajo el divisor ID/EX). Para 1 ciclo después de
+`halted` y pone marcadores en el ciclo 1 y en el final. De ahí sale
+`docs/diagramas/ondas_load_sin_dep_nops.png`: dos capturas de la ventana de ondas (de Banco a
+MEM/WB y de ID/EX a WB), unidas y sin la columna Value, desde el ciclo 2 hasta que sube `halted`.

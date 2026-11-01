@@ -20,6 +20,7 @@ convenciones está en la [decisión 019](../docs/decisiones/019_programas-de-pru
 | `<nombre>.exp` | Estado final esperado de registros y memoria ([`verificacion.md`](../docs/spec/verificacion.md) §5) | Sí |
 | `estado_inicial/regs.hex`, `estado_inicial/dmem.hex` | Estado inicial de los programas `indep_*` (§4) | Sí |
 | `<nombre>.hex`, `.bin`, `.coe`, `.lst` | Salida del ensamblador | **No**: se regenera desde el `.s` |
+| `programas.py` | Listas de programas: el plan, los `indep_*`, los que tienen variante `_nops` y los que corren en M7 | Sí |
 | `test_programas.py` | Chequeos de las convenciones de este README | Sí |
 
 Todo programa tiene su `.exp`: **un programa sin `.exp` no es una prueba**. El `.exp` se
@@ -224,7 +225,7 @@ escriben. **No verifica los valores del `.exp`**: eso es trabajo del modelo de r
    `n + 4 + stalls + 2 · saltos_tomados` ([`verificacion.md`](../docs/spec/verificacion.md)
    §5), con la cuenta en un comentario.
 3. Si tiene riesgos, escribir `<nombre>_nops.s` y su `.exp` (§5) y agregarlo a `NOPS` en
-   `test_programas.py`.
+   `programas.py`.
 4. Si es un mecanismo nuevo, agregarlo a la lista de [`verificacion.md`](../docs/spec/verificacion.md)
-   §4 y a `PLAN`.
+   §4 y a `PLAN` en `programas.py`.
 5. `python -m pytest sw`.
