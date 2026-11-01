@@ -10,10 +10,11 @@
 #       source <ruta-al-repo>/scripts/ondas.tcl
 #
 # Usa el proyecto abierto o, si no hay ninguno, lo crea con create_project.tcl.
-# La simulación se detiene 3 ciclos después de que sube halted. Antes del ciclo 1
-# el banco carga imem por el puerto B (1024 ciclos con el core en reset): los
+# La simulación se detiene 1 ciclo después de que sube halted. Antes del ciclo 1
+# el banco carga imem y dmem por el puerto B (con el core en reset): los
 # marcadores quedan en el ciclo 1 y en el final, y entre los dos está la traza.
-# En batch no hay ventana de ondas: solo comprueba que las señales existan.
+# Cada señal se muestra sin el prefijo de su etapa (id_ex_rs1_data -> rs1_data),
+# que ya está en el divisor: así la columna de nombres ocupa menos.
 # ---------------------------------------------------------------------------
 if {![info exists PROG]} { set PROG load_sin_dep_nops }
 set ond_root [file normalize [file join [file dirname [info script]] ..]]
@@ -32,9 +33,10 @@ set_property -name {xsim.simulate.xsim.more_options} \
 set_property -name {xsim.simulate.runtime} -value {0ns} -objects [get_filesets sim_1]
 launch_simulation
 
-# Grupo y señales (radix hex salvo los bits sueltos y el número de ciclo)
+# Grupo y señales, en hex. /pipeline_tb/ciclo no va: el banco pasa del último
+# ciclo de la traza al siguiente sin esperar un flanco, y en las ondas ese ciclo no aparece
 set ond_ondas {
-    {Banco}  {/pipeline_tb/tb_clk /pipeline_tb/tb_rst /pipeline_tb/tb_enable /pipeline_tb/ciclo}
+    {Banco}  {/pipeline_tb/tb_clk /pipeline_tb/tb_rst /pipeline_tb/tb_enable}
     {IF}     {/pipeline_tb/u_dut/if_pc /pipeline_tb/u_dut/stop_fetch /pipeline_tb/u_dut/redirect}
     {IF/ID}  {/pipeline_tb/u_dut/if_id_valid /pipeline_tb/u_dut/if_id_pc /pipeline_tb/u_dut/if_id_instr}
     {ID/EX}  {/pipeline_tb/u_dut/id_ex_valid /pipeline_tb/u_dut/id_ex_pc /pipeline_tb/u_dut/id_ex_rd
@@ -55,22 +57,16 @@ foreach {grupo senales} $ond_ondas {
     }
 }
 
-set ond_gui [expr {$rdi::mode eq "gui"}]
-if {$ond_gui} {
-    create_wave_config ondas_$PROG
-    foreach {grupo senales} $ond_ondas {
-        add_wave_divider $grupo
-        foreach s $senales {
-            if {$s eq "/pipeline_tb/ciclo"} {
-                add_wave -radix unsigned $s
-            } else {
-                add_wave -radix hex $s
-            }
-        }
+create_wave_config ondas_$PROG
+foreach {grupo senales} $ond_ondas {
+    add_wave_divider $grupo
+    foreach s $senales {
+        regsub {^(if_id_|id_ex_|ex_mem_|mem_wb_|if_|wb_)} [file tail $s] {} nombre
+        set_property DISPLAY_NAME $nombre [add_wave -radix hex $s]
     }
 }
 
-# Corre hasta el ciclo 1 y desde ahí hasta que sube halted, y 3 ciclos más
+# Corre hasta el ciclo 1 y desde ahí hasta que sube halted, y 1 ciclo más
 add_condition -name ond_c1 -notrace {/pipeline_tb/ciclo == 1} {stop}
 run all
 set ond_t0 [current_time]
@@ -78,10 +74,9 @@ remove_conditions ond_c1
 add_condition -name ond_halt -notrace {/pipeline_tb/tb_o_halted == 1} {stop}
 run all
 remove_conditions ond_halt
-run 30ns
+run 10ns
 set ond_t1 [current_time]
-if {$ond_gui} {
-    add_wave_marker $ond_t0
-    add_wave_marker $ond_t1
-}
+# current_time devuelve "<valor> <unidad>"; add_wave_marker los toma por separado
+add_wave_marker {*}$ond_t0
+add_wave_marker {*}$ond_t1
 puts "ondas.tcl: $PROG, traza entre $ond_t0 y $ond_t1 (zoom entre los marcadores)"
