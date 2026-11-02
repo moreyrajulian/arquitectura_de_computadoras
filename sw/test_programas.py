@@ -94,12 +94,14 @@ def test_plan_programs_exist():
 def test_nops_variants_exist():
     assert not sorted(f"{n}_nops" for n in NOPS if f"{n}_nops" not in PROGRAMS)
     assert not sorted(n for n in PROGRAMS if n.endswith("_nops") and n[:-5] not in PROGRAMS)
+    # Una variante que no esta en NOPS quedaria afuera de SIN_RIESGOS sin avisar
+    assert not sorted(n for n in PROGRAMS if n.endswith("_nops") and n[:-5] not in NOPS)
 
 
 def test_m7_programs():
     """verificacion.md 4.3: los solo de M8 son del plan y no tienen variante _nops."""
     assert not sorted(set(SOLO_M8) - set(PLAN))
-    assert not sorted(set(SOLO_M8) & set(NOPS))
+    assert not sorted(n for n in SOLO_M8 if f"{n}_nops" in PROGRAMS)
     assert not sorted(set(SIN_RIESGOS) - set(PROGRAMS))
 
 

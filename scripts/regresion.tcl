@@ -12,8 +12,10 @@
 #
 # Cada corrida deja su log en build/regresion/logs/<etiqueta>.log. Pasa si la
 # última línea que empieza con "TEST " empieza con "TEST PASSED" (verificacion.md
-# §6). Al final imprime el resumen, lo guarda en build/regresion/resumen.txt y,
-# si alguna corrida falló, termina con error (en batch, Vivado sale con código 1).
+# §6). Una corrida en la que Vivado da error, o en la que xsim no deja log, cuenta
+# como falla y el script sigue con la próxima. Al final imprime el resumen, lo
+# guarda en build/regresion/resumen.txt y, si alguna corrida falló, termina con
+# error (en batch, Vivado sale con código 1).
 # ---------------------------------------------------------------------------
 set reg_root [file normalize [file join [file dirname [info script]] ..]]
 set reg_dir  [file join $reg_root build regresion]
@@ -52,6 +54,7 @@ proc reg_resultado {log} {
 
 set_property top pipeline_tb [get_filesets sim_1]
 update_compile_order -fileset sim_1
+catch {close_sim -force}        ;# por si quedó abierta una simulación, por ejemplo de ondas.tcl
 
 set resumen [list]
 set fallas  0
@@ -62,17 +65,34 @@ foreach corrida $corridas {
     foreach plusarg [lrange $corrida 2 end] { append opts " -testplusarg $plusarg" }
     set_property -name {xsim.simulate.xsim.more_options} -value $opts -objects [get_filesets sim_1]
 
-    if {$primera} {
-        launch_simulation
-        set primera 0
-    } else {
-        launch_simulation -step simulate
+    # Sin el log viejo, una corrida en la que xsim no llega a correr no puede
+    # pasar con el resultado de la anterior. Un error corta solo esta corrida:
+    # si fue al compilar, la siguiente vuelve a intentar el launch completo
+    set sim_log [file join $sim_dir simulate.log]
+    if {[catch {
+        file delete -force $sim_log
+        if {$primera} {
+            launch_simulation
+            set primera 0
+        } else {
+            launch_simulation -step simulate
+        }
+        run all
+        close_sim
+    } err]} {
+        catch {close_sim -force}
+        lappend resumen "FALLA $etiqueta: [lindex [split $err "\n"] 0]"
+        incr fallas
+        continue
     }
-    run all
-    close_sim
+    if {![file exists $sim_log]} {
+        lappend resumen "FALLA $etiqueta: xsim no dejó simulate.log"
+        incr fallas
+        continue
+    }
 
     set log [file join $log_dir $etiqueta.log]
-    file copy -force [file join $sim_dir simulate.log] $log
+    file copy -force $sim_log $log
     set res [reg_resultado $log]
     if {[string match "TEST PASSED*" $res]} {
         lappend resumen "ok    $etiqueta: $res"

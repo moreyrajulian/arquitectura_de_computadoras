@@ -597,7 +597,9 @@ Quedan afuera `halt_stall` y `halt_camino_equivocado`.
 `regresion.tcl` usa el proyecto abierto o lo crea con `create_project.tcl`. Compila y elabora
 una vez, corre cada línea con `launch_simulation -step simulate` y guarda el log de cada
 corrida en `build/regresion/logs/<etiqueta>.log`. Una corrida pasa si la última línea del log
-que empieza con `TEST ` es `TEST PASSED...`. El resumen sale por consola y queda en
+que empieza con `TEST ` es `TEST PASSED...`. Antes de cada corrida borra el `simulate.log` de la
+anterior: si Vivado da error o xsim no deja log, la corrida cuenta como falla y el script sigue con
+la próxima, así que nunca se decide con el log de otra. El resumen sale por consola y queda en
 `build/regresion/resumen.txt`. Si alguna corrida falla, el script termina con error: en batch,
 Vivado sale con código 1.
 
