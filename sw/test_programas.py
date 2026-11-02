@@ -22,24 +22,7 @@ sys.path.insert(0, str(SW.parent / "tools" / "assembler"))
 from rvasm import assemble, classify  # noqa: E402
 from rvasm.isa import HALT_WORD, INSTRUCTIONS  # noqa: E402
 
-PROGRAMS = sorted(p.stem for p in SW.glob("*.s"))
-
-# verificacion.md 4.1 y 4.2: los 22 programas del plan
-PLAN = [
-    "alu_r", "alu_i", "shifts", "lui", "mem_palabra", "mem_byte_media",
-    "branch_cond", "jump", "halt_basico", "mem_avisos",
-    "fwd_exmem", "fwd_memwb", "fwd_prioridad", "fwd_x0", "bypass_banco",
-    "loaduse_rs1_rs2", "loaduse_sw_beq", "load_sin_dep", "salto_depende",
-    "halt_stall", "halt_camino_equivocado", "mixto_lazo",
-]
-# La issue I-15: un programa independiente por grupo de instrucciones, y
-# la I-34: un store seguido de un load a la misma direccion
-INDEP = ["indep_alu_r", "indep_alu_i", "indep_cargas", "indep_stores",
-         "indep_saltos", "indep_lui", "indep_store_load"]
-# Programas de riesgos y de saltos que no corren sin forwarding, stall o flush
-NOPS = ["fwd_exmem", "fwd_memwb", "fwd_prioridad", "loaduse_rs1_rs2",
-        "loaduse_sw_beq", "load_sin_dep", "branch_cond", "jump",
-        "salto_depende", "mixto_lazo"]
+from programas import INDEP, NOPS, PLAN, PROGRAMS, SIN_RIESGOS, SOLO_M8  # noqa: E402
 
 AVISOS = {"imem_fault", "dmem_oob", "dmem_misaligned"}
 
@@ -111,6 +94,15 @@ def test_plan_programs_exist():
 def test_nops_variants_exist():
     assert not sorted(f"{n}_nops" for n in NOPS if f"{n}_nops" not in PROGRAMS)
     assert not sorted(n for n in PROGRAMS if n.endswith("_nops") and n[:-5] not in PROGRAMS)
+    # Una variante que no esta en NOPS quedaria afuera de SIN_RIESGOS sin avisar
+    assert not sorted(n for n in PROGRAMS if n.endswith("_nops") and n[:-5] not in NOPS)
+
+
+def test_m7_programs():
+    """verificacion.md 4.3: los solo de M8 son del plan y no tienen variante _nops."""
+    assert not sorted(set(SOLO_M8) - set(PLAN))
+    assert not sorted(n for n in SOLO_M8 if f"{n}_nops" in PROGRAMS)
+    assert not sorted(set(SIN_RIESGOS) - set(PROGRAMS))
 
 
 def test_every_instruction_is_covered():
