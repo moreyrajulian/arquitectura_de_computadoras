@@ -22,7 +22,8 @@ sys.path.insert(0, str(SW.parent / "tools" / "assembler"))
 from rvasm import assemble, classify  # noqa: E402
 from rvasm.isa import HALT_WORD, INSTRUCTIONS  # noqa: E402
 
-from programas import INDEP, NOPS, PLAN, PROGRAMS, SIN_RIESGOS, SOLO_M8  # noqa: E402
+from programas import (FORWARDING, INDEP, NOPS, PLAN, PROGRAMS, SIN_RIESGOS,  # noqa: E402
+                       SOLO_FORWARDING, SOLO_M8)
 
 AVISOS = {"imem_fault", "dmem_oob", "dmem_misaligned"}
 
@@ -103,6 +104,13 @@ def test_m7_programs():
     assert not sorted(set(SOLO_M8) - set(PLAN))
     assert not sorted(n for n in SOLO_M8 if f"{n}_nops" in PROGRAMS)
     assert not sorted(set(SIN_RIESGOS) - set(PROGRAMS))
+
+
+def test_forwarding_programs():
+    """Decision 029: los que suma el modo forwarding son originales con variante _nops."""
+    assert not sorted(set(SOLO_FORWARDING) - set(NOPS))
+    assert not sorted(set(FORWARDING) - set(PROGRAMS))
+    assert len(FORWARDING) == len(set(FORWARDING))
 
 
 def test_every_instruction_is_covered():

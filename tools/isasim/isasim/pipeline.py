@@ -45,6 +45,8 @@ class Mode:
             return "completo"
         if self == SIN_RIESGOS:
             return "sin_riesgos"
+        if self == FORWARDING:
+            return "forwarding"
         off = [n for n in ("forwarding", "stall", "flush") if not getattr(self, n)]
         return "sin_" + "_".join(off)
 
@@ -55,6 +57,7 @@ class Mode:
 
 COMPLETO = Mode()                                   # M8 en adelante
 SIN_RIESGOS = Mode(False, False, False)             # M7 (I-38)
+FORWARDING = Mode(True, False, False)               # M8 desde I-39, sin stall ni flush (decisión 029)
 
 
 def control(word, valid):

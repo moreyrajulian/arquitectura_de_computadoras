@@ -8,11 +8,14 @@ registros de segmentación en todos los ciclos y el estado final contra el .exp
 Programas por modo (verificacion.md §4.3; las listas están en sw/programas.py):
 
     sin_riesgos  M7 (I-38): los del plan sin riesgos, las variantes _nops y los indep_*
+    forwarding   desde I-39 (decisión 029): los de sin_riesgos y los que solo necesitan
+                 forwarding. Es el modo por defecto mientras falten el stall y el flush
     completo     M8 (I-43): todos los programas de sw/
 
 Uso (desde la raíz del repositorio):
 
-    python scripts/regresion.py                      # sin_riesgos
+    python scripts/regresion.py                      # forwarding
+    python scripts/regresion.py --modo sin_riesgos   # el pipeline de M7
     python scripts/regresion.py --modo completo
     python scripts/regresion.py alu_r fwd_x0         # solo esos programas
     python scripts/regresion.py --pausas 47          # además, cada uno con +PAUSAS=47
@@ -33,9 +36,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "sw"))
 
 import prep_tb  # noqa: E402
-from programas import PROGRAMS, SIN_RIESGOS  # noqa: E402
+from programas import FORWARDING, PROGRAMS, SIN_RIESGOS  # noqa: E402
 
-PROGRAMAS = {"sin_riesgos": SIN_RIESGOS, "completo": PROGRAMS}
+PROGRAMAS = {"sin_riesgos": SIN_RIESGOS, "forwarding": FORWARDING, "completo": PROGRAMS}
 
 SALIDA = ROOT / "build" / "regresion"
 
@@ -44,8 +47,8 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("programas", nargs="*",
                    help="nombres de sw/ sin .s (por defecto, todos los del modo)")
-    p.add_argument("--modo", choices=PROGRAMAS, default="sin_riesgos",
-                   help="modo del modelo y lista de programas (por defecto sin_riesgos)")
+    p.add_argument("--modo", choices=PROGRAMAS, default="forwarding",
+                   help="modo del modelo y lista de programas (por defecto forwarding)")
     p.add_argument("--pausas", type=int, metavar="SEMILLA",
                    help="agrega una segunda corrida de cada programa con +PAUSAS=SEMILLA")
     args = p.parse_args(argv)

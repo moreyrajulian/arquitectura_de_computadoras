@@ -32,3 +32,10 @@ SOLO_M8 = ["halt_stall", "halt_camino_equivocado"]
 # Los que corren en M7 (I-38): el plan sin riesgos, las variantes _nops y los indep_
 SIN_RIESGOS = ([n for n in PLAN if n not in NOPS and n not in SOLO_M8]
                + [f"{n}_nops" for n in NOPS] + INDEP)
+
+# Originales de NOPS que corren con forwarding y sin stall ni flush: no tienen
+# carga-uso ni saltos tomados (decision 029)
+SOLO_FORWARDING = ["fwd_exmem", "fwd_memwb", "fwd_prioridad", "load_sin_dep"]
+
+# Los que corren desde I-39, con forwarding y sin stall ni flush
+FORWARDING = SIN_RIESGOS + SOLO_FORWARDING

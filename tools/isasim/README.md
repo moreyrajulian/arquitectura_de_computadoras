@@ -28,12 +28,16 @@ python tools/isasim/sim.py sw/fwd_exmem.s -o build/isasim
 
 # M7 (I-38): pipeline completo sin forwarding, stall ni flush por saltos
 python tools/isasim/sim.py sw/fwd_exmem_nops.s --modo sin_riesgos --exp auto
+
+# desde I-39: con forwarding, sin stall ni flush
+python tools/isasim/sim.py sw/fwd_exmem.s --modo forwarding --exp auto
 ```
 
 | Opción | Qué hace |
 |---|---|
 | `--modo completo` | Por defecto. Pipeline con forwarding, stall de carga-uso y flush por saltos (M8 en adelante) |
 | `--modo sin_riesgos` | Sin los tres mecanismos, como el pipeline de M3 a M7 |
+| `--modo forwarding` | Solo forwarding, como el pipeline desde I-39 hasta que lleguen el stall (I-41) y el flush (I-42) (decisión [029](../../docs/decisiones/029_modo-del-modelo-en-m8.md)) |
 | `--sin-forwarding`, `--sin-stall`, `--sin-flush` | Saca un mecanismo por vez, para las integraciones intermedias de M8 (I-40 a I-42) |
 | `--estado-inicial DIR` | Lee `DIR/regs.hex` y `DIR/dmem.hex`. Si no se da, los programas `indep_*` usan `estado_inicial/` junto al programa ([`sw/README.md`](../../sw/README.md) §4) y el resto parte de todo en cero, como después de `LOAD` |
 | `--exp ARCHIVO` | Compara con un `.exp`; `auto` usa el que está junto al programa |
@@ -141,6 +145,7 @@ chk("id_ex", (dut_id_ex ^ ref_id_ex[t]) & ref_id_ex_mask[t], 0);
 |---|---|---|
 | `completo` | forwarding, stall, flush | M8 (I-43) en adelante, nivel 3 y 4 |
 | `sin_riesgos` | ninguno | M3 a M7 (I-17, I-38) |
+| `forwarding` | forwarding | M8 desde I-39, mientras falten el stall y el flush |
 | `--sin-*` | combinaciones | integraciones intermedias de M8 |
 
 En un modo sin un mecanismo, un programa que lo necesita **no da un resultado equivocado: da
@@ -180,10 +185,11 @@ python -m pytest tools/isasim
 |---|---|
 | `test_isa.py` | Capa 1 con valores calculados a mano: `x0`, desbordes, `sra`/`srl` con negativos, `slt` frente a `sltu`, `sltiu`, `lb` frente a `lbu` (ejemplos de `memoria.md` §5), stores parciales, saltos hacia atrás, `jal`/`jalr`, alias y desalineados |
 | `test_pipeline.py` | Capa 2: anchos de §8, la fórmula de ciclos, el valor viejo en `id_ex_rs1_data`, bypass del banco, burbuja del stall, flush de saltos, HALT, máscaras y modos |
-| `test_sw_programas.py` | **Los programas de `sw/` contra su `.exp` escrito a mano**: todos en modo completo, los de M7 en `sin_riesgos`, y que los originales con riesgos no pasan sin los mecanismos. También el bloque de estado del ejemplo de `protocolo_debug.md` §4 |
+| `test_sw_programas.py` | **Los programas de `sw/` contra su `.exp` escrito a mano**: todos en modo completo, los de M7 en `sin_riesgos`, los de M7 y los que solo necesitan forwarding en `forwarding`, y que los originales con riesgos no pasan sin los mecanismos. También el bloque de estado del ejemplo de `protocolo_debug.md` §4 |
 
-Resultado actual: 121 tests; los 39 programas de `sw/` coinciden con su `.exp` en modo
-completo, ciclos incluidos, y los 27 de M7 en `sin_riesgos`.
+Resultado actual: 160 tests; los 39 programas de `sw/` coinciden con su `.exp` en modo
+completo, ciclos incluidos, los 27 de M7 en `sin_riesgos` y esos 27 más los 4 originales que
+solo necesitan forwarding en `forwarding`.
 
 ## 6. Estructura
 

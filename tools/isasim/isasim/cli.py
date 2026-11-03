@@ -7,9 +7,9 @@ from pathlib import Path
 from .files import (compare_exp, default_initial_state, format_exp, load_initial_state,
                     load_program, parse_exp, write_outputs)
 from .isa import ModelError
-from .pipeline import COMPLETO, SIN_RIESGOS, Mode, simulate
+from .pipeline import COMPLETO, FORWARDING, SIN_RIESGOS, Mode, simulate
 
-MODOS = {"completo": COMPLETO, "sin_riesgos": SIN_RIESGOS}
+MODOS = {"completo": COMPLETO, "sin_riesgos": SIN_RIESGOS, "forwarding": FORWARDING}
 
 
 def build_parser():
@@ -19,8 +19,9 @@ def build_parser():
                     "y la traza de los registros de segmentación.")
     p.add_argument("programa", help="programa .s (se ensambla con rvasm) o .hex")
     p.add_argument("--modo", choices=MODOS, default="completo",
-                   help="completo (M8 en adelante) o sin_riesgos (M7: sin forwarding, "
-                        "stall ni flush por saltos)")
+                   help="completo (M8 en adelante), sin_riesgos (M7: sin forwarding, "
+                        "stall ni flush por saltos) o forwarding (desde I-39: solo "
+                        "forwarding)")
     p.add_argument("--sin-forwarding", action="store_true")
     p.add_argument("--sin-stall", action="store_true")
     p.add_argument("--sin-flush", action="store_true")

@@ -2,7 +2,7 @@
 # Regresión del pipeline en Vivado (decisión 028): corre pipeline_tb una vez por
 # línea de build/regresion/corridas.txt, que escribe scripts/regresion.py.
 #
-#   python scripts/regresion.py [--modo sin_riesgos|completo] [programas...]
+#   python scripts/regresion.py [--modo sin_riesgos|forwarding|completo] [programas...]
 #   y en la Tcl Console de Vivado (o con vivado -mode batch -source):
 #       source <ruta-al-repo>/scripts/regresion.tcl
 #
