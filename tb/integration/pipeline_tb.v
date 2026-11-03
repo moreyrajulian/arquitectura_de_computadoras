@@ -29,7 +29,7 @@
 //     estado que no respeta enable (decisión 018, pipeline.md §10.4).
 //
 // Uso:
-//   python scripts/prep_tb.py sw/<programa>.s [--modo sin_riesgos|completo]
+//   python scripts/prep_tb.py sw/<programa>.s [--modo sin_riesgos|forwarding|completo]
 //   xsim ... -testplusarg DIR=<build/tb/<programa>, ruta absoluta> [-testplusarg FINAL]
 //            [-testplusarg PAUSAS=<semilla>]
 //
