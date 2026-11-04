@@ -39,3 +39,9 @@ SOLO_FORWARDING = ["fwd_exmem", "fwd_memwb", "fwd_prioridad", "load_sin_dep"]
 
 # Los que corren desde I-39, con forwarding y sin stall ni flush
 FORWARDING = SIN_RIESGOS + SOLO_FORWARDING
+
+# Originales de NOPS que con forwarding y sin flush se comparan solo contra la
+# traza, sin +FINAL: el modelo ejecuta el camino equivocado igual que el RTL, pero
+# el .exp necesita el flush (I-42). salto_depende es el unico con forwarding hacia
+# los saltos (verificacion.md 4.3 y 8.2, I-40)
+SOLO_TRAZA_FORWARDING = ["salto_depende"]

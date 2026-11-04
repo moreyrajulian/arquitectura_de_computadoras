@@ -23,7 +23,7 @@ from rvasm import assemble, classify  # noqa: E402
 from rvasm.isa import HALT_WORD, INSTRUCTIONS  # noqa: E402
 
 from programas import (FORWARDING, INDEP, NOPS, PLAN, PROGRAMS, SIN_RIESGOS,  # noqa: E402
-                       SOLO_FORWARDING, SOLO_M8)
+                       SOLO_FORWARDING, SOLO_M8, SOLO_TRAZA_FORWARDING)
 
 AVISOS = {"imem_fault", "dmem_oob", "dmem_misaligned"}
 
@@ -111,6 +111,12 @@ def test_forwarding_programs():
     assert not sorted(set(SOLO_FORWARDING) - set(NOPS))
     assert not sorted(set(FORWARDING) - set(PROGRAMS))
     assert len(FORWARDING) == len(set(FORWARDING))
+
+
+def test_trace_only_forwarding_programs():
+    """verificacion.md 8.2: los que corren sin +FINAL son originales que no estan en FORWARDING."""
+    assert not sorted(set(SOLO_TRAZA_FORWARDING) - set(NOPS))
+    assert not sorted(set(SOLO_TRAZA_FORWARDING) & set(FORWARDING))
 
 
 def test_every_instruction_is_covered():
