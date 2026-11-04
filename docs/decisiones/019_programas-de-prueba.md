@@ -91,7 +91,8 @@ Las convenciones completas están en [`sw/README.md`](../../sw/README.md).
 - **Modelo de referencia (I-16):** lee los mismos dos archivos para los `indep_*` y tiene que
   coincidir con el `.exp` de los 38 programas, incluidas las variantes.
 - **Validación sin riesgos (I-38):** corre los programas sin riesgos y las variantes `_nops`;
-  M8 (I-40, I-43) corre todos.
+  en M8, cada integración corre los que admite el RTL que tiene (decisión
+  [029](029_modo-del-modelo-en-m8.md)) y la I-43 corre todos.
 - **Si cambia el estado inicial**, cambian los `.exp` de los seis `indep_*`.
 - **Si cambia el costo de un salto o del stall** (decisión [012](012_resolucion-saltos.md)), hay
   que recalcular los ciclos de los `.exp`; las variantes `_nops` dejan de dar los mismos ciclos

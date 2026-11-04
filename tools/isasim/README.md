@@ -38,7 +38,7 @@ python tools/isasim/sim.py sw/fwd_exmem.s --modo forwarding --exp auto
 | `--modo completo` | Por defecto. Pipeline con forwarding, stall de carga-uso y flush por saltos (M8 en adelante) |
 | `--modo sin_riesgos` | Sin los tres mecanismos, como el pipeline de M3 a M7 |
 | `--modo forwarding` | Solo forwarding, como el pipeline desde I-39 hasta que lleguen el stall (I-41) y el flush (I-42) (decisión [029](../../docs/decisiones/029_modo-del-modelo-en-m8.md)) |
-| `--sin-forwarding`, `--sin-stall`, `--sin-flush` | Saca un mecanismo por vez, para las integraciones intermedias de M8 (I-39 a I-42) |
+| `--sin-forwarding`, `--sin-stall`, `--sin-flush` | Saca un mecanismo por vez del modo elegido, para pruebas a mano con `sim.py`. `prep_tb.py` y `regresion.py` no las aceptan: las integraciones de M8 usan modos con nombre (decisión [029](../../docs/decisiones/029_modo-del-modelo-en-m8.md)) |
 | `--estado-inicial DIR` | Lee `DIR/regs.hex` y `DIR/dmem.hex`. Si no se da, los programas `indep_*` usan `estado_inicial/` junto al programa ([`sw/README.md`](../../sw/README.md) §4) y el resto parte de todo en cero, como después de `LOAD` |
 | `--exp ARCHIVO` | Compara con un `.exp`; `auto` usa el que está junto al programa |
 | `-o DIR` | Escribe los archivos de §3 en `DIR` |
@@ -146,7 +146,7 @@ chk("id_ex", (dut_id_ex ^ ref_id_ex[t]) & ref_id_ex_mask[t], 0);
 | `completo` | forwarding, stall, flush | M8 (I-43) en adelante, nivel 3 y 4 |
 | `sin_riesgos` | ninguno | M3 a M7 (I-17, I-38) |
 | `forwarding` | forwarding | M8 desde I-39, mientras falten el stall y el flush |
-| `--sin-*` | combinaciones | integraciones intermedias de M8 |
+| `--sin-*` | combinaciones | pruebas a mano con `sim.py` (las integraciones de M8 usan modos con nombre, decisión 029) |
 
 En un modo sin un mecanismo, un programa que lo necesita **no da un resultado equivocado: da
 un error** que dice qué instrucción falló (código de salida 3). Por ejemplo, `fwd_exmem.s` en
