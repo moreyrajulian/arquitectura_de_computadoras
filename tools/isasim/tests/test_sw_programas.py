@@ -10,7 +10,7 @@ import struct
 import pytest
 
 from isasim_testutil import REPO
-from isasim import (COMPLETO, SIN_RIESGOS, ModelError, compare_exp, load_initial_state,
+from isasim import (COMPLETO, FORWARDING, SIN_RIESGOS, ModelError, compare_exp, load_initial_state,
                     load_program, parse_exp, read_all_payload, simulate, write_outputs)
 from isasim.files import default_initial_state
 
@@ -22,6 +22,9 @@ NEEDS_HAZARD_UNITS = ["fwd_exmem", "fwd_memwb", "fwd_prioridad", "loaduse_rs1_rs
                       "loaduse_sw_beq", "load_sin_dep", "branch_cond", "jump",
                       "salto_depende", "mixto_lazo", "halt_stall", "halt_camino_equivocado"]
 M7 = [p for p in PROGRAMS if p not in NEEDS_HAZARD_UNITS]
+# Decisión 029: de esos, los que no tienen carga-uso ni saltos tomados
+ONLY_FORWARDING = ["fwd_exmem", "fwd_memwb", "fwd_prioridad", "load_sin_dep"]
+NEEDS_STALL_OR_FLUSH = [p for p in NEEDS_HAZARD_UNITS if p not in ONLY_FORWARDING]
 
 
 def run_program(name, mode):
@@ -49,6 +52,22 @@ def test_matches_expected_state(name):
 def test_m7_programs_match_without_hazard_units(name):
     """sw/README.md §5: sin riesgos y variantes _nops dan lo mismo en M7."""
     assert compare_exp(run_program(name, SIN_RIESGOS), expected(name)) == []
+
+
+@pytest.mark.parametrize("name", M7 + ONLY_FORWARDING)
+def test_forwarding_mode_matches(name):
+    """Decisión 029: con forwarding y sin stall ni flush (desde I-39)."""
+    assert compare_exp(run_program(name, FORWARDING), expected(name)) == []
+
+
+@pytest.mark.parametrize("name", NEEDS_STALL_OR_FLUSH)
+def test_stall_or_flush_programs_do_not_pass_with_forwarding_only(name):
+    """Los que necesitan stall o flush no dan el .exp solo con forwarding."""
+    try:
+        r = run_program(name, FORWARDING)
+    except ModelError:
+        return
+    assert compare_exp(r, expected(name)) != []
 
 
 @pytest.mark.parametrize("name", NEEDS_HAZARD_UNITS)

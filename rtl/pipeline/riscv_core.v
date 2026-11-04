@@ -7,7 +7,7 @@
 // Procesador RV32I segmentado (docs/spec/pipeline.md). Se integra etapa
 // por etapa (docs/planificacion.md); esta versión tiene IF (I-22), ID
 // (I-27), EX (I-31), MEM (I-34), WB (I-35), los saltos de vuelta a IF
-// (I-36) y la parada por HALT (I-37).
+// (I-36), la parada por HALT (I-37) y la unidad de forwarding (I-39).
 //
 // Función:
 //   Instancia las etapas y genera las señales de control del pipeline
@@ -15,11 +15,14 @@
 //   produzca valen 0 y se indica qué issue las conecta:
 //     stall          = 0   hasta I-41/I-42 (detección de carga-uso)
 //     flush_redirect = 0   hasta I-42      (flush por salto tomado)
-//     fwd_a/fwd_b    = 00  hasta I-39      (unidad de forwarding)
-//   Con eso, en M7: en_pc = en_if_id = en_id_ex = en_ex_mem = en_mem_wb
-//   = enable, flush_id_ex = flush_ex_mem = flush_mem_wb = 0 y EX opera
-//   con lo leído en ID. WB escribe el banco (wb_*, con el bypass WB -> ID
-//   del banco, decisión 007). El salto tomado en EX (redirect,
+//   Con eso: en_pc = en_if_id = en_id_ex = en_ex_mem = en_mem_wb =
+//   enable y flush_id_ex = flush_ex_mem = flush_mem_wb = 0.
+//   forwarding_unit (§10.2) elige fwd_a / fwd_b: EX toma rs1 / rs2 de
+//   EX/MEM o de WB cuando una de las dos instrucciones anteriores los
+//   escribe. Un uso inmediatamente después de un load todavía lee la
+//   dirección de EX/MEM, porque falta el stall de carga-uso (I-41).
+//   WB escribe el banco (wb_*, con el bypass WB -> ID del banco,
+//   decisión 007). El salto tomado en EX (redirect,
 //   redirect_pc de branch_unit) cambia el PC, pero sin flush: las dos
 //   instrucciones que entraron detrás se ejecutan, como en el modo
 //   sin_riesgos del modelo. En I-42, flush_redirect = redirect.
@@ -175,11 +178,11 @@ module riscv_core
     wire [NB_DATA-1:0] wb_data;
 
     //------------------------------------------------------------------
-    // Selectores de forwarding (pipeline.md §10.2): I-39. En 00 (FWD_ID_EX)
-    // EX usa lo leído en ID
+    // Selectores de forwarding (pipeline.md §10.2), de forwarding_unit
+    // (se instancia después de MEM/WB, que tiene sus entradas)
     //------------------------------------------------------------------
-    wire [NB_FWD-1:0] fwd_a = {NB_FWD{1'b0}};
-    wire [NB_FWD-1:0] fwd_b = {NB_FWD{1'b0}};
+    wire [NB_FWD-1:0] fwd_a;
+    wire [NB_FWD-1:0] fwd_b;
 
     //------------------------------------------------------------------
     // IF e IF/ID
@@ -398,6 +401,24 @@ module riscv_core
         .i_dmem_b_addr       (i_dmem_b_addr),
         .i_dmem_b_din        (i_dmem_b_din),
         .o_dmem_b_dout       (o_dmem_b_dout)
+    );
+
+    //------------------------------------------------------------------
+    // Unidad de forwarding (pipeline.md §10.2): compara rs1 / rs2 de la
+    // instrucción en EX con el rd de las que están en MEM y en WB
+    //------------------------------------------------------------------
+    forwarding_unit #(
+        .NB_ADDR (NB_ADDR),
+        .NB_FWD  (NB_FWD)
+    ) u_forwarding_unit (
+        .i_id_ex_rs1        (id_ex_rs1),
+        .i_id_ex_rs2        (id_ex_rs2),
+        .i_ex_mem_rd        (ex_mem_rd),
+        .i_ex_mem_reg_write (ex_mem_reg_write),
+        .i_mem_wb_rd        (mem_wb_rd),
+        .i_mem_wb_reg_write (mem_wb_reg_write),
+        .o_fwd_a            (fwd_a),
+        .o_fwd_b            (fwd_b)
     );
 
     //------------------------------------------------------------------

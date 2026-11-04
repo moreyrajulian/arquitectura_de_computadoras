@@ -579,9 +579,9 @@ Los muxes de forwarding van adentro porque §5.1 los pone en EX y su entrada `10
 del propio EX/MEM; la unidad que elige el selector (§10.2, I-39) queda afuera.
 
 - **No calcula enables, flush ni forwarding:** recibe `en_ex_mem` y `flush_ex_mem` ya
-  calculados (§10.4), `fwd_a` / `fwd_b` y `wb_data` (§7.2). Hasta I-39 `riscv_core` deja los
-  selectores en `00`; `wb_data` viene de `wb_stage` (§7.4). El código `11` no lo genera la
-  unidad de forwarding; si llega, toma lo leído en ID, como `00`.
+  calculados (§10.4), `fwd_a` / `fwd_b` y `wb_data` (§7.2). Los selectores vienen de
+  `forwarding_unit` (§10.2, desde I-39); `wb_data` viene de `wb_stage` (§7.4). El código `11`
+  no lo genera la unidad de forwarding; si llega, toma lo leído en ID, como `00`.
 - **De ID/EX** entran los campos que usa EX y los que pasan a EX/MEM. `rs1`, `rs2` y
   `mem_read` no entran: los usan la unidad de forwarding (§10.2) y la detección de load-use
   (§10.3).
@@ -960,6 +960,11 @@ fwd_b = ídem con id_ex_rs2
   compara **los mismos campos** `rs1`/`rs2`: si la instrucción siguiente los usara, ya estaría
   frenada en ID. Si alguna vez se filtran los campos según el formato, hay que filtrarlos
   igual en las dos unidades.
+
+**Módulo.** `rtl/control/forwarding_unit.v`, combinacional y sin estado (no recibe `enable`).
+Entradas: `i_id_ex_rs1`, `i_id_ex_rs2`, `i_ex_mem_rd`, `i_ex_mem_reg_write`, `i_mem_wb_rd`,
+`i_mem_wb_reg_write`. Salidas: `o_fwd_a`, `o_fwd_b`, con los códigos `FWD_*` de
+`riscv_defs.vh`. `riscv_core` la instancia y conecta los selectores a `ex_stage` (§5.6).
 
 Ejemplo con las tres distancias ([`riesgo_forwarding.png`](../diagramas/riesgo_forwarding.png)):
 

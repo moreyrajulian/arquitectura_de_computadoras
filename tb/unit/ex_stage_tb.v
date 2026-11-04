@@ -607,7 +607,10 @@ module ex_stage_tb;
         m_valid = 1'b0;
         m_ctrl  = {NB_CTRL{1'b0}};
         for (i = 0; i < N_RANDOM; i = i + 1) begin
-            tb_rst       = (i == 0) || (($random(seed) & 63) == 0);
+            // $random primero y con |, no ||: xsim corta || y no llama a
+            // $random cuando i == 0, iverilog sí, y la misma semilla daba
+            // estímulos distintos en los dos simuladores
+            tb_rst       = (($random(seed) & 63) == 0) | (i == 0);
             tb_en_ex_mem = (($random(seed) & 7) != 0);
             tb_flush     = (($random(seed) & 7) == 0);
             fila_al_azar;

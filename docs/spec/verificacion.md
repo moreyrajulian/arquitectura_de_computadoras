@@ -178,7 +178,11 @@ Los 22 programas necesitan el pipeline completo. Para las etapas anteriores hay 
 | `<nombre>_nops`, de los programas de riesgos y de saltos | 3 sin riesgos (I-38, M7): pipeline completo sin forwarding, stall ni flush | Llevan `nop` para que toda dependencia quede a distancia 3 y detrás de cada salto haya dos `nop`. Mismo estado final que el original y los mismos ciclos en M7 y en M8 |
 
 En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en M8
-(I-40 e I-43), todos. `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban
+(I-40 e I-43), todos. Entre medio, cada integración de M8 compara contra el modelo con los
+mecanismos que ya tiene el RTL (decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)):
+desde I-39, `--modo forwarding` (forwarding sin stall ni flush), con los 27 de M7 y los
+originales que solo necesitan forwarding: `fwd_exmem`, `fwd_memwb`, `fwd_prioridad` y
+`load_sin_dep` (lista `FORWARDING` de `sw/programas.py`). `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban
 es la interacción del HALT con el stall y el flush.
 
 ---
@@ -301,7 +305,7 @@ Cuándo se considera aprobado cada nivel:
 | Nivel | Aprobado cuando |
 |---|---|
 | 1. Unitario | Imprime `TEST PASSED` y cubre todos los casos mínimos de §3 |
-| 2. Por etapa | Para todos los programas de `sw/` que la etapa ya puede ejecutar, cada registro de segmentación de las etapas integradas coincide con la traza del modelo en **todos** los ciclos (campos de `pipeline.md` §8, incluidos `valid` y las señales de control), comparando los bits que marca la máscara del modelo: en una burbuja, solo `valid` y el control ([`tools/isasim`](../../tools/isasim/README.md) §3). Hasta M7 el modelo corre en modo `sin_riesgos` |
+| 2. Por etapa | Para todos los programas de `sw/` que la etapa ya puede ejecutar, cada registro de segmentación de las etapas integradas coincide con la traza del modelo en **todos** los ciclos (campos de `pipeline.md` §8, incluidos `valid` y las señales de control), comparando los bits que marca la máscara del modelo: en una burbuja, solo `valid` y el control ([`tools/isasim`](../../tools/isasim/README.md) §3). Hasta M7 el modelo corre en modo `sin_riesgos`; en M8, en el modo con los mecanismos ya integrados (§4.3) |
 | 3. Core completo | Para los 22 programas, el estado final coincide con el `.exp` en todos los campos de §5, incluido `ciclos` |
 | 4. Debug Unit | Imprime `TEST PASSED` y cada programa da el mismo estado final con `RUN` que con `STEP` repetido |
 | 5. Placa | Para los 22 programas cargados con `LOAD`, el volcado de `READ_ALL` coincide con el `.exp` |
@@ -379,8 +383,9 @@ escrito a mano (nivel 3). El porqué de cada elección está en la decisión
 
 ```sh
 # 1. Preparar el programa: ensambla, corre el modelo y convierte el .exp
-python scripts/prep_tb.py sw/indep_alu_r.s                  # --modo sin_riesgos (M3 a M7)
-python scripts/prep_tb.py sw/fwd_exmem.s --modo completo    # M8 en adelante
+python scripts/prep_tb.py sw/indep_alu_r.s --modo sin_riesgos   # M3 a M7
+python scripts/prep_tb.py sw/fwd_exmem.s                         # --modo forwarding, desde I-39
+python scripts/prep_tb.py sw/fwd_exmem.s --modo completo         # M8 completo (I-43)
 ```
 
 `prep_tb.py` escribe en `build/tb/<nombre>/` los archivos de la tabla y, al final, la línea
@@ -471,6 +476,16 @@ los 20 de la lista de arriba y los 7 de `STAGE_REDIRECT`, ahora también en `pip
   Los registros y `dmem` se comparan después, así que tampoco se escribió nada. Sin el término
   `halted` de `stop_fetch`, el PC vuelve a avanzar en cuanto el HALT sale de WB. Así el core no
   depende de en qué ciclo baje `enable` la Debug Unit.
+
+**Con la unidad de forwarding (I-39)** el banco no cambia y no hay define nuevo: lo que cambia
+es el modo de la traza. El RTL ya no coincide con `--modo sin_riesgos` en 10 de los 27
+programas de M7, aunque el estado final es el mismo. La unidad compara `rs1` y `rs2` aunque la
+instrucción no los use (`pipeline.md` §10.2), así que un `addi` o el HALT (`rs2 = 1`) reciben
+un valor reenviado en `ex_mem_store_data` o en `result`, que nadie usa, y la máscara compara
+esos campos en toda instrucción válida. Por eso desde I-39 la traza sale de `--modo forwarding`
+(decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)). Con `+FINAL` pasan los 31 programas
+de la lista `FORWARDING`, entre ellos `fwd_exmem`, `fwd_memwb`, `fwd_prioridad` y
+`load_sin_dep` sin `nop`.
 
 ### 8.3 Hasta qué ciclo se compara
 
@@ -579,8 +594,9 @@ la foto final. Para ver el watchdog de `+FINAL` se compila con `-d STAGES_CLI -d
 lista de programas, uno detrás del otro (decisión [028](../decisiones/028_regresion-por-lotes.md)):
 
 ```sh
-python scripts/regresion.py                    # sin_riesgos: los 27 programas de M7 (I-38)
-python scripts/regresion.py --modo completo    # todos los de sw/ (M8, I-43)
+python scripts/regresion.py                        # forwarding: los 31 de §4.3 (desde I-39)
+python scripts/regresion.py --modo sin_riesgos     # los 27 programas de M7 (I-38)
+python scripts/regresion.py --modo completo        # todos los de sw/ (M8, I-43)
 python scripts/regresion.py alu_r fwd_x0       # solo esos
 python scripts/regresion.py --pausas 47        # además, cada uno con +PAUSAS=47
 ```
@@ -592,7 +608,9 @@ source <ruta-al-repo>/scripts/regresion.tcl    ;# en la Tcl Console de Vivado, o
 `regresion.py` prepara cada programa con `prep_tb.py` en el modo elegido y escribe la lista en
 `build/regresion/corridas.txt`. Las listas por modo están en `sw/programas.py`. `sin_riesgos`
 son los 10 programas del plan sin riesgos (§4.3), las 10 variantes `_nops` y los 7 `indep_*`.
-Quedan afuera `halt_stall` y `halt_camino_equivocado`.
+Quedan afuera `halt_stall` y `halt_camino_equivocado`. `forwarding` son esos 27 y los 4
+originales que solo necesitan forwarding (§4.3, decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)).
+El modo por defecto es el que corresponde al RTL de `master`.
 
 `regresion.tcl` usa el proyecto abierto o lo crea con `create_project.tcl`. Compila y elabora
 una vez, corre cada línea con `launch_simulation -step simulate` y guarda el log de cada
