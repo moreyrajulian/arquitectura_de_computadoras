@@ -177,12 +177,14 @@ Los 22 programas necesitan el pipeline completo. Para las etapas anteriores hay 
 | `indep_alu_r`, `indep_alu_i`, `indep_cargas`, `indep_stores`, `indep_store_load`, `indep_saltos`, `indep_lui` | 2, de IF a MEM (M3 a M6), antes de que exista WB | Ninguna instrucción lee un registro que escribe otra: parten de un **estado inicial** de registros y de `dmem` (`sw/estado_inicial/`, en formato `$readmemh`) y cada resultado se ve en el registro de segmentación de su etapa |
 | `<nombre>_nops`, de los programas de riesgos y de saltos | 3 sin riesgos (I-38, M7): pipeline completo sin forwarding, stall ni flush | Llevan `nop` para que toda dependencia quede a distancia 3 y detrás de cada salto haya dos `nop`. Mismo estado final que el original y los mismos ciclos en M7 y en M8 |
 
-En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en M8
-(I-40 e I-43), todos. Entre medio, cada integración de M8 compara contra el modelo con los
+En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en I-43,
+todos. Entre medio, cada integración de M8 compara contra el modelo con los
 mecanismos que ya tiene el RTL (decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)):
 desde I-39, `--modo forwarding` (forwarding sin stall ni flush), con los 27 de M7 y los
 originales que solo necesitan forwarding: `fwd_exmem`, `fwd_memwb`, `fwd_prioridad` y
-`load_sin_dep` (lista `FORWARDING` de `sw/programas.py`). `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban
+`load_sin_dep` (lista `FORWARDING` de `sw/programas.py`). Con esa lista I-40 cierra el
+forwarding. `salto_depende` también lo usa, pero toma saltos: sin `nop` pasa recién con el
+flush (I-42) y entra a la regresión de I-43. `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban
 es la interacción del HALT con el stall y el flush.
 
 ---
@@ -318,7 +320,7 @@ decide leyendo la línea final, que es lo que permite automatizarlo. Para `pipel
 **Que la prueba pueda fallar.** Para cada mecanismo de riesgo (forwarding, bypass del banco,
 stall, flush de saltos, parada por HALT), al menos una vez se lo desactiva a propósito en el RTL y
 se comprueba que algún programa pasa a `TEST FAILED`. Si nada falla, los programas no cubren ese
-mecanismo y hay que agregar uno. I-40 lo hace para el forwarding; I-43 para el resto.
+mecanismo y hay que agregar uno. I-40 lo hace para el forwarding (§8.2); I-43 para el resto.
 
 ---
 
@@ -486,6 +488,16 @@ esos campos en toda instrucción válida. Por eso desde I-39 la traza sale de `-
 (decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)). Con `+FINAL` pasan los 31 programas
 de la lista `FORWARDING`, entre ellos `fwd_exmem`, `fwd_memwb`, `fwd_prioridad` y
 `load_sin_dep` sin `nop`.
+
+**Con el forwarding apagado (I-40, §6 "Que la prueba pueda fallar").** Con `fwd_a = fwd_b = 00`
+en `riscv_core`, la regresión `forwarding` da `REGRESION: 34 de 62` en xsim. Fallan 14
+programas, con y sin `+PAUSAS`. Diez son los de M7 de arriba, por los campos sin usar. Los otros
+cuatro son los que solo necesitan forwarding, y fallan por un resultado equivocado: por ejemplo,
+en `fwd_exmem` el `addi x2, x1, 5` deja `0x5` en vez de `0xF`. Además, cada regla de
+`pipeline.md` §10.2, rota por separado en `forwarding_unit`, hace fallar al menos un programa.
+Las reglas son la prioridad, `rd ≠ 0` y `reg_write` en cada fuente, y `fwd_b` comparando con
+`rs2`, mirando MEM/WB y devolviendo el código de cada fuente. La prioridad la detecta solo
+`fwd_prioridad`, y `rd ≠ 0`, `fwd_x0` junto con `mem_avisos` y `jump_nops`.
 
 ### 8.3 Hasta qué ciclo se compara
 
