@@ -994,6 +994,15 @@ load_use = id_ex_mem_read && id_ex_rd != 0 && if_id_valid &&
 - Después del stall, el load está en WB y la instrucción frenada en EX: el dato llega por
   `fwd = 01` (`wb_data`). Un load seguido de un salto que usa el dato funciona igual.
 
+**Módulo.** `rtl/control/hazard_unit.v`, combinacional y sin estado (no recibe `enable`).
+Entradas: `i_if_id_valid`, `i_if_id_rs1`, `i_if_id_rs2`, `i_id_ex_mem_read`, `i_id_ex_rd`.
+Salida: `o_load_use`. Recibe los campos y no la palabra, igual que `forwarding_unit` (§10.2),
+y así su testbench puede recorrer todas las combinaciones (`verificacion.md` §6). `riscv_core`
+saca `if_id_rs1` e `if_id_rs2` de `if_id_instr`, con los mismos bits que usa `id_stage`, y
+calcula `stall = load_use & ~redirect` y los enables y flush de §10.4. Desde I-42 esa parte
+también pasa a `hazard_unit` (decisión [023](../decisiones/023_interfaz-debug-del-core.md),
+`verificacion.md` §3.2).
+
 Ejemplo ([`riesgo_carga_uso.png`](../diagramas/riesgo_carga_uso.png)):
 
 ![Riesgo carga-uso resuelto con un stall](../diagramas/riesgo_carga_uso.png)
