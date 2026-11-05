@@ -16,7 +16,8 @@ nombres fijos para que el banco no cambie de un programa a otro (decisión 021):
 
 Uso (desde la raíz del repositorio):
 
-    python scripts/prep_tb.py sw/indep_alu_r.s                  # modo forwarding
+    python scripts/prep_tb.py sw/indep_alu_r.s                  # modo forwarding_stall
+    python scripts/prep_tb.py sw/alu_r.s --modo forwarding      # I-39 e I-40
     python scripts/prep_tb.py sw/alu_r.s --modo sin_riesgos     # M7
     python scripts/prep_tb.py sw/alu_r.s --modo completo        # M8, I-43
 """
@@ -28,14 +29,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "isasim"))
 
-from isasim import (COMPLETO, FORWARDING, SIN_RIESGOS, LATCHES, ModelError,  # noqa: E402
-                    compare_exp, load_initial_state, load_program, parse_exp,
+from isasim import (COMPLETO, FORWARDING, FORWARDING_STALL, SIN_RIESGOS, LATCHES,  # noqa: E402
+                    ModelError, compare_exp, load_initial_state, load_program, parse_exp,
                     simulate, write_outputs)
 from isasim.files import default_initial_state  # noqa: E402
 from isasim.isa import DMEM_WORDS, HALT_WORD  # noqa: E402
 
 # Modo del modelo según lo integrado en el RTL (decisión 029)
-MODOS = {"sin_riesgos": SIN_RIESGOS, "forwarding": FORWARDING, "completo": COMPLETO}
+MODOS = {"sin_riesgos": SIN_RIESGOS, "forwarding": FORWARDING,
+         "forwarding_stall": FORWARDING_STALL, "completo": COMPLETO}
 
 # Orden de las líneas de corte.hex (el banco las lee por posición)
 CORTE = ["lineas", "halt_if_id", "halt_id_ex", "halt_ex_mem", "halt_mem_wb", "redirect"]
@@ -95,9 +97,9 @@ def exp_files(exp, outdir):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("programa", help="programa .s de sw/")
-    p.add_argument("--modo", choices=MODOS, default="forwarding",
-                   help="modo del modelo: sin_riesgos (M3 a M7), forwarding (desde I-39, "
-                        "por defecto) o completo (M8, I-43)")
+    p.add_argument("--modo", choices=MODOS, default="forwarding_stall",
+                   help="modo del modelo: sin_riesgos (M3 a M7), forwarding (I-39 e I-40), "
+                        "forwarding_stall (desde I-41, por defecto) o completo (M8, I-43)")
     p.add_argument("-o", "--salida", default=str(ROOT / "build" / "tb"),
                    help="directorio base (por defecto build/tb)")
     args = p.parse_args(argv)

@@ -31,13 +31,17 @@ python tools/isasim/sim.py sw/fwd_exmem_nops.s --modo sin_riesgos --exp auto
 
 # desde I-39: con forwarding, sin stall ni flush
 python tools/isasim/sim.py sw/fwd_exmem.s --modo forwarding --exp auto
+
+# desde I-41: con forwarding y stall de carga-uso, sin flush
+python tools/isasim/sim.py sw/loaduse_rs1_rs2.s --modo forwarding_stall --exp auto
 ```
 
 | Opción | Qué hace |
 |---|---|
 | `--modo completo` | Por defecto. Pipeline con forwarding, stall de carga-uso y flush por saltos (M8 en adelante) |
 | `--modo sin_riesgos` | Sin los tres mecanismos, como el pipeline de M3 a M7 |
-| `--modo forwarding` | Solo forwarding, como el pipeline desde I-39 hasta que lleguen el stall (I-41) y el flush (I-42) (decisión [029](../../docs/decisiones/029_modo-del-modelo-en-m8.md)) |
+| `--modo forwarding` | Solo forwarding, como el pipeline de I-39 e I-40, antes del stall (I-41) (decisión [029](../../docs/decisiones/029_modo-del-modelo-en-m8.md)) |
+| `--modo forwarding_stall` | Forwarding y stall de carga-uso, sin flush por saltos: el pipeline desde I-41 hasta que llegue el flush (I-42) (decisión [029](../../docs/decisiones/029_modo-del-modelo-en-m8.md)) |
 | `--sin-forwarding`, `--sin-stall`, `--sin-flush` | Saca un mecanismo por vez del modo elegido, para pruebas a mano con `sim.py`. `prep_tb.py` y `regresion.py` no las aceptan: las integraciones de M8 usan modos con nombre (decisión [029](../../docs/decisiones/029_modo-del-modelo-en-m8.md)) |
 | `--estado-inicial DIR` | Lee `DIR/regs.hex` y `DIR/dmem.hex`. Si no se da, los programas `indep_*` usan `estado_inicial/` junto al programa ([`sw/README.md`](../../sw/README.md) §4) y el resto parte de todo en cero, como después de `LOAD` |
 | `--exp ARCHIVO` | Compara con un `.exp`; `auto` usa el que está junto al programa |

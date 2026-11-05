@@ -189,6 +189,12 @@ se compara solo su traza, sin `+FINAL` (§8.2): está en la regresión `forwardi
 `SOLO_TRAZA_FORWARDING` (decisión [030](../decisiones/030_corridas-solo-traza.md)). Con `+FINAL`
 entra junto con el flush (decisión 029). Con esa regresión, I-40 cierra el forwarding. Los demás
 originales también usan forwarding, pero además necesitan el stall o el flush.
+Desde I-41 la traza sale de `--modo forwarding_stall` (forwarding y stall, sin flush): la lista
+`FORWARDING_STALL` suma a esos 31 los que solo necesitan el stall, `loaduse_rs1_rs2` y
+`halt_stall` (`SOLO_STALL`), y `loaduse_sw_beq` se compara solo contra la traza, como
+`salto_depende` (`SOLO_TRAZA_FORWARDING_STALL`): es el único load seguido de un salto que usa el
+dato, y su `beq` se toma. Quedan para el flush `branch_cond`, `jump`, `mixto_lazo` y
+`halt_camino_equivocado`.
 `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban es la interacción
 del HALT con el stall y el flush.
 
@@ -393,7 +399,8 @@ escrito a mano (nivel 3). El porqué de cada elección está en la decisión
 ```sh
 # 1. Preparar el programa: ensambla, corre el modelo y convierte el .exp
 python scripts/prep_tb.py sw/indep_alu_r.s --modo sin_riesgos   # M3 a M7
-python scripts/prep_tb.py sw/fwd_exmem.s                         # --modo forwarding, desde I-39
+python scripts/prep_tb.py sw/fwd_exmem.s --modo forwarding       # I-39 e I-40
+python scripts/prep_tb.py sw/fwd_exmem.s                         # --modo forwarding_stall, desde I-41
 python scripts/prep_tb.py sw/fwd_exmem.s --modo completo         # M8 completo (I-43)
 ```
 
@@ -538,6 +545,29 @@ La prioridad la detecta solo `fwd_prioridad`, que es el programa que existe para
 leen las dos instrucciones siguientes (§4.2). Antes de agregarlo, ese mutante lo detectaban solo
 programas que no se escribieron para eso, y bastaba con cambiarles los registros para perderlo.
 
+**Con el stall de carga-uso (I-41)** el banco no cambia y no hay define nuevo: la traza sale de
+`--modo forwarding_stall` (§4.3). `hazard_unit` (`pipeline.md` §10.3) frena un ciclo a la
+instrucción que usa el dato de un load, y el dato le llega después desde MEM/WB. Con `+FINAL`
+pasan los 33 programas de la lista `FORWARDING_STALL`, entre ellos `loaduse_rs1_rs2` y
+`halt_stall`, que ahora coincide también en `ciclos`. `loaduse_sw_beq` corre sin `+FINAL`, como
+`salto_depende`. Su `beq` se toma y, sin flush, el RTL y el modelo ejecutan el `addi x20` del camino
+equivocado: la traza coincide, pero el `.exp` difiere en `x20` hasta I-42 (decisión
+[030](../decisiones/030_corridas-solo-traza.md)). La regresión `forwarding_stall` pasa las 70
+corridas, con y sin `+PAUSAS=47`.
+
+**Pausas en medio de un stall.** Con `enable = 0` nada cambia, y al volver a 1 el stall se
+recalcula igual (`pipeline.md` §10.4). Para que `+PAUSAS` lo pruebe, alguna pausa tiene que caer en
+un ciclo de stall, y eso depende de la semilla. Con la semilla 47 cae en el ciclo 11 de
+`loaduse_rs1_rs2` (el `sub x8, x0, x7`, uso en `rs2`) y en los ciclos 11 y 19 de `loaduse_sw_beq`
+(el `sw` que usa el dato como base y el `bne`). Los ciclos son los de `modelo.traza.txt`, donde
+el stall está marcado. En `halt_stall` la semilla 47 no deja ninguna pausa en el stall del
+ciclo 7 (el HALT retenido en ID), y la 2 sí: `+FINAL +PAUSAS=2` pasa, así que IF/ID conserva el
+HALT también con el core detenido. Esa corrida se hace a mano, porque la regresión usa una sola
+semilla para todos los programas. De la 1 a la 12, también sirven la 5 y la 8. Si se cambia
+la semilla de la regresión, hay que volver a comprobarlo, por ejemplo con
+`add_condition {/pipeline_tb/tb_clk == 0}` en xsim, leyendo `u_dut.stall` y `tb_enable`. El
+`STEP` real en medio de un stall, desde una trama UART, es de I-47 (§3.3).
+
 ### 8.3 Hasta qué ciclo se compara
 
 El modelo simula siempre el pipeline completo. Mientras falte una parte, el RTL se aparta de
@@ -647,7 +677,8 @@ Los programas que en el modo se comparan solo contra la traza corren sin `+FINAL
 [030](../decisiones/030_corridas-solo-traza.md)):
 
 ```sh
-python scripts/regresion.py                        # forwarding: los 31 de §4.3 y salto_depende sin +FINAL
+python scripts/regresion.py                        # forwarding_stall: los 33 de §4.3 y 2 sin +FINAL
+python scripts/regresion.py --modo forwarding      # los 31 de I-39 e I-40 y salto_depende sin +FINAL
 python scripts/regresion.py --modo sin_riesgos     # los 27 programas de M7 (I-38)
 python scripts/regresion.py --modo completo        # todos los de sw/ (M8, I-43)
 python scripts/regresion.py alu_r fwd_x0       # solo esos
@@ -666,7 +697,9 @@ son los 10 programas del plan sin riesgos (§4.3), las 10 variantes `_nops` y lo
 Quedan afuera `halt_stall` y `halt_camino_equivocado`. `forwarding` son esos 27 y los 4
 originales que solo necesitan forwarding (§4.3, decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)),
 con `+FINAL`, más `salto_depende` sin `+FINAL` (lista `SOLO_TRAZA_FORWARDING`, §8.2): 32
-corridas, 64 con `--pausas`. Cada línea de `corridas.txt` es la etiqueta, el programa y los
+corridas, 64 con `--pausas`. `forwarding_stall` (desde I-41) son esos 31, `loaduse_rs1_rs2` y
+`halt_stall` (lista `SOLO_STALL`) con `+FINAL`, más `salto_depende` y `loaduse_sw_beq` sin
+`+FINAL` (lista `SOLO_TRAZA_FORWARDING_STALL`, §8.2): 35 corridas, 70 con `--pausas`. Cada línea de `corridas.txt` es la etiqueta, el programa y los
 plusargs además de `DIR` (por ejemplo, `salto_depende_pausas salto_depende PAUSAS=47`). El modo
 por defecto es el que corresponde al RTL de `master`.
 
