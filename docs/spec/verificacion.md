@@ -674,19 +674,24 @@ por defecto es el que corresponde al RTL de `master`.
 una vez, corre cada línea con `launch_simulation -step simulate` y guarda el log de cada
 corrida en `build/regresion/logs/<etiqueta>.log`. Una corrida pasa si la última línea del log
 que empieza con `TEST ` es `TEST PASSED...`. Antes de cada corrida borra el `simulate.log` de la
-anterior: si Vivado da error o xsim no deja log, la corrida cuenta como falla y el script sigue con
-la próxima, así que nunca se decide con el log de otra. El resumen sale por consola y queda en
+anterior: si Vivado da error, xsim no deja log o el log no tiene línea `TEST`, la corrida queda
+como `ERROR`, cuenta como falla y el script sigue con la próxima, así que nunca se decide con el
+log de otra. El resumen sale por consola y queda en
 `build/regresion/resumen.txt`. Si alguna corrida falla, el script termina con error: en batch,
 Vivado sale con código 1.
 
 **Con mutantes** (decisión [031](../decisiones/031_mutantes-de-la-regresion.md)), `regresion.py`
 escribe cada copia mutada en `build/mutantes/<nombre>/` y la lista en
 `build/regresion/mutantes.txt`. Sin `--mutante` la lista se borra, así que una regresión normal
-nunca corre con un mutante que quedó de antes. `regresion.tcl` corre todas las corridas una vez
-por mutante, con la copia en lugar del archivo de `rtl/`, que no se toca, y compila desde cero
-en cada pasada. Los logs quedan en `build/regresion/logs/<mutante>/`. El resumen tiene una línea
-por mutante, `MUTANTE <nombre>: detectado, fallan N de M corridas: ...` o `NO DETECTADO`, y el
-script termina con error si alguno no se detecta. Al terminar, o si algo falla en el medio, el
+nunca corre con un mutante que quedó de antes. `regresion.tcl` corre primero todas las corridas
+sin mutante, como referencia: si alguna falla, los mutantes no se corren y el script termina con
+error. Después las corre una vez por mutante, con la copia en lugar del archivo de `rtl/`, que no
+se toca, y compila desde cero en cada pasada. Los logs quedan en `build/regresion/logs/<mutante>/`.
+El resumen tiene una línea por mutante: `MUTANTE <nombre>: detectado, fallan N de M corridas: ...`
+si alguna corrida termina en `TEST FAILED`, `NO DETECTADO` si pasan todas, o `ERROR` si alguna
+quedó sin resultado (por ejemplo, la copia mutada no compila). En ese caso no se sabe si el mutante
+se detecta, y el resumen muestra el mensaje de Vivado. El script termina con error si algún
+mutante no se detecta o queda en `ERROR`. Al terminar, o si algo falla en el medio, el
 proyecto queda como estaba. `python scripts/mutantes.py` lista los mutantes y comprueba que se
 pueden aplicar al RTL actual.
 
