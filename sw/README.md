@@ -180,7 +180,7 @@ No tienen variante:
 | `fwd_exmem` | RAW consecutiva: forwarding desde EX/MEM en `rs1`, `rs2`, dato y base de `sw` | `_nops` |
 | `fwd_memwb` | RAW a distancia 2: forwarding desde MEM/WB | `_nops` |
 | `fwd_prioridad` | Las dos anteriores escriben el mismo registro: gana EX/MEM | `_nops` |
-| `fwd_x0` | Escritura en `x0`: no se reenvía, no pasa por el bypass, un `lw x0` no frena | — |
+| `fwd_x0` | Escritura en `x0`: no se reenvía, no pasa por el bypass, un `lw x0` no frena. Una instrucción que no escribe (`sw`) tampoco se reenvía, aunque su campo `rd` coincida | — |
 | `bypass_banco` | RAW a distancia 3: bypass del banco | — |
 | `loaduse_rs1_rs2` | Carga-uso en `rs1`, `rs2` y los dos (también para `STEP` en medio de un stall) | `_nops` |
 | `loaduse_sw_beq` | Load seguido de `sw` (dato y base), de `beq` tomado y de `bne` no tomado | `_nops` |

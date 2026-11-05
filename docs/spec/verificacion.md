@@ -146,7 +146,7 @@ Es la lista de `pipeline.md` §10.7. Cada línea de esa lista tiene su programa:
 | Forwarding desde EX/MEM (distancia 1), en `rs1` y en `rs2` | `fwd_exmem` |
 | Forwarding desde MEM/WB (distancia 2), en `rs1` y en `rs2` | `fwd_memwb` |
 | Las dos instrucciones anteriores escriben el mismo registro (gana EX/MEM) | `fwd_prioridad` |
-| Destino `x0` en la instrucción anterior (no se reenvía) | `fwd_x0` |
+| Destino `x0` en la instrucción anterior (no se reenvía). Además, una instrucción que no escribe (`reg_write = 0`) tampoco se reenvía (§10.2) | `fwd_x0` |
 | Dependencia a distancia 3 (bypass del banco) | `bypass_banco` |
 | Load-use en `rs1` y en `rs2` | `loaduse_rs1_rs2` |
 | Load seguido de `sw` que guarda el dato; load seguido de `beq` | `loaduse_sw_beq` |
@@ -177,13 +177,20 @@ Los 22 programas necesitan el pipeline completo. Para las etapas anteriores hay 
 | `indep_alu_r`, `indep_alu_i`, `indep_cargas`, `indep_stores`, `indep_store_load`, `indep_saltos`, `indep_lui` | 2, de IF a MEM (M3 a M6), antes de que exista WB | Ninguna instrucción lee un registro que escribe otra: parten de un **estado inicial** de registros y de `dmem` (`sw/estado_inicial/`, en formato `$readmemh`) y cada resultado se ve en el registro de segmentación de su etapa |
 | `<nombre>_nops`, de los programas de riesgos y de saltos | 3 sin riesgos (I-38, M7): pipeline completo sin forwarding, stall ni flush | Llevan `nop` para que toda dependencia quede a distancia 3 y detrás de cada salto haya dos `nop`. Mismo estado final que el original y los mismos ciclos en M7 y en M8 |
 
-En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en M8
-(I-40 e I-43), todos. Entre medio, cada integración de M8 compara contra el modelo con los
+En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en I-43,
+todos. Entre medio, cada integración de M8 compara contra el modelo con los
 mecanismos que ya tiene el RTL (decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)):
 desde I-39, `--modo forwarding` (forwarding sin stall ni flush), con los 27 de M7 y los
 originales que solo necesitan forwarding: `fwd_exmem`, `fwd_memwb`, `fwd_prioridad` y
-`load_sin_dep` (lista `FORWARDING` de `sw/programas.py`). `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban
-es la interacción del HALT con el stall y el flush.
+`load_sin_dep` (lista `FORWARDING` de `sw/programas.py`). Ninguno de esos 31 tiene un salto
+que lea un registro escrito por una de las dos instrucciones anteriores: el forwarding hacia
+`beq`, `bne` y `jalr` lo prueba `salto_depende`. Como sus saltos se toman, hasta el flush (I-42)
+se compara solo su traza, sin `+FINAL` (§8.2): está en la regresión `forwarding` por la lista
+`SOLO_TRAZA_FORWARDING` (decisión [030](../decisiones/030_corridas-solo-traza.md)). Con `+FINAL`
+entra junto con el flush (decisión 029). Con esa regresión, I-40 cierra el forwarding. Los demás
+originales también usan forwarding, pero además necesitan el stall o el flush.
+`halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban es la interacción
+del HALT con el stall y el flush.
 
 ---
 
@@ -318,7 +325,9 @@ decide leyendo la línea final, que es lo que permite automatizarlo. Para `pipel
 **Que la prueba pueda fallar.** Para cada mecanismo de riesgo (forwarding, bypass del banco,
 stall, flush de saltos, parada por HALT), al menos una vez se lo desactiva a propósito en el RTL y
 se comprueba que algún programa pasa a `TEST FAILED`. Si nada falla, los programas no cubren ese
-mecanismo y hay que agregar uno. I-40 lo hace para el forwarding; I-43 para el resto.
+mecanismo y hay que agregar uno. Los mutantes están en `scripts/mutantes.py` y se corren con
+`regresion.py --mutante` (§8.7, decisión [031](../decisiones/031_mutantes-de-la-regresion.md)).
+I-40 lo hace para el forwarding (§8.2); I-43 para el resto.
 
 ---
 
@@ -487,6 +496,48 @@ esos campos en toda instrucción válida. Por eso desde I-39 la traza sale de `-
 de la lista `FORWARDING`, entre ellos `fwd_exmem`, `fwd_memwb`, `fwd_prioridad` y
 `load_sin_dep` sin `nop`.
 
+**Forwarding hacia los saltos (I-40).** `salto_depende` corre en `--modo forwarding` **sin**
+`+FINAL`, como `branch_cond` desde `STAGE_REDIRECT`: sin flush, el RTL y el modelo ejecutan las
+dos instrucciones del camino equivocado (`x20`, `x21` y `x22` quedan en 2), así que la traza
+coincide, pero el `.exp` no hasta I-42. `regresion.py` lo suma a la regresión `forwarding` sin
+`FINAL` (lista `SOLO_TRAZA_FORWARDING`, decisión [030](../decisiones/030_corridas-solo-traza.md)),
+y pasa los 24 ciclos de la traza, con y sin `+PAUSAS=47`.
+
+**Que la prueba pueda fallar (I-40, §6).** Los mutantes son los de `scripts/mutantes.py`
+(decisión [031](../decisiones/031_mutantes-de-la-regresion.md)). Con `sin_forwarding`
+(`fwd_a = fwd_b = FWD_ID_EX` en `riscv_core`), `python scripts/regresion.py --pausas 47
+--mutante sin_forwarding` y `regresion.tcl` dan en xsim `fallan 30 de 64 corridas`: 15 programas,
+con y sin `+PAUSAS`. Diez son de M7 (`alu_r`, `shifts`, `mem_palabra`, `halt_basico`, `fwd_x0`,
+`bypass_banco`, `fwd_memwb_nops`, `loaduse_rs1_rs2_nops`, `branch_cond_nops` y
+`mixto_lazo_nops`), por los campos sin usar (decisión
+[029](../decisiones/029_modo-del-modelo-en-m8.md)). Los otros cinco fallan por un resultado
+equivocado. Son los cuatro de `SOLO_FORWARDING` (en `fwd_exmem`, el `addi x2, x1, 5` deja `0x5`
+en vez de `0xF`) y `salto_depende`, que falla en el ciclo 8: el `beq x3, x2` compara sin el `x3`
+de EX/MEM y `ex_mem.result` da `0xFFFFFFFA` en vez de `0x0`.
+
+Los otros 15 mutantes rompen de a una las reglas de `pipeline.md` §10.2 en `forwarding_unit`,
+por separado en `fwd_a` y en `fwd_b` cuando la regla es de una sola salida. Con
+`--mutante` de cada uno, sin `--pausas` (32 corridas), todos hacen fallar al menos una:
+
+| Mutante | Fallan | Programas que lo detectan |
+|---|---|---|
+| `fwd_prioridad` (MEM/WB antes que EX/MEM) | 1 | `fwd_prioridad` |
+| `fwd_rd0_ex_mem`, `fwd_rd0_mem_wb` (se reenvía con `rd = x0`) | 3 | `fwd_x0`, `mem_avisos`, `jump_nops` |
+| `fwd_reg_write_ex_mem` (se reenvía sin `reg_write`) | 4 | `fwd_x0`, `bypass_banco`, `mem_byte_media`, `indep_store_load` |
+| `fwd_reg_write_mem_wb` | 5 | `fwd_x0`, `mem_byte_media`, `mem_avisos`, `loaduse_rs1_rs2_nops`, `indep_stores` |
+| `fwd_a_ex_mem_con_rs2`, `fwd_b_ex_mem_con_rs1` | 12 | `fwd_exmem`, `fwd_memwb`, `fwd_prioridad`, `salto_depende` y 8 más |
+| `fwd_a_mem_wb_con_rs2` | 5 | `fwd_memwb`, `fwd_prioridad`, `load_sin_dep`, `salto_depende`, `halt_basico` |
+| `fwd_b_mem_wb_con_rs1` | 6 | los mismos y `mem_palabra` |
+| `fwd_a_sin_mem_wb`, `fwd_a_codigo_mem_wb` | 3 | `fwd_memwb`, `load_sin_dep`, `salto_depende` |
+| `fwd_b_sin_mem_wb`, `fwd_b_codigo_mem_wb` | 4 | `fwd_memwb`, `load_sin_dep`, `mem_palabra`, `halt_basico` |
+| `fwd_a_codigo_ex_mem` (`FWD_WB` cuando coincide EX/MEM) | 3 | `fwd_exmem`, `fwd_prioridad`, `salto_depende` |
+| `fwd_b_codigo_ex_mem` | 12 | `fwd_exmem`, `fwd_memwb`, `fwd_prioridad`, `salto_depende` y 8 más |
+
+La prioridad la detecta solo `fwd_prioridad`, que es el programa que existe para eso (§4.2).
+`reg_write` lo detecta `fwd_x0`: su `sw` del final tiene en el campo `rd` el mismo registro que
+leen las dos instrucciones siguientes (§4.2). Antes de agregarlo, ese mutante lo detectaban solo
+programas que no se escribieron para eso, y bastaba con cambiarles los registros para perderlo.
+
 ### 8.3 Hasta qué ciclo se compara
 
 El modelo simula siempre el pipeline completo. Mientras falte una parte, el RTL se aparta de
@@ -591,14 +642,18 @@ la foto final. Para ver el watchdog de `+FINAL` se compila con `-d STAGES_CLI -d
 ### 8.7 Regresión por lotes
 
 `scripts/regresion.py` y `scripts/regresion.tcl` corren `pipeline_tb` con `+FINAL` para una
-lista de programas, uno detrás del otro (decisión [028](../decisiones/028_regresion-por-lotes.md)):
+lista de programas, uno detrás del otro (decisión [028](../decisiones/028_regresion-por-lotes.md)).
+Los programas que en el modo se comparan solo contra la traza corren sin `+FINAL` (decisión
+[030](../decisiones/030_corridas-solo-traza.md)):
 
 ```sh
-python scripts/regresion.py                        # forwarding: los 31 de §4.3 (desde I-39)
+python scripts/regresion.py                        # forwarding: los 31 de §4.3 y salto_depende sin +FINAL
 python scripts/regresion.py --modo sin_riesgos     # los 27 programas de M7 (I-38)
 python scripts/regresion.py --modo completo        # todos los de sw/ (M8, I-43)
 python scripts/regresion.py alu_r fwd_x0       # solo esos
 python scripts/regresion.py --pausas 47        # además, cada uno con +PAUSAS=47
+python scripts/regresion.py --mutante sin_forwarding   # con un mutante del RTL (§6)
+python scripts/regresion.py --mutante todos            # con cada uno de scripts/mutantes.py
 ```
 
 ```tcl
@@ -609,17 +664,36 @@ source <ruta-al-repo>/scripts/regresion.tcl    ;# en la Tcl Console de Vivado, o
 `build/regresion/corridas.txt`. Las listas por modo están en `sw/programas.py`. `sin_riesgos`
 son los 10 programas del plan sin riesgos (§4.3), las 10 variantes `_nops` y los 7 `indep_*`.
 Quedan afuera `halt_stall` y `halt_camino_equivocado`. `forwarding` son esos 27 y los 4
-originales que solo necesitan forwarding (§4.3, decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)).
-El modo por defecto es el que corresponde al RTL de `master`.
+originales que solo necesitan forwarding (§4.3, decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)),
+con `+FINAL`, más `salto_depende` sin `+FINAL` (lista `SOLO_TRAZA_FORWARDING`, §8.2): 32
+corridas, 64 con `--pausas`. Cada línea de `corridas.txt` es la etiqueta, el programa y los
+plusargs además de `DIR` (por ejemplo, `salto_depende_pausas salto_depende PAUSAS=47`). El modo
+por defecto es el que corresponde al RTL de `master`.
 
 `regresion.tcl` usa el proyecto abierto o lo crea con `create_project.tcl`. Compila y elabora
 una vez, corre cada línea con `launch_simulation -step simulate` y guarda el log de cada
 corrida en `build/regresion/logs/<etiqueta>.log`. Una corrida pasa si la última línea del log
 que empieza con `TEST ` es `TEST PASSED...`. Antes de cada corrida borra el `simulate.log` de la
-anterior: si Vivado da error o xsim no deja log, la corrida cuenta como falla y el script sigue con
-la próxima, así que nunca se decide con el log de otra. El resumen sale por consola y queda en
+anterior: si Vivado da error, xsim no deja log o el log no tiene línea `TEST`, la corrida queda
+como `ERROR`, cuenta como falla y el script sigue con la próxima, así que nunca se decide con el
+log de otra. El resumen sale por consola y queda en
 `build/regresion/resumen.txt`. Si alguna corrida falla, el script termina con error: en batch,
 Vivado sale con código 1.
+
+**Con mutantes** (decisión [031](../decisiones/031_mutantes-de-la-regresion.md)), `regresion.py`
+escribe cada copia mutada en `build/mutantes/<nombre>/` y la lista en
+`build/regresion/mutantes.txt`. Sin `--mutante` la lista se borra, así que una regresión normal
+nunca corre con un mutante que quedó de antes. `regresion.tcl` corre primero todas las corridas
+sin mutante, como referencia: si alguna falla, los mutantes no se corren y el script termina con
+error. Después las corre una vez por mutante, con la copia en lugar del archivo de `rtl/`, que no
+se toca, y compila desde cero en cada pasada. Los logs quedan en `build/regresion/logs/<mutante>/`.
+El resumen tiene una línea por mutante: `MUTANTE <nombre>: detectado, fallan N de M corridas: ...`
+si alguna corrida termina en `TEST FAILED`, `NO DETECTADO` si pasan todas, o `ERROR` si alguna
+quedó sin resultado (por ejemplo, la copia mutada no compila). En ese caso no se sabe si el mutante
+se detecta, y el resumen muestra el mensaje de Vivado. El script termina con error si algún
+mutante no se detecta o queda en `ERROR`. Al terminar, o si algo falla en el medio, el
+proyecto queda como estaba. `python scripts/mutantes.py` lista los mutantes y comprueba que se
+pueden aplicar al RTL actual.
 
 `scripts/ondas.tcl` es para mirar, no para aprobar (§6). Lanza un programa (por defecto
 `load_sin_dep_nops`) en la GUI con el PC, los campos principales de cada registro de

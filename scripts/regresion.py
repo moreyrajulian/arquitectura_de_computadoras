@@ -3,13 +3,16 @@
 Corre scripts/prep_tb.py para cada programa del modo y escribe build/regresion/corridas.txt,
 la lista que lee scripts/regresion.tcl en Vivado. Cada corrida usa +FINAL: compara los
 registros de segmentación en todos los ciclos y el estado final contra el .exp
-(verificacion.md §6, niveles 2 y 3).
+(verificacion.md §6, niveles 2 y 3). La excepción son los programas que en el modo se comparan
+solo contra la traza (SOLO_TRAZA): el modelo los ejecuta igual que el RTL, pero su .exp
+necesita un mecanismo que el RTL todavía no tiene, así que corren sin +FINAL.
 
 Programas por modo (verificacion.md §4.3; las listas están en sw/programas.py):
 
     sin_riesgos  M7 (I-38): los del plan sin riesgos, las variantes _nops y los indep_*
     forwarding   desde I-39 (decisión 029): los de sin_riesgos y los que solo necesitan
-                 forwarding. Es el modo por defecto mientras falten el stall y el flush
+                 forwarding, y salto_depende sin +FINAL (I-40). Es el modo por defecto
+                 mientras falten el stall y el flush
     completo     M8 (I-43): todos los programas de sw/
 
 Uso (desde la raíz del repositorio):
@@ -19,6 +22,8 @@ Uso (desde la raíz del repositorio):
     python scripts/regresion.py --modo completo
     python scripts/regresion.py alu_r fwd_x0         # solo esos programas
     python scripts/regresion.py --pausas 47          # además, cada uno con +PAUSAS=47
+    python scripts/regresion.py --mutante sin_forwarding   # la regresión con un mutante del RTL
+    python scripts/regresion.py --mutante todos            # con cada mutante (scripts/mutantes.py)
 
 Después, en la consola Tcl de Vivado:
 
@@ -35,10 +40,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "sw"))
 
+import mutantes  # noqa: E402
 import prep_tb  # noqa: E402
-from programas import FORWARDING, PROGRAMS, SIN_RIESGOS  # noqa: E402
+from programas import FORWARDING, PROGRAMS, SIN_RIESGOS, SOLO_TRAZA_FORWARDING  # noqa: E402
 
 PROGRAMAS = {"sin_riesgos": SIN_RIESGOS, "forwarding": FORWARDING, "completo": PROGRAMS}
+# Se suman a los del modo, pero sin +FINAL: solo la traza (verificacion.md §8.2)
+SOLO_TRAZA = {"forwarding": SOLO_TRAZA_FORWARDING}
 
 SALIDA = ROOT / "build" / "regresion"
 
@@ -51,9 +59,14 @@ def main(argv=None):
                    help="modo del modelo y lista de programas (por defecto forwarding)")
     p.add_argument("--pausas", type=int, metavar="SEMILLA",
                    help="agrega una segunda corrida de cada programa con +PAUSAS=SEMILLA")
+    p.add_argument("--mutante", action="append", metavar="NOMBRE",
+                   choices=[*mutantes.MUTANTES, "todos"],
+                   help="corre la regresión con ese mutante del RTL (se puede repetir; 'todos' "
+                        "son los de scripts/mutantes.py). regresion.tcl dice qué corridas lo detectan")
     args = p.parse_args(argv)
 
-    nombres = args.programas or PROGRAMAS[args.modo]
+    solo_traza = SOLO_TRAZA.get(args.modo, [])
+    nombres = args.programas or PROGRAMAS[args.modo] + solo_traza
     faltan = [n for n in nombres if n not in PROGRAMS]
     if faltan:
         print(f"error: no existen en sw/: {', '.join(faltan)}", file=sys.stderr)
@@ -73,13 +86,40 @@ def main(argv=None):
         return 3
 
     # Una corrida por línea: etiqueta, programa y plusargs además de DIR
-    corridas = [f"{n} {n} FINAL" for n in nombres]
+    def plusargs(n):
+        return "" if n in solo_traza else " FINAL"
+
+    corridas = [f"{n} {n}{plusargs(n)}" for n in nombres]
     if args.pausas is not None:
-        corridas += [f"{n}_pausas {n} FINAL PAUSAS={args.pausas}" for n in nombres]
+        corridas += [f"{n}_pausas {n}{plusargs(n)} PAUSAS={args.pausas}" for n in nombres]
     SALIDA.mkdir(parents=True, exist_ok=True)
     (SALIDA / "corridas.txt").write_text("\n".join(corridas) + "\n", encoding="utf-8")
 
-    print(f"{len(corridas)} corridas ({args.modo}) en {SALIDA / 'corridas.txt'}")
+    # Mutantes (decisión 031): una línea por mutante con su nombre, el archivo original y la
+    # copia mutada, relativos a la raíz. Sin --mutante se borra la lista: una regresión
+    # normal nunca corre con un mutante que quedó de antes
+    lista_mut = SALIDA / "mutantes.txt"
+    lista_mut.unlink(missing_ok=True)
+    elegidos = args.mutante or []
+    if "todos" in elegidos:
+        elegidos = list(mutantes.MUTANTES)
+    elegidos = list(dict.fromkeys(elegidos))
+    if elegidos:
+        lineas = []
+        for m in elegidos:
+            try:
+                copia = mutantes.escribir(m)
+            except ValueError as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 4
+            lineas.append(f"{m} {mutantes.MUTANTES[m].archivo} {copia.relative_to(ROOT).as_posix()}")
+        lista_mut.write_text("\n".join(lineas) + "\n", encoding="utf-8")
+
+    sin_final = [n for n in nombres if n in solo_traza]
+    nota = f", sin +FINAL: {', '.join(sin_final)}" if sin_final else ""
+    print(f"{len(corridas)} corridas ({args.modo}{nota}) en {SALIDA / 'corridas.txt'}")
+    if elegidos:
+        print(f"{len(elegidos)} mutantes, cada uno con todas las corridas: {', '.join(elegidos)}")
     print(f"Vivado: source {(ROOT / 'scripts' / 'regresion.tcl').as_posix()}")
     return 0
 

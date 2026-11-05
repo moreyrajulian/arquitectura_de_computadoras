@@ -25,6 +25,10 @@ M7 = [p for p in PROGRAMS if p not in NEEDS_HAZARD_UNITS]
 # Decisión 029: de esos, los que no tienen carga-uso ni saltos tomados
 ONLY_FORWARDING = ["fwd_exmem", "fwd_memwb", "fwd_prioridad", "load_sin_dep"]
 NEEDS_STALL_OR_FLUSH = [p for p in NEEDS_HAZARD_UNITS if p not in ONLY_FORWARDING]
+# verificacion.md §8.2 (I-40): con forwarding y sin flush corren hasta el HALT; solo
+# difieren del .exp los registros que escriben las instrucciones del camino
+# equivocado (las marcadas "no se ejecuta" en el .s)
+TRACE_ONLY_FORWARDING = {"salto_depende": {20, 21, 22}}
 
 
 def run_program(name, mode):
@@ -68,6 +72,15 @@ def test_stall_or_flush_programs_do_not_pass_with_forwarding_only(name):
     except ModelError:
         return
     assert compare_exp(r, expected(name)) != []
+
+
+@pytest.mark.parametrize("name", sorted(TRACE_ONLY_FORWARDING))
+def test_trace_only_programs_run_with_forwarding(name):
+    """Su traza sirve para pipeline_tb sin +FINAL: no es un ModelError y termina en HALT."""
+    r = run_program(name, FORWARDING)
+    assert r.halted and r.pipeline_empty
+    diffs = compare_exp(r, expected(name))
+    assert sorted(d.split(":")[0] for d in diffs) == sorted(f"x{i}" for i in TRACE_ONLY_FORWARDING[name])
 
 
 @pytest.mark.parametrize("name", NEEDS_HAZARD_UNITS)
