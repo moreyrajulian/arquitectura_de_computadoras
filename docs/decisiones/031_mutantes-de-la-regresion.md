@@ -1,6 +1,6 @@
 # 031 - Mutantes del RTL para la regresión
 
-- **Estado:** propuesta
+- **Estado:** Aprobada
 - **Fecha:** 2026-11-04
 - **Autores:** Moreyra, Julián
 

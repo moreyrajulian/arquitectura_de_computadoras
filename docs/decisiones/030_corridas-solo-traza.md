@@ -1,6 +1,6 @@
 # 030 - Corridas sin `+FINAL` en la regresión por lotes
 
-- **Estado:** propuesta
+- **Estado:** Aprobada
 - **Fecha:** 2026-11-04
 - **Autores:** Moreyra, Julián
 
