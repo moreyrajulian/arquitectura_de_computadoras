@@ -45,3 +45,15 @@ FORWARDING = SIN_RIESGOS + SOLO_FORWARDING
 # el .exp necesita el flush (I-42). salto_depende es el unico con forwarding hacia
 # los saltos (verificacion.md 4.3 y 8.2, I-40)
 SOLO_TRAZA_FORWARDING = ["salto_depende"]
+
+# Programas que suma el stall de carga-uso (I-41) con forwarding y sin flush: no
+# tienen saltos tomados. halt_stall es de SOLO_M8 (no tiene variante _nops)
+SOLO_STALL = ["loaduse_rs1_rs2", "halt_stall"]
+
+# Los que corren desde I-41, con forwarding y stall, sin flush
+FORWARDING_STALL = FORWARDING + SOLO_STALL
+
+# Con forwarding y stall, sin +FINAL (decision 030): ademas de salto_depende,
+# loaduse_sw_beq, el unico load seguido de un salto que usa el dato. Su beq se
+# toma y el .exp difiere solo en x20, del camino equivocado (I-42)
+SOLO_TRAZA_FORWARDING_STALL = SOLO_TRAZA_FORWARDING + ["loaduse_sw_beq"]

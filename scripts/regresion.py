@@ -10,14 +10,18 @@ necesita un mecanismo que el RTL todavía no tiene, así que corren sin +FINAL.
 Programas por modo (verificacion.md §4.3; las listas están en sw/programas.py):
 
     sin_riesgos  M7 (I-38): los del plan sin riesgos, las variantes _nops y los indep_*
-    forwarding   desde I-39 (decisión 029): los de sin_riesgos y los que solo necesitan
-                 forwarding, y salto_depende sin +FINAL (I-40). Es el modo por defecto
-                 mientras falten el stall y el flush
+    forwarding   I-39 e I-40 (decisión 029): los de sin_riesgos y los que solo necesitan
+                 forwarding, y salto_depende sin +FINAL (I-40)
+    forwarding_stall
+                 desde I-41: los de forwarding, loaduse_rs1_rs2 y halt_stall, y
+                 salto_depende y loaduse_sw_beq sin +FINAL. Es el modo por defecto
+                 mientras falte el flush (I-42)
     completo     M8 (I-43): todos los programas de sw/
 
 Uso (desde la raíz del repositorio):
 
-    python scripts/regresion.py                      # forwarding
+    python scripts/regresion.py                      # forwarding_stall
+    python scripts/regresion.py --modo forwarding    # el pipeline de I-39 e I-40
     python scripts/regresion.py --modo sin_riesgos   # el pipeline de M7
     python scripts/regresion.py --modo completo
     python scripts/regresion.py alu_r fwd_x0         # solo esos programas
@@ -42,11 +46,14 @@ sys.path.insert(0, str(ROOT / "sw"))
 
 import mutantes  # noqa: E402
 import prep_tb  # noqa: E402
-from programas import FORWARDING, PROGRAMS, SIN_RIESGOS, SOLO_TRAZA_FORWARDING  # noqa: E402
+from programas import (FORWARDING, FORWARDING_STALL, PROGRAMS, SIN_RIESGOS,  # noqa: E402
+                       SOLO_TRAZA_FORWARDING, SOLO_TRAZA_FORWARDING_STALL)
 
-PROGRAMAS = {"sin_riesgos": SIN_RIESGOS, "forwarding": FORWARDING, "completo": PROGRAMS}
+PROGRAMAS = {"sin_riesgos": SIN_RIESGOS, "forwarding": FORWARDING,
+             "forwarding_stall": FORWARDING_STALL, "completo": PROGRAMS}
 # Se suman a los del modo, pero sin +FINAL: solo la traza (verificacion.md §8.2)
-SOLO_TRAZA = {"forwarding": SOLO_TRAZA_FORWARDING}
+SOLO_TRAZA = {"forwarding": SOLO_TRAZA_FORWARDING,
+              "forwarding_stall": SOLO_TRAZA_FORWARDING_STALL}
 
 SALIDA = ROOT / "build" / "regresion"
 
@@ -55,8 +62,8 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("programas", nargs="*",
                    help="nombres de sw/ sin .s (por defecto, todos los del modo)")
-    p.add_argument("--modo", choices=PROGRAMAS, default="forwarding",
-                   help="modo del modelo y lista de programas (por defecto forwarding)")
+    p.add_argument("--modo", choices=PROGRAMAS, default="forwarding_stall",
+                   help="modo del modelo y lista de programas (por defecto forwarding_stall)")
     p.add_argument("--pausas", type=int, metavar="SEMILLA",
                    help="agrega una segunda corrida de cada programa con +PAUSAS=SEMILLA")
     p.add_argument("--mutante", action="append", metavar="NOMBRE",
