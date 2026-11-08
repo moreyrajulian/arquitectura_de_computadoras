@@ -19,8 +19,8 @@
 //       todo el control en 0 (§4.4). Su imm_sel elige el formato de
 //       imm_gen (§4.3).
 //     - id_ex_reg guarda los 161 bits de §8 con rst > en > flush (§2).
-//   La etapa no calcula enables ni flush: los recibe de quien los genere
-//   (riscv_core hasta I-42, después la unidad de riesgos, §10.4):
+//   La etapa no calcula enables ni flush: los recibe ya calculados de
+//   hazard_unit (§10.4, desde I-42; antes, de riscv_core):
 //     en_id_ex    = enable
 //     flush_id_ex = redirect | stall
 //   El banco recibe además enable, porque su escritura respeta el enable

@@ -7,33 +7,31 @@
 // Procesador RV32I segmentado (docs/spec/pipeline.md). Se integra etapa
 // por etapa (docs/planificacion.md); esta versión tiene IF (I-22), ID
 // (I-27), EX (I-31), MEM (I-34), WB (I-35), los saltos de vuelta a IF
-// (I-36), la parada por HALT (I-37), la unidad de forwarding (I-39) y
-// la detección de carga-uso (I-41).
+// (I-36), la parada por HALT (I-37), la unidad de forwarding (I-39), la
+// detección de carga-uso (I-41) y el flush por saltos (I-42).
 //
 // Función:
-//   Instancia las etapas y genera las señales de control del pipeline
-//   (pipeline.md §9.2, §10.4). La que todavía no tiene quien la
-//   produzca vale 0 y se indica qué issue la conecta:
-//     flush_redirect = 0   hasta I-42      (flush por salto tomado)
-//   Con eso: en_id_ex = en_ex_mem = en_mem_wb = enable y
-//   flush_ex_mem = flush_mem_wb = 0. Hasta I-42 los enables y el flush
-//   se calculan acá (decisión 023); después, en hazard_unit.
-//   hazard_unit (§10.3) detecta la carga-uso: el load en EX escribe un
-//   registro que nombra la instrucción en ID. stall = load_use &
-//   ~redirect retiene PC e IF/ID (en_pc = en_if_id = enable & ~stall) y
-//   mete una burbuja en ID/EX (flush_id_ex = stall); en IF/ID, en gana
-//   sobre flush, así que un HALT en ID se conserva durante el stall
-//   (§3.4). Como todo es combinacional sobre los latches, con enable = 0
-//   el stall queda congelado y sigue donde estaba al volver a 1.
+//   Instancia las etapas y las unidades de riesgos, y conecta las señales
+//   de control del pipeline (pipeline.md §9.2, §10.4).
+//   hazard_unit (§10.3, §10.4) calcula el stall y las entradas en / flush
+//   de cada registro a partir de la carga-uso, el salto tomado en EX
+//   (redirect), stop_fetch y el enable de la Debug Unit (decisión 018):
+//     - Carga-uso: el load en EX escribe un registro que nombra la
+//       instrucción en ID. stall = load_use & ~redirect retiene PC e
+//       IF/ID y mete una burbuja en ID/EX; en IF/ID, en gana sobre flush,
+//       así que un HALT en ID se conserva durante el stall (§3.4). Como
+//       todo es combinacional sobre los latches, con enable = 0 el stall
+//       queda congelado y sigue donde estaba al volver a 1.
+//     - Salto tomado (redirect, redirect_pc de branch_unit): el PC toma
+//       redirect_pc y, en el mismo flanco, flush_if_id y flush_id_ex
+//       convierten en burbuja las dos instrucciones que entraron detrás
+//       siguiendo PC + 4 (§10.5, decisión 012). Cuesta 2 ciclos.
 //   forwarding_unit (§10.2) elige fwd_a / fwd_b: EX toma rs1 / rs2 de
 //   EX/MEM o de WB cuando una de las dos instrucciones anteriores los
 //   escribe. Después del stall, el load está en WB y la instrucción
 //   frenada recibe el dato por fwd = 01.
 //   WB escribe el banco (wb_*, con el bypass WB -> ID del banco,
-//   decisión 007). El salto tomado en EX (redirect,
-//   redirect_pc de branch_unit) cambia el PC, pero sin flush: las dos
-//   instrucciones que entraron detrás se ejecutan, como en el modo
-//   sin_riesgos del modelo. En I-42, flush_redirect = redirect.
+//   decisión 007).
 //
 //   Parada por HALT (I-37, pipeline.md §3.4, decisión 001): stop_fetch
 //   es el OR de los bits halt de las cuatro etapas y de halted. Congela
@@ -41,9 +39,8 @@
 //   burbujas; en el flanco en que halted pasa a 1 el pipeline queda
 //   vacío, y halted mantiene la parada. Un HALT en el camino equivocado
 //   de un salto tomado no detiene el core: redirect gana en el PC y el
-//   flush lo convierte en burbuja (I-42). Hasta I-42, sin ese flush, un
-//   HALT en las dos posiciones detrás de un salto tomado sí lo detiene
-//   (por eso los programas de M7 llevan dos nop ahí).
+//   flush lo convierte en burbuja, así que su bit halt desaparece y
+//   stop_fetch se apaga solo.
 //
 //   Los campos de los registros de segmentación son señales de este
 //   módulo con el nombre <latch>_<campo> de pipeline.md §8: el banco de
@@ -157,31 +154,24 @@ module riscv_core
     //------------------------------------------------------------------
     // Señales de control del pipeline (pipeline.md §9.2 y §10.4)
     //------------------------------------------------------------------
-    wire             load_use;                      // hazard_unit (§10.3)
     wire             redirect;                      // ex_stage (§5.3)
     wire [NB_PC-1:0] redirect_pc;                   // ex_stage (§5.3)
     wire             stop_fetch;                    // parada por HALT (§3.4)
     wire             halted;                        // wb_stage (§7.3)
 
-    // Término del salto en el flush (§10.5): I-42. Hasta M8 el salto
-    // cambia el PC pero no descarta las dos instrucciones que lo siguen,
-    // como el modelo en modo sin_riesgos (los programas llevan dos nop)
-    wire flush_redirect = 1'b0;
-
-    // Stall por carga-uso (§10.4). Si en el mismo ciclo hay un salto
-    // tomado gana el salto (§3.3); con los saltos en EX no puede pasar,
-    // porque la instrucción en EX es un load o un salto
-    wire stall = load_use & ~redirect;
-
-    wire en_pc       = i_enable & ~stall;
-    wire en_if_id     = i_enable & ~stall;
-    wire en_id_ex     = i_enable;
-    wire en_ex_mem    = i_enable;
-    wire en_mem_wb    = i_enable;           // también el ena de dmem
-    wire flush_if_id  = flush_redirect | stop_fetch;
-    wire flush_id_ex  = flush_redirect | stall;
-    wire flush_ex_mem = 1'b0;
-    wire flush_mem_wb = 1'b0;
+    // Enables y flush de cada registro, de hazard_unit (§10.4). Se
+    // instancia después de ID/EX, que tiene sus entradas
+    wire load_use;
+    wire stall;
+    wire en_pc;
+    wire en_if_id;                          // también el ena de imem
+    wire en_id_ex;
+    wire en_ex_mem;
+    wire en_mem_wb;                         // también el ena de dmem
+    wire flush_if_id;
+    wire flush_id_ex;
+    wire flush_ex_mem;
+    wire flush_mem_wb;
 
     //------------------------------------------------------------------
     // Escritura del banco desde WB (pipeline.md §7.2), de wb_stage
@@ -300,9 +290,10 @@ module riscv_core
     );
 
     //------------------------------------------------------------------
-    // Detección de carga-uso (pipeline.md §10.3): compara el rd del load
-    // en EX con los campos rs1 / rs2 de la instrucción en ID, sin
-    // decodificar (decisión 011), los mismos que usa id_stage
+    // Unidad de detección de riesgos (pipeline.md §10.3 y §10.4): compara
+    // el rd del load en EX con los campos rs1 / rs2 de la instrucción en
+    // ID, sin decodificar (decisión 011), los mismos que usa id_stage, y
+    // combina la carga-uso con el salto tomado, stop_fetch y el enable
     //------------------------------------------------------------------
     wire [NB_ADDR-1:0] if_id_rs1 = if_id_instr[19:15];
     wire [NB_ADDR-1:0] if_id_rs2 = if_id_instr[24:20];
@@ -310,12 +301,25 @@ module riscv_core
     hazard_unit #(
         .NB_ADDR (NB_ADDR)
     ) u_hazard_unit (
+        .i_enable         (i_enable),
+        .i_redirect       (redirect),
+        .i_stop_fetch     (stop_fetch),
         .i_if_id_valid    (if_id_valid),
         .i_if_id_rs1      (if_id_rs1),
         .i_if_id_rs2      (if_id_rs2),
         .i_id_ex_mem_read (id_ex_mem_read),
         .i_id_ex_rd       (id_ex_rd),
-        .o_load_use       (load_use)
+        .o_load_use       (load_use),
+        .o_stall          (stall),
+        .o_en_pc          (en_pc),
+        .o_en_if_id       (en_if_id),
+        .o_en_id_ex       (en_id_ex),
+        .o_en_ex_mem      (en_ex_mem),
+        .o_en_mem_wb      (en_mem_wb),
+        .o_flush_if_id    (flush_if_id),
+        .o_flush_id_ex    (flush_id_ex),
+        .o_flush_ex_mem   (flush_ex_mem),
+        .o_flush_mem_wb   (flush_mem_wb)
     );
 
     //------------------------------------------------------------------
