@@ -57,3 +57,11 @@ FORWARDING_STALL = FORWARDING + SOLO_STALL
 # loaduse_sw_beq, el unico load seguido de un salto que usa el dato. Su beq se
 # toma y el .exp difiere solo en x20, del camino equivocado (I-42)
 SOLO_TRAZA_FORWARDING_STALL = SOLO_TRAZA_FORWARDING + ["loaduse_sw_beq"]
+
+# Programas que suma el flush por saltos (I-42): los originales con saltos tomados que
+# faltaban. halt_camino_equivocado es de SOLO_M8 (no tiene variante _nops)
+SOLO_FLUSH = ["branch_cond", "jump", "mixto_lazo", "halt_camino_equivocado"]
+
+# Desde I-42 el RTL tiene forwarding, stall y flush: modo completo, todos los programas
+# con +FINAL (decision 029). Los de SOLO_TRAZA_FORWARDING_STALL ya dan su .exp
+COMPLETO = FORWARDING_STALL + SOLO_TRAZA_FORWARDING_STALL + SOLO_FLUSH

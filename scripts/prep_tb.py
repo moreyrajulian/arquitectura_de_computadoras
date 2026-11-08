@@ -16,10 +16,10 @@ nombres fijos para que el banco no cambie de un programa a otro (decisión 021):
 
 Uso (desde la raíz del repositorio):
 
-    python scripts/prep_tb.py sw/indep_alu_r.s                  # modo forwarding_stall
-    python scripts/prep_tb.py sw/alu_r.s --modo forwarding      # I-39 e I-40
-    python scripts/prep_tb.py sw/alu_r.s --modo sin_riesgos     # M7
-    python scripts/prep_tb.py sw/alu_r.s --modo completo        # M8, I-43
+    python scripts/prep_tb.py sw/indep_alu_r.s                      # modo completo
+    python scripts/prep_tb.py sw/alu_r.s --modo forwarding_stall    # I-41
+    python scripts/prep_tb.py sw/alu_r.s --modo forwarding          # I-39 e I-40
+    python scripts/prep_tb.py sw/alu_r.s --modo sin_riesgos         # M7
 """
 
 import argparse
@@ -97,9 +97,9 @@ def exp_files(exp, outdir):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("programa", help="programa .s de sw/")
-    p.add_argument("--modo", choices=MODOS, default="forwarding_stall",
+    p.add_argument("--modo", choices=MODOS, default="completo",
                    help="modo del modelo: sin_riesgos (M3 a M7), forwarding (I-39 e I-40), "
-                        "forwarding_stall (desde I-41, por defecto) o completo (M8, I-43)")
+                        "forwarding_stall (I-41) o completo (desde I-42, por defecto)")
     p.add_argument("-o", "--salida", default=str(ROOT / "build" / "tb"),
                    help="directorio base (por defecto build/tb)")
     args = p.parse_args(argv)
