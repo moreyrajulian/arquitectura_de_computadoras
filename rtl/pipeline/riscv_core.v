@@ -7,20 +7,28 @@
 // Procesador RV32I segmentado (docs/spec/pipeline.md). Se integra etapa
 // por etapa (docs/planificacion.md); esta versión tiene IF (I-22), ID
 // (I-27), EX (I-31), MEM (I-34), WB (I-35), los saltos de vuelta a IF
-// (I-36), la parada por HALT (I-37) y la unidad de forwarding (I-39).
+// (I-36), la parada por HALT (I-37), la unidad de forwarding (I-39) y
+// la detección de carga-uso (I-41).
 //
 // Función:
 //   Instancia las etapas y genera las señales de control del pipeline
-//   (pipeline.md §9.2, §10.4). Las que todavía no tienen quien las
-//   produzca valen 0 y se indica qué issue las conecta:
-//     stall          = 0   hasta I-41/I-42 (detección de carga-uso)
+//   (pipeline.md §9.2, §10.4). La que todavía no tiene quien la
+//   produzca vale 0 y se indica qué issue la conecta:
 //     flush_redirect = 0   hasta I-42      (flush por salto tomado)
-//   Con eso: en_pc = en_if_id = en_id_ex = en_ex_mem = en_mem_wb =
-//   enable y flush_id_ex = flush_ex_mem = flush_mem_wb = 0.
+//   Con eso: en_id_ex = en_ex_mem = en_mem_wb = enable y
+//   flush_ex_mem = flush_mem_wb = 0. Hasta I-42 los enables y el flush
+//   se calculan acá (decisión 023); después, en hazard_unit.
+//   hazard_unit (§10.3) detecta la carga-uso: el load en EX escribe un
+//   registro que nombra la instrucción en ID. stall = load_use &
+//   ~redirect retiene PC e IF/ID (en_pc = en_if_id = enable & ~stall) y
+//   mete una burbuja en ID/EX (flush_id_ex = stall); en IF/ID, en gana
+//   sobre flush, así que un HALT en ID se conserva durante el stall
+//   (§3.4). Como todo es combinacional sobre los latches, con enable = 0
+//   el stall queda congelado y sigue donde estaba al volver a 1.
 //   forwarding_unit (§10.2) elige fwd_a / fwd_b: EX toma rs1 / rs2 de
 //   EX/MEM o de WB cuando una de las dos instrucciones anteriores los
-//   escribe. Un uso inmediatamente después de un load todavía lee la
-//   dirección de EX/MEM, porque falta el stall de carga-uso (I-41).
+//   escribe. Después del stall, el load está en WB y la instrucción
+//   frenada recibe el dato por fwd = 01.
 //   WB escribe el banco (wb_*, con el bypass WB -> ID del banco,
 //   decisión 007). El salto tomado en EX (redirect,
 //   redirect_pc de branch_unit) cambia el PC, pero sin flush: las dos
@@ -149,7 +157,7 @@ module riscv_core
     //------------------------------------------------------------------
     // Señales de control del pipeline (pipeline.md §9.2 y §10.4)
     //------------------------------------------------------------------
-    wire             stall       = 1'b0;            // I-41/I-42
+    wire             load_use;                      // hazard_unit (§10.3)
     wire             redirect;                      // ex_stage (§5.3)
     wire [NB_PC-1:0] redirect_pc;                   // ex_stage (§5.3)
     wire             stop_fetch;                    // parada por HALT (§3.4)
@@ -160,7 +168,12 @@ module riscv_core
     // como el modelo en modo sin_riesgos (los programas llevan dos nop)
     wire flush_redirect = 1'b0;
 
-    wire en_pc        = i_enable & ~stall;
+    // Stall por carga-uso (§10.4). Si en el mismo ciclo hay un salto
+    // tomado gana el salto (§3.3); con los saltos en EX no puede pasar,
+    // porque la instrucción en EX es un load o un salto
+    wire stall = load_use & ~redirect;
+
+    wire en_pc       = i_enable & ~stall;
     wire en_if_id     = i_enable & ~stall;
     wire en_id_ex     = i_enable;
     wire en_ex_mem    = i_enable;
@@ -284,6 +297,25 @@ module riscv_core
         .o_id_ex_mem_to_reg (id_ex_mem_to_reg),
         .o_id_ex_halt       (id_ex_halt),
         .o_id_ex_latch      (o_id_ex_latch)
+    );
+
+    //------------------------------------------------------------------
+    // Detección de carga-uso (pipeline.md §10.3): compara el rd del load
+    // en EX con los campos rs1 / rs2 de la instrucción en ID, sin
+    // decodificar (decisión 011), los mismos que usa id_stage
+    //------------------------------------------------------------------
+    wire [NB_ADDR-1:0] if_id_rs1 = if_id_instr[19:15];
+    wire [NB_ADDR-1:0] if_id_rs2 = if_id_instr[24:20];
+
+    hazard_unit #(
+        .NB_ADDR (NB_ADDR)
+    ) u_hazard_unit (
+        .i_if_id_valid    (if_id_valid),
+        .i_if_id_rs1      (if_id_rs1),
+        .i_if_id_rs2      (if_id_rs2),
+        .i_id_ex_mem_read (id_ex_mem_read),
+        .i_id_ex_rd       (id_ex_rd),
+        .o_load_use       (load_use)
     );
 
     //------------------------------------------------------------------

@@ -22,8 +22,9 @@ sys.path.insert(0, str(SW.parent / "tools" / "assembler"))
 from rvasm import assemble, classify  # noqa: E402
 from rvasm.isa import HALT_WORD, INSTRUCTIONS  # noqa: E402
 
-from programas import (FORWARDING, INDEP, NOPS, PLAN, PROGRAMS, SIN_RIESGOS,  # noqa: E402
-                       SOLO_FORWARDING, SOLO_M8, SOLO_TRAZA_FORWARDING)
+from programas import (FORWARDING, FORWARDING_STALL, INDEP, NOPS, PLAN, PROGRAMS,  # noqa: E402
+                       SIN_RIESGOS, SOLO_FORWARDING, SOLO_M8, SOLO_STALL,
+                       SOLO_TRAZA_FORWARDING, SOLO_TRAZA_FORWARDING_STALL)
 
 AVISOS = {"imem_fault", "dmem_oob", "dmem_misaligned"}
 
@@ -117,6 +118,20 @@ def test_trace_only_forwarding_programs():
     """verificacion.md 8.2: los que corren sin +FINAL son originales que no estan en FORWARDING."""
     assert not sorted(set(SOLO_TRAZA_FORWARDING) - set(NOPS))
     assert not sorted(set(SOLO_TRAZA_FORWARDING) & set(FORWARDING))
+
+
+def test_forwarding_stall_programs():
+    """Decision 029 (I-41): el stall suma originales del plan que no estaban en FORWARDING."""
+    assert not sorted(set(SOLO_STALL) - set(NOPS + SOLO_M8))
+    assert not sorted(set(SOLO_STALL) & set(FORWARDING))
+    assert not sorted(set(FORWARDING) - set(FORWARDING_STALL))
+    assert len(FORWARDING_STALL) == len(set(FORWARDING_STALL))
+
+
+def test_trace_only_forwarding_stall_programs():
+    """Decision 030: los que corren sin +FINAL con el stall no estan en FORWARDING_STALL."""
+    assert not sorted(set(SOLO_TRAZA_FORWARDING_STALL) - set(NOPS))
+    assert not sorted(set(SOLO_TRAZA_FORWARDING_STALL) & set(FORWARDING_STALL))
 
 
 def test_every_instruction_is_covered():

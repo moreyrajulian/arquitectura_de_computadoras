@@ -10,7 +10,7 @@ import struct
 import pytest
 
 from isasim_testutil import REPO
-from isasim import (COMPLETO, FORWARDING, SIN_RIESGOS, ModelError, compare_exp, load_initial_state,
+from isasim import (COMPLETO, FORWARDING, FORWARDING_STALL, SIN_RIESGOS, ModelError, compare_exp, load_initial_state,
                     load_program, parse_exp, read_all_payload, simulate, write_outputs)
 from isasim.files import default_initial_state
 
@@ -29,6 +29,13 @@ NEEDS_STALL_OR_FLUSH = [p for p in NEEDS_HAZARD_UNITS if p not in ONLY_FORWARDIN
 # difieren del .exp los registros que escriben las instrucciones del camino
 # equivocado (las marcadas "no se ejecuta" en el .s)
 TRACE_ONLY_FORWARDING = {"salto_depende": {20, 21, 22}}
+# Decisión 029 (I-41): de NEEDS_STALL_OR_FLUSH, los que solo necesitan el stall
+# (sin saltos tomados); el resto necesita el flush
+ONLY_STALL = ["loaduse_rs1_rs2", "halt_stall"]
+NEEDS_FLUSH = [p for p in NEEDS_STALL_OR_FLUSH if p not in ONLY_STALL]
+# verificacion.md §8.2 (I-41): con forwarding y stall, sin flush. loaduse_sw_beq es
+# el load seguido de un beq tomado: x20 es del camino equivocado
+TRACE_ONLY_FORWARDING_STALL = {**TRACE_ONLY_FORWARDING, "loaduse_sw_beq": {20}}
 
 
 def run_program(name, mode):
@@ -81,6 +88,32 @@ def test_trace_only_programs_run_with_forwarding(name):
     assert r.halted and r.pipeline_empty
     diffs = compare_exp(r, expected(name))
     assert sorted(d.split(":")[0] for d in diffs) == sorted(f"x{i}" for i in TRACE_ONLY_FORWARDING[name])
+
+
+@pytest.mark.parametrize("name", M7 + ONLY_FORWARDING + ONLY_STALL)
+def test_forwarding_stall_mode_matches(name):
+    """Decisión 029: con forwarding y stall de carga-uso, sin flush (desde I-41)."""
+    assert compare_exp(run_program(name, FORWARDING_STALL), expected(name)) == []
+
+
+@pytest.mark.parametrize("name", NEEDS_FLUSH)
+def test_flush_programs_do_not_pass_without_flush(name):
+    """Los que necesitan el flush no dan el .exp con forwarding y stall."""
+    try:
+        r = run_program(name, FORWARDING_STALL)
+    except ModelError:
+        return
+    assert compare_exp(r, expected(name)) != []
+
+
+@pytest.mark.parametrize("name", sorted(TRACE_ONLY_FORWARDING_STALL))
+def test_trace_only_programs_run_with_forwarding_stall(name):
+    """Su traza sirve para pipeline_tb sin +FINAL: solo difieren los registros del camino equivocado."""
+    r = run_program(name, FORWARDING_STALL)
+    assert r.halted and r.pipeline_empty
+    diffs = compare_exp(r, expected(name))
+    assert sorted(d.split(":")[0] for d in diffs) == sorted(
+        f"x{i}" for i in TRACE_ONLY_FORWARDING_STALL[name])
 
 
 @pytest.mark.parametrize("name", NEEDS_HAZARD_UNITS)
