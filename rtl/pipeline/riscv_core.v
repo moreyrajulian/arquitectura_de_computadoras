@@ -160,7 +160,9 @@ module riscv_core
     wire             halted;                        // wb_stage (§7.3)
 
     // Enables y flush de cada registro, de hazard_unit (§10.4). Se
-    // instancia después de ID/EX, que tiene sus entradas
+    // instancia después de ID/EX, que tiene sus entradas. load_use no
+    // tiene lectores en el core (lo usa stall dentro de hazard_unit): queda
+    // para verlo en las formas de onda (u_dut.load_use), junto a stall
     wire load_use;
     wire stall;
     wire en_pc;
