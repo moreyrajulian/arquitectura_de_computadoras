@@ -38,6 +38,7 @@ Uso (desde la raíz del repositorio):
     python scripts/regresion.py --mutante todos            # con cada mutante (scripts/mutantes.py)
     python scripts/regresion.py --mutante stall_sin_valid  # un equivalente, a mano (NO DETECTADO)
     python scripts/regresion.py --sin-unitarios            # solo los programas
+    python scripts/regresion.py --mutante bypass_sin_we --invertir  # las corridas al revés
 
 Después, en la consola Tcl de Vivado:
 
@@ -98,6 +99,10 @@ def main(argv=None):
                    help="corre la regresión con ese mutante del RTL (se puede repetir; 'todos' "
                         "son los de scripts/mutantes.py, sin los equivalentes). regresion.tcl dice "
                         "qué corridas lo detectan")
+    p.add_argument("--invertir", action="store_true",
+                   help="escribe las corridas en orden inverso. Con un mutante que ve el estado "
+                        "que el reset no borra, separa las fallas que dependen de la corrida "
+                        "anterior (verificacion.md §8.2, decisión 033)")
     p.add_argument("--sin-unitarios", action="store_true",
                    help="no corre los testbenches de tb/unit/ (solo se corren en la regresión "
                         "normal, sin programas ni --mutante)")
@@ -138,6 +143,10 @@ def main(argv=None):
     corridas = [f"{n} {n}{plusargs(n)}" for n in nombres]
     if args.pausas is not None:
         corridas += [f"{n}_pausas {n}{plusargs(n)} PAUSAS={args.pausas}" for n in nombres]
+    # pipeline_tb corre la lista en una simulación (decisión 033): el orden decide qué corrida
+    # va primero y cuál deja su estado a la siguiente
+    if args.invertir:
+        corridas.reverse()
     SALIDA.mkdir(parents=True, exist_ok=True)
     lista_corr.write_text("\n".join(corridas) + "\n", encoding="utf-8")
 
@@ -168,7 +177,8 @@ def main(argv=None):
 
     sin_final = [n for n in nombres if n in solo_traza]
     nota = f", sin +FINAL: {', '.join(sin_final)}" if sin_final else ""
-    print(f"{len(corridas)} corridas ({args.modo}{nota}) en {lista_corr}")
+    orden = ", en orden inverso" if args.invertir else ""
+    print(f"{len(corridas)} corridas ({args.modo}{nota}{orden}) en {lista_corr}")
     if elegidos:
         print(f"{len(elegidos)} mutantes, cada uno con todas las corridas: {', '.join(elegidos)}")
         equiv = [m for m in elegidos if m in mutantes.EQUIVALENTES]
