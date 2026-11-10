@@ -17,6 +17,10 @@ Programas por modo (verificacion.md §4.3; las listas están en sw/programas.py)
                  salto_depende y loaduse_sw_beq sin +FINAL
     completo     desde I-42 (por defecto): todos los programas de sw/, con +FINAL
 
+Además, la regresión normal (sin programas ni --mutante) corre los testbenches unitarios de
+tb/unit/ (verificacion.md §6, decisión 032): escribe su lista en build/regresion/unitarios.txt
+y regresion.tcl los corre después de los programas. --sin-unitarios los saltea.
+
 Solo completo corresponde al RTL de master. Los otros modos describen el RTL de una
 integración anterior y sirven con su commit (por ejemplo, para repetir la regresión de una
 PR vieja): con el RTL de master, que siempre hace flush, fallan los programas con saltos
@@ -32,6 +36,8 @@ Uso (desde la raíz del repositorio):
     python scripts/regresion.py --pausas 47          # además, cada uno con +PAUSAS=47
     python scripts/regresion.py --mutante sin_forwarding   # la regresión con un mutante del RTL
     python scripts/regresion.py --mutante todos            # con cada mutante (scripts/mutantes.py)
+    python scripts/regresion.py --mutante stall_sin_valid  # un equivalente, a mano (NO DETECTADO)
+    python scripts/regresion.py --sin-unitarios            # solo los programas
 
 Después, en la consola Tcl de Vivado:
 
@@ -60,6 +66,13 @@ SOLO_TRAZA = {"forwarding": SOLO_TRAZA_FORWARDING,
               "forwarding_stall": SOLO_TRAZA_FORWARDING_STALL}
 
 SALIDA = ROOT / "build" / "regresion"
+TB_UNIT = ROOT / "tb" / "unit"
+
+
+def unitarios():
+    """Testbenches de tb/unit/: el módulo superior se llama como el archivo (verificacion.md §7).
+    Los que empiezan con _ (la plantilla) no son pruebas."""
+    return sorted(p.stem for p in TB_UNIT.glob("*_tb.v") if not p.name.startswith("_"))
 
 
 def main(argv=None):
@@ -72,9 +85,13 @@ def main(argv=None):
     p.add_argument("--pausas", type=int, metavar="SEMILLA",
                    help="agrega una segunda corrida de cada programa con +PAUSAS=SEMILLA")
     p.add_argument("--mutante", action="append", metavar="NOMBRE",
-                   choices=[*mutantes.MUTANTES, "todos"],
+                   choices=[*mutantes.TODOS, "todos"],
                    help="corre la regresión con ese mutante del RTL (se puede repetir; 'todos' "
-                        "son los de scripts/mutantes.py). regresion.tcl dice qué corridas lo detectan")
+                        "son los de scripts/mutantes.py, sin los equivalentes). regresion.tcl dice "
+                        "qué corridas lo detectan")
+    p.add_argument("--sin-unitarios", action="store_true",
+                   help="no corre los testbenches de tb/unit/ (solo se corren en la regresión "
+                        "normal, sin programas ni --mutante)")
     args = p.parse_args(argv)
 
     solo_traza = SOLO_TRAZA.get(args.modo, [])
@@ -114,7 +131,7 @@ def main(argv=None):
     lista_mut.unlink(missing_ok=True)
     elegidos = args.mutante or []
     if "todos" in elegidos:
-        elegidos = list(mutantes.MUTANTES)
+        elegidos = [*mutantes.MUTANTES, *(m for m in elegidos if m != "todos")]
     elegidos = list(dict.fromkeys(elegidos))
     if elegidos:
         lineas = []
@@ -127,11 +144,25 @@ def main(argv=None):
             lineas.append(f"{m} {mutantes.MUTANTES[m].archivo} {copia.relative_to(ROOT).as_posix()}")
         lista_mut.write_text("\n".join(lineas) + "\n", encoding="utf-8")
 
+    # Testbenches unitarios (decisión 032): solo en la regresión normal. Con --mutante no,
+    # porque un mutante de un módulo lo detecta su propio testbench y eso no dice nada de los
+    # programas (verificacion.md §6). Sin la lista, regresion.tcl no corre ninguno
+    lista_unit = SALIDA / "unitarios.txt"
+    lista_unit.unlink(missing_ok=True)
+    tbs = [] if (args.programas or elegidos or args.sin_unitarios) else unitarios()
+    if tbs:
+        lista_unit.write_text("\n".join(tbs) + "\n", encoding="utf-8")
+
     sin_final = [n for n in nombres if n in solo_traza]
     nota = f", sin +FINAL: {', '.join(sin_final)}" if sin_final else ""
     print(f"{len(corridas)} corridas ({args.modo}{nota}) en {SALIDA / 'corridas.txt'}")
     if elegidos:
         print(f"{len(elegidos)} mutantes, cada uno con todas las corridas: {', '.join(elegidos)}")
+        equiv = [m for m in elegidos if m in mutantes.EQUIVALENTES]
+        if equiv:
+            print(f"equivalentes, lo esperado es NO DETECTADO: {', '.join(equiv)}")
+    if tbs:
+        print(f"{len(tbs)} testbenches unitarios en {lista_unit}")
     print(f"Vivado: source {(ROOT / 'scripts' / 'regresion.tcl').as_posix()}")
     return 0
 

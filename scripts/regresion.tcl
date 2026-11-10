@@ -12,17 +12,26 @@
 #
 # Cada corrida deja su log en build/regresion/logs/<etiqueta>.log. Pasa si la
 # última línea que empieza con "TEST " empieza con "TEST PASSED" (verificacion.md
-# §6). Una corrida en la que Vivado da error, o en la que xsim no deja log, cuenta
-# como falla y el script sigue con la próxima. Al final imprime el resumen, lo
+# §6). Una corrida en la que Vivado da error, xsim no deja log o el log no tiene
+# línea TEST queda como ERROR, cuenta como falla y el script sigue con la
+# próxima. Al final imprime el resumen, lo
 # guarda en build/regresion/resumen.txt y, si alguna corrida falló, termina con
 # error (en batch, Vivado sale con código 1).
 #
-# Con mutantes (regresion.py --mutante, decisión 031) corre la lista entera una vez
-# por mutante: deshabilita el archivo original de rtl/ y simula con la copia de
-# build/mutantes/, sin tocar rtl/. Los logs van a build/regresion/logs/<mutante>/.
-# Lo que se espera es lo contrario: el script termina con error si algún mutante
-# no hace fallar ninguna corrida. Al terminar, o si algo falla en el medio, el
-# proyecto queda como estaba.
+# Después de los programas corre los testbenches unitarios de
+# build/regresion/unitarios.txt (decisión 032), si regresion.py la escribió: cada
+# uno con su top y compilando desde cero, porque el snapshot es otro. Su log va a
+# build/regresion/logs/unit/<tb>.log y se decide igual, por la última línea TEST.
+#
+# Con mutantes (regresion.py --mutante, decisión 031) corre primero la lista sin
+# mutante, como referencia: si alguna corrida falla, los mutantes no se corren.
+# Después la corre una vez por mutante: deshabilita el archivo original de rtl/ y
+# simula con la copia de build/mutantes/, sin tocar rtl/. Los logs van a
+# build/regresion/logs/<mutante>/. Un mutante está detectado si alguna corrida
+# termina en TEST FAILED, y queda en ERROR si alguna quedó sin resultado (por
+# ejemplo, la copia no compila): ahí no se sabe si se detecta. El script termina
+# con error si algún mutante no se detecta o queda en ERROR. Al terminar, o si
+# algo falla en el medio, el proyecto queda como estaba.
 # ---------------------------------------------------------------------------
 set reg_root [file normalize [file join [file dirname [info script]] ..]]
 set reg_dir  [file join $reg_root build regresion]
@@ -39,14 +48,24 @@ foreach linea [split [read $f] "\n"] {
 close $f
 
 # Mutantes: nombre, archivo original y copia mutada (relativos a la raíz). Sin la
-# lista, una sola pasada sin mutante ("")
+# lista, solo la pasada sin mutante
 set mut_list [file join $reg_dir mutantes.txt]
-set mutantes [list ""]
+set mutantes [list]
 if {[file exists $mut_list]} {
-    set mutantes [list]
     set f [open $mut_list r]
     foreach linea [split [read $f] "\n"] {
         if {[string trim $linea] ne ""} { lappend mutantes $linea }
+    }
+    close $f
+}
+
+# Testbenches unitarios (decisión 032): un top por línea. Sin la lista, ninguno
+set unit_list [file join $reg_dir unitarios.txt]
+set unitarios [list]
+if {[file exists $unit_list]} {
+    set f [open $unit_list r]
+    foreach linea [split [read $f] "\n"] {
+        if {[string trim $linea] ne ""} { lappend unitarios [string trim $linea] }
     }
     close $f
 }
@@ -93,10 +112,14 @@ proc reg_mutar {reg_root original copia} {
     add_files -fileset sim_1 -norecurse [file join $reg_root $copia]
 }
 
-# Una pasada: todas las corridas, con los logs en dir. Devuelve {fallas lineas}
+# Una pasada: todas las corridas, con los logs en dir. Devuelve {fallas errores
+# lineas}: fallas son las que terminan sin TEST PASSED; errores, las que quedan sin
+# resultado (Vivado da error, xsim no deja log o el log no tiene línea TEST). Los
+# errores también están en fallas
 proc reg_pasada {corridas reg_root sim_dir dir} {
     set lineas [list]
     set fallas [list]
+    set errores [list]
     set primera 1
     foreach corrida $corridas {
         set etiqueta [lindex $corrida 0]
@@ -120,13 +143,15 @@ proc reg_pasada {corridas reg_root sim_dir dir} {
             close_sim
         } err]} {
             catch {close_sim -force}
-            lappend lineas "FALLA $etiqueta: [lindex [split $err "\n"] 0]"
+            lappend lineas "ERROR $etiqueta: [lindex [split $err "\n"] 0]"
             lappend fallas $etiqueta
+            lappend errores $etiqueta
             continue
         }
         if {![file exists $sim_log]} {
-            lappend lineas "FALLA $etiqueta: xsim no dejó simulate.log"
+            lappend lineas "ERROR $etiqueta: xsim no dejó simulate.log"
             lappend fallas $etiqueta
+            lappend errores $etiqueta
             continue
         }
 
@@ -135,23 +160,78 @@ proc reg_pasada {corridas reg_root sim_dir dir} {
         set res [reg_resultado $log]
         if {[string match "TEST PASSED*" $res]} {
             lappend lineas "ok    $etiqueta: $res"
+        } elseif {$res eq ""} {
+            lappend lineas "ERROR $etiqueta: sin línea TEST"
+            lappend fallas $etiqueta
+            lappend errores $etiqueta
         } else {
-            if {$res eq ""} { set res "sin línea TEST" }
             lappend lineas "FALLA $etiqueta: $res"
             lappend fallas $etiqueta
         }
     }
     set_property -name {xsim.simulate.xsim.more_options} -value {} -objects [get_filesets sim_1]
+    return [list $fallas $errores $lineas]
+}
+
+# Los testbenches unitarios, con los logs en dir. Cada uno cambia el top, así que
+# launch_simulation compila y elabora de nuevo. Devuelve {fallas lineas}; una
+# corrida sin resultado (ERROR) cuenta como falla
+proc reg_unitarios {unitarios sim_dir dir} {
+    set lineas [list]
+    set fallas [list]
+    set_property -name {xsim.simulate.xsim.more_options} -value {} -objects [get_filesets sim_1]
+    foreach tb $unitarios {
+        set sim_log [file join $sim_dir simulate.log]
+        if {[catch {
+            file delete -force $sim_log
+            set_property top $tb [get_filesets sim_1]
+            update_compile_order -fileset sim_1
+            launch_simulation
+            run all
+            close_sim
+        } err]} {
+            catch {close_sim -force}
+            lappend lineas "ERROR unit $tb: [lindex [split $err "\n"] 0]"
+            lappend fallas $tb
+            continue
+        }
+        if {![file exists $sim_log]} {
+            lappend lineas "ERROR unit $tb: xsim no dejó simulate.log"
+            lappend fallas $tb
+            continue
+        }
+        set log [file join $dir $tb.log]
+        file copy -force $sim_log $log
+        set res [reg_resultado $log]
+        if {[string match "TEST PASSED*" $res]} {
+            lappend lineas "ok    unit $tb: $res"
+        } elseif {$res eq ""} {
+            lappend lineas "ERROR unit $tb: sin línea TEST"
+            lappend fallas $tb
+        } else {
+            lappend lineas "FALLA unit $tb: $res"
+            lappend fallas $tb
+        }
+    }
+    set_property top pipeline_tb [get_filesets sim_1]
     return [list $fallas $lineas]
 }
 
 set_property top pipeline_tb [get_filesets sim_1]
 catch {close_sim -force}        ;# por si quedó abierta una simulación, por ejemplo de ondas.tcl
 
+# La pasada sin mutante ("") va siempre primero: con mutantes es la referencia. Si
+# falla, los mutantes no se corren, porque una corrida que ya falla no dice nada de
+# un mutante (verificacion.md §8.7)
 set resumen [list]
 set fallas_total 0
 set no_detectados [list]
-foreach mutante $mutantes {
+set con_error [list]
+foreach mutante [concat [list ""] $mutantes] {
+    if {$mutante ne "" && $fallas_total > 0} {
+        lappend resumen "MUTANTES: no se corren, la pasada sin mutante tiene $fallas_total corridas que fallan"
+        break
+    }
     # Cada pasada compila desde cero: sin reset_simulation, xsim puede reusar lo
     # compilado de la pasada anterior (la copia mutada o el original)
     reg_restaurar
@@ -165,10 +245,11 @@ foreach mutante $mutantes {
     if {[catch {
         if {$mutante ne ""} { reg_mutar $reg_root $original $copia }
         update_compile_order -fileset sim_1
-        lassign [reg_pasada $corridas $reg_root $sim_dir $dir] fallas lineas
+        lassign [reg_pasada $corridas $reg_root $sim_dir $dir] fallas errores lineas
     } err]} {
         set fallas [list error]
-        set lineas [list "FALLA: [lindex [split $err "\n"] 0]"]
+        set errores [list error]
+        set lineas [list "ERROR: [lindex [split $err "\n"] 0]"]
     }
     reg_restaurar
 
@@ -177,6 +258,11 @@ foreach mutante $mutantes {
         set resumen [concat $resumen $lineas]
         lappend resumen "REGRESION: [expr {$n - [llength $fallas]}] de $n corridas con TEST PASSED"
         set fallas_total [llength $fallas]
+    } elseif {[llength $errores] > 0} {
+        # Sin resultado no se sabe si el mutante se detecta: se muestra el mensaje
+        set msj [lindex $lineas [lsearch -glob $lineas "ERROR*"]]
+        lappend resumen "MUTANTE $nombre: ERROR, [llength $errores] de $n corridas sin resultado: $msj"
+        lappend con_error $nombre
     } elseif {[llength $fallas] > 0} {
         lappend resumen "MUTANTE $nombre: detectado, fallan [llength $fallas] de $n corridas: [join $fallas {, }]"
     } else {
@@ -184,6 +270,24 @@ foreach mutante $mutantes {
         lappend no_detectados $nombre
     }
 }
+# Testbenches unitarios, sin mutantes (regresion.py no escribe la lista con --mutante)
+if {[llength $unitarios] > 0} {
+    reg_restaurar
+    set dir [file join $log_dir unit]
+    file mkdir $dir
+    if {[catch {
+        lassign [reg_unitarios $unitarios $sim_dir $dir] fallas lineas
+    } err]} {
+        set fallas [list error]
+        set lineas [list "ERROR unit: [lindex [split $err "\n"] 0]"]
+        catch {set_property top pipeline_tb [get_filesets sim_1]}
+    }
+    set n [llength $unitarios]
+    set resumen [concat $resumen $lineas]
+    lappend resumen "UNITARIOS: [expr {$n - [llength $fallas]}] de $n testbenches con TEST PASSED"
+    incr fallas_total [llength $fallas]
+}
+
 catch {reset_simulation -simset sim_1 -mode behavioral}
 update_compile_order -fileset sim_1
 
@@ -192,8 +296,8 @@ puts $f [join $resumen "\n"]
 close $f
 puts [join $resumen "\n"]
 if {$fallas_total > 0} {
-    error "regresión: $fallas_total corridas fallaron (logs en $log_dir)"
+    error "regresión: $fallas_total corridas o testbenches fallaron (logs en $log_dir)"
 }
-if {[llength $no_detectados] > 0} {
-    error "regresión: mutantes no detectados: [join $no_detectados {, }] (logs en $log_dir)"
+if {[llength $no_detectados] > 0 || [llength $con_error] > 0} {
+    error "regresión: mutantes no detectados: [join $no_detectados {, }]; con ERROR: [join $con_error {, }] (logs en $log_dir)"
 }
