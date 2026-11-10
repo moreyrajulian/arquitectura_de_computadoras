@@ -177,8 +177,8 @@ Los 22 programas necesitan el pipeline completo. Para las etapas anteriores hay 
 | `indep_alu_r`, `indep_alu_i`, `indep_cargas`, `indep_stores`, `indep_store_load`, `indep_saltos`, `indep_lui` | 2, de IF a MEM (M3 a M6), antes de que exista WB | Ninguna instrucción lee un registro que escribe otra: parten de un **estado inicial** de registros y de `dmem` (`sw/estado_inicial/`, en formato `$readmemh`) y cada resultado se ve en el registro de segmentación de su etapa |
 | `<nombre>_nops`, de los programas de riesgos y de saltos | 3 sin riesgos (I-38, M7): pipeline completo sin forwarding, stall ni flush | Llevan `nop` para que toda dependencia quede a distancia 3 y detrás de cada salto haya dos `nop`. Mismo estado final que el original y los mismos ciclos en M7 y en M8 |
 
-En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en I-43,
-todos. Entre medio, cada integración de M8 compara contra el modelo con los
+En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; desde I-42,
+todos (I-43 suma los mutantes del resto de los mecanismos, §6). Entre medio, cada integración de M8 compara contra el modelo con los
 mecanismos que ya tiene el RTL (decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)):
 desde I-39, `--modo forwarding` (forwarding sin stall ni flush), con los 27 de M7 y los
 originales que solo necesitan forwarding: `fwd_exmem`, `fwd_memwb`, `fwd_prioridad` y
@@ -195,6 +195,12 @@ Desde I-41 la traza sale de `--modo forwarding_stall` (forwarding y stall, sin f
 `salto_depende` (`SOLO_TRAZA_FORWARDING_STALL`): es el único load seguido de un salto que usa el
 dato, y su `beq` se toma. Quedan para el flush `branch_cond`, `jump`, `mixto_lazo` y
 `halt_camino_equivocado`.
+Desde I-42 (flush por saltos) el RTL tiene los tres mecanismos y la traza sale de
+`--modo completo`: la lista `COMPLETO` son los 39 programas de `sw/`, todos con `+FINAL`. Suma
+a `FORWARDING_STALL` los que solo esperaban el flush (`SOLO_FLUSH`: `branch_cond`, `jump`,
+`mixto_lazo` y `halt_camino_equivocado`) y pasa `salto_depende` y `loaduse_sw_beq` a `+FINAL`,
+porque con el flush el camino equivocado ya no se ejecuta. Así la regresión de `master` ya
+corre todos los programas; I-43 la cierra con los mutantes del resto de los mecanismos (§6).
 `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban es la interacción
 del HALT con el stall y el flush.
 
@@ -398,11 +404,15 @@ escrito a mano (nivel 3). El porqué de cada elección está en la decisión
 
 ```sh
 # 1. Preparar el programa: ensambla, corre el modelo y convierte el .exp
-python scripts/prep_tb.py sw/indep_alu_r.s --modo sin_riesgos   # M3 a M7
-python scripts/prep_tb.py sw/fwd_exmem.s --modo forwarding       # I-39 e I-40
-python scripts/prep_tb.py sw/fwd_exmem.s                         # --modo forwarding_stall, desde I-41
-python scripts/prep_tb.py sw/fwd_exmem.s --modo completo         # M8 completo (I-43)
+python scripts/prep_tb.py sw/indep_alu_r.s --modo sin_riesgos   # RTL de M3 a M7
+python scripts/prep_tb.py sw/fwd_exmem.s --modo forwarding       # RTL de I-39 e I-40
+python scripts/prep_tb.py sw/fwd_exmem.s --modo forwarding_stall # RTL de I-41
+python scripts/prep_tb.py sw/fwd_exmem.s                         # --modo completo, desde I-42
 ```
+
+Cada modo describe el RTL de una integración (§4.3, decisión
+[029](../decisiones/029_modo-del-modelo-en-m8.md)), y desde I-42 el de `master` es `completo`.
+Los otros sirven con el commit de su integración (§8.7).
 
 `prep_tb.py` escribe en `build/tb/<nombre>/` los archivos de la tabla y, al final, la línea
 para pasarle el directorio a xsim:
@@ -568,6 +578,18 @@ la semilla de la regresión, hay que volver a comprobarlo, por ejemplo con
 `add_condition {/pipeline_tb/tb_clk == 0}` en xsim, leyendo `u_dut.stall` y `tb_enable`. El
 `STEP` real en medio de un stall, desde una trama UART, es de I-47 (§3.3).
 
+**Con el flush por saltos (I-42)** el banco no cambia y no hay define nuevo: la traza sale de
+`--modo completo` (§4.3). `hazard_unit` calcula el stall y todos los enables y flush de
+`pipeline.md` §10.4, y el salto tomado convierte en burbuja las dos instrucciones que entraron
+detrás (§10.5). Con `+FINAL` pasan los 39 programas de la lista `COMPLETO`. Los que suma el flush
+coinciden también en `ciclos`, que cuentan 2 por salto tomado (§5): `branch_cond` (48 ciclos,
+7 saltos tomados), `jump` (27, 5 saltos), `mixto_lazo` (83, 8 saltos y 5 stalls) y
+`halt_camino_equivocado` (16, 2 saltos): el HALT que entra detrás de cada salto se anula y el
+core sigue hasta el HALT del final. `salto_depende` y `loaduse_sw_beq` pasan con `+FINAL`: los
+registros del camino equivocado quedan en 0. La regresión `completo` pasa las 78 corridas, con y
+sin `+PAUSAS=47`. `hazard_unit_tb` suma las filas de la tabla de §10.4 y el barrido de las
+1.048.576 combinaciones de entradas (§3.2): `TEST PASSED` con 7.340.247 chequeos.
+
 ### 8.3 Hasta qué ciclo se compara
 
 El modelo simula siempre el pipeline completo. Mientras falte una parte, el RTL se aparta de
@@ -677,10 +699,10 @@ Los programas que en el modo se comparan solo contra la traza corren sin `+FINAL
 [030](../decisiones/030_corridas-solo-traza.md)):
 
 ```sh
-python scripts/regresion.py                        # forwarding_stall: los 33 de §4.3 y 2 sin +FINAL
-python scripts/regresion.py --modo forwarding      # los 31 de I-39 e I-40 y salto_depende sin +FINAL
-python scripts/regresion.py --modo sin_riesgos     # los 27 programas de M7 (I-38)
-python scripts/regresion.py --modo completo        # todos los de sw/ (M8, I-43)
+python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL (master)
+python scripts/regresion.py --modo forwarding_stall # RTL de I-41: los 33 y 2 sin +FINAL
+python scripts/regresion.py --modo forwarding      # RTL de I-39 e I-40: los 31 y salto_depende sin +FINAL
+python scripts/regresion.py --modo sin_riesgos     # RTL de M7: los 27 programas (I-38)
 python scripts/regresion.py alu_r fwd_x0       # solo esos
 python scripts/regresion.py --pausas 47        # además, cada uno con +PAUSAS=47
 python scripts/regresion.py --mutante sin_forwarding   # con un mutante del RTL (§6)
@@ -699,9 +721,15 @@ originales que solo necesitan forwarding (§4.3, decisión [029](../decisiones/0
 con `+FINAL`, más `salto_depende` sin `+FINAL` (lista `SOLO_TRAZA_FORWARDING`, §8.2): 32
 corridas, 64 con `--pausas`. `forwarding_stall` (desde I-41) son esos 31, `loaduse_rs1_rs2` y
 `halt_stall` (lista `SOLO_STALL`) con `+FINAL`, más `salto_depende` y `loaduse_sw_beq` sin
-`+FINAL` (lista `SOLO_TRAZA_FORWARDING_STALL`, §8.2): 35 corridas, 70 con `--pausas`. Cada línea de `corridas.txt` es la etiqueta, el programa y los
-plusargs además de `DIR` (por ejemplo, `salto_depende_pausas salto_depende PAUSAS=47`). El modo
-por defecto es el que corresponde al RTL de `master`.
+`+FINAL` (lista `SOLO_TRAZA_FORWARDING_STALL`, §8.2): 35 corridas, 70 con `--pausas`. `completo`
+(desde I-42) son los 39 programas de `sw/`, todos con `+FINAL` (lista `COMPLETO`, §4.3): 39
+corridas, 78 con `--pausas`. Cada línea de `corridas.txt` es la etiqueta, el programa y los
+plusargs además de `DIR` (por ejemplo, `salto_depende_pausas salto_depende FINAL PAUSAS=47`, o
+sin `FINAL` en los modos con solo traza). El modo por defecto es el que corresponde al RTL de
+`master`. Los otros describen el RTL de una integración anterior y sirven con su commit, por
+ejemplo para repetir la regresión de una PR vieja: con el RTL de `master`, que siempre hace
+flush, los programas con saltos tomados (las variantes `_nops`, `indep_saltos`, `mem_avisos`)
+no coinciden con esas trazas, que dejan válidas las dos instrucciones de detrás del salto.
 
 `regresion.tcl` usa el proyecto abierto o lo crea con `create_project.tcl`. Compila y elabora
 una vez, corre cada línea con `launch_simulation -step simulate` y guarda el log de cada

@@ -147,9 +147,10 @@ chk("id_ex", (dut_id_ex ^ ref_id_ex[t]) & ref_id_ex_mask[t], 0);
 
 | Modo | Mecanismos | Para |
 |---|---|---|
-| `completo` | forwarding, stall, flush | M8 (I-43) en adelante, nivel 3 y 4 |
+| `completo` | forwarding, stall, flush | M8 desde I-42 en adelante, nivel 3 y 4 |
 | `sin_riesgos` | ninguno | M3 a M7 (I-17, I-38) |
 | `forwarding` | forwarding | M8 desde I-39, mientras falten el stall y el flush |
+| `forwarding_stall` | forwarding, stall | M8 en I-41, mientras falte el flush |
 | `--sin-*` | combinaciones | pruebas a mano con `sim.py` (las integraciones de M8 usan modos con nombre, decisión 029) |
 
 En un modo sin un mecanismo, un programa que lo necesita **no da un resultado equivocado: da

@@ -22,9 +22,9 @@ sys.path.insert(0, str(SW.parent / "tools" / "assembler"))
 from rvasm import assemble, classify  # noqa: E402
 from rvasm.isa import HALT_WORD, INSTRUCTIONS  # noqa: E402
 
-from programas import (FORWARDING, FORWARDING_STALL, INDEP, NOPS, PLAN, PROGRAMS,  # noqa: E402
-                       SIN_RIESGOS, SOLO_FORWARDING, SOLO_M8, SOLO_STALL,
-                       SOLO_TRAZA_FORWARDING, SOLO_TRAZA_FORWARDING_STALL)
+from programas import (COMPLETO, FORWARDING, FORWARDING_STALL, INDEP, NOPS, PLAN,  # noqa: E402
+                       PROGRAMS, SIN_RIESGOS, SOLO_FLUSH, SOLO_FORWARDING, SOLO_M8,
+                       SOLO_STALL, SOLO_TRAZA_FORWARDING, SOLO_TRAZA_FORWARDING_STALL)
 
 AVISOS = {"imem_fault", "dmem_oob", "dmem_misaligned"}
 
@@ -132,6 +132,14 @@ def test_trace_only_forwarding_stall_programs():
     """Decision 030: los que corren sin +FINAL con el stall no estan en FORWARDING_STALL."""
     assert not sorted(set(SOLO_TRAZA_FORWARDING_STALL) - set(NOPS))
     assert not sorted(set(SOLO_TRAZA_FORWARDING_STALL) & set(FORWARDING_STALL))
+
+
+def test_completo_programs():
+    """Decision 029 (I-42): el flush suma los originales que faltaban y el modo completo son todos."""
+    assert not sorted(set(SOLO_FLUSH) - set(NOPS + SOLO_M8))
+    m8 = FORWARDING_STALL + SOLO_TRAZA_FORWARDING_STALL + SOLO_FLUSH
+    assert len(m8) == len(set(m8))
+    assert sorted(m8) == COMPLETO == PROGRAMS
 
 
 def test_every_instruction_is_covered():

@@ -16,8 +16,8 @@
 //     - if_id_reg guarda valid y pc con la prioridad rst > en > flush
 //       (§2). El flush no borra la BRAM: solo pone if_id_valid = 0
 //       (decisión 022).
-//   La etapa no calcula enables ni flush: los recibe de quien los genere
-//   (riscv_core hasta I-42, después la unidad de riesgos, §10.4):
+//   La etapa no calcula enables ni flush: los recibe ya calculados de
+//   hazard_unit (§10.4, desde I-42; antes, de riscv_core):
 //     en_pc = en_if_id = enable & ~stall
 //     flush_if_id      = redirect | stop_fetch
 //   El puerto B de imem (LOAD, memoria.md §4) pasa sin tocar.

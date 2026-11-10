@@ -207,10 +207,10 @@ al HALT. Al terminar t+4, `halted = 1` mantiene la parada.
   [015](../decisiones/015_accesos-desalineados-y-fuera-de-rango.md)). Un bucle infinito
   tampoco termina: para eso está `STOP` ([`protocolo_debug.md`](protocolo_debug.md) §3.5).
 
-**En el RTL** (I-37), `stop_fetch` se calcula en `riscv_core`, junto con los enables y el
-flush de §10.4. Ningún término necesita combinarse con `valid`: `id_is_halt` sale de
-`id_stage` ya anulado en una burbuja (la unidad de control da todo en 0, §4.4), y una burbuja
-lleva `halt = 0` en ID/EX, EX/MEM y MEM/WB (§2). Con el PC congelado, después de la parada
+**En el RTL** (I-37), `stop_fetch` se calcula en `riscv_core` y entra a `pc_logic` y a
+`hazard_unit`, que desde I-42 calcula los enables y el flush de §10.4. Ningún término necesita
+combinarse con `valid`: `id_is_halt` sale de `id_stage` ya anulado en una burbuja (la unidad
+de control da todo en 0, §4.4), y una burbuja lleva `halt = 0` en ID/EX, EX/MEM y MEM/WB (§2). Con el PC congelado, después de la parada
 `pc_reg` vale `h + 4`, que es el PC que ve la Debug Unit en el bloque de estado.
 
 ### 3.5 Salidas hacia IF/ID
@@ -529,8 +529,8 @@ redirect_pc = jalr ? {alu_out[31:1], 1'b0}       (rs1 + imm, con el bit 0 en cer
   `i_funct3`, `i_pc` e `i_imm` (de ID/EX), `i_zero` e `i_alu_out` (de la ALU, §5.2) →
   `o_redirect`, `o_redirect_pc`. No mira `valid`: una burbuja trae `branch`, `jal` y `jalr`
   en 0 (§2). La dirección de retorno (`PC + 4`) no sale de acá: es el mux de resultado
-  (§5.4). Sus salidas llegan a IF desde I-36; el término `redirect` del flush (§10.5) se
-  agrega en I-42.
+  (§5.4). Sus salidas llegan a IF desde I-36, y desde I-42 `redirect` entra también a
+  `hazard_unit`, que hace el flush de IF/ID e ID/EX (§10.5).
 
 ### 5.4 Resultado
 ```
@@ -587,8 +587,8 @@ del propio EX/MEM; la unidad que elige el selector (§10.2, I-39) queda afuera.
   (§10.3).
 - **Salidas:** los 10 campos `ex_mem_*` de §8, el bus `o_ex_mem_latch` para la Debug Unit y
   `redirect` / `redirect_pc` de `branch_unit` hacia IF. Desde I-36 `riscv_core` los conecta al
-  mux de próximo PC (§3.1); hasta I-42 no hacen flush de IF/ID ni de ID/EX (`flush_redirect = 0`),
-  como el modelo en modo `sin_riesgos`.
+  mux de próximo PC (§3.1), y desde I-42 `redirect` entra también a `hazard_unit`, que hace el
+  flush de IF/ID y de ID/EX (§10.4, §10.5).
 
 ---
 
@@ -994,14 +994,14 @@ load_use = id_ex_mem_read && id_ex_rd != 0 && if_id_valid &&
 - Después del stall, el load está en WB y la instrucción frenada en EX: el dato llega por
   `fwd = 01` (`wb_data`). Un load seguido de un salto que usa el dato funciona igual.
 
-**Módulo.** `rtl/control/hazard_unit.v`, combinacional y sin estado (no recibe `enable`).
-Entradas: `i_if_id_valid`, `i_if_id_rs1`, `i_if_id_rs2`, `i_id_ex_mem_read`, `i_id_ex_rd`.
-Salida: `o_load_use`. Recibe los campos y no la palabra, igual que `forwarding_unit` (§10.2),
-y así su testbench puede recorrer todas las combinaciones (`verificacion.md` §6). `riscv_core`
-saca `if_id_rs1` e `if_id_rs2` de `if_id_instr`, con los mismos bits que usa `id_stage`, y
-calcula `stall = load_use & ~redirect` y los enables y flush de §10.4. Desde I-42 esa parte
-también pasa a `hazard_unit` (decisión [023](../decisiones/023_interfaz-debug-del-core.md),
-`verificacion.md` §3.2).
+**Módulo.** `rtl/control/hazard_unit.v`, combinacional y sin estado. Para la carga-uso, sus
+entradas son `i_if_id_valid`, `i_if_id_rs1`, `i_if_id_rs2`, `i_id_ex_mem_read` e `i_id_ex_rd`,
+y su salida `o_load_use`. Recibe los campos y no la palabra, igual que `forwarding_unit`
+(§10.2), y así su testbench puede recorrer todas las combinaciones (`verificacion.md` §6).
+`riscv_core` saca `if_id_rs1` e `if_id_rs2` de `if_id_instr`, con los mismos bits que usa
+`id_stage`. Desde I-42 la unidad calcula además el stall y los enables y flush de §10.4 (el
+párrafo **Módulo** de §10.4); en I-41 esa parte estaba en `riscv_core` (decisión
+[023](../decisiones/023_interfaz-debug-del-core.md), `verificacion.md` §3.2).
 
 Ejemplo ([`riesgo_carga_uso.png`](../diagramas/riesgo_carga_uso.png)):
 
@@ -1044,6 +1044,14 @@ flush_ex_mem = flush_mem_wb = 0
 - **Core detenido en medio de un stall:** con `enable = 0` nada cambia, y al volver a 1 las
   señales combinacionales se recalculan igual. El stall continúa donde quedó, así que se puede
   avanzar ciclo a ciclo con `STEP` sin perder instrucciones.
+
+**Módulo** (I-42). `hazard_unit` (§10.3) calcula estas ecuaciones. Además de las entradas de la
+carga-uso recibe `i_enable`, `i_redirect` (de `ex_stage`, §5.3) e `i_stop_fetch` (§3.4, que
+sigue calculando `riscv_core`). Salidas: `o_stall`, `o_en_pc`, `o_en_if_id`, `o_en_id_ex`,
+`o_en_ex_mem`, `o_en_mem_wb`, `o_flush_if_id`, `o_flush_id_ex`, `o_flush_ex_mem` y
+`o_flush_mem_wb` (estas dos, siempre 0). `riscv_core` las conecta sin lógica en el medio a
+`if_stage`, `id_stage`, `ex_stage` y `mem_stage`. `enable` le llega como un dato más: la unidad
+no tiene estado, así que no hay nada que congelar.
 
 **Elementos con estado que respetan `enable`** (decisión
 [018](../decisiones/018_paso-a-paso-sin-clock.md)). El clock nunca se toca: parar o avanzar el
