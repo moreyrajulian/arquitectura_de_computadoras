@@ -155,6 +155,9 @@ def decode(word):
 
 
 def disassemble(ins):
+    """Texto de una instrucción decodificada. Además de la traza, es lo que muestra la
+    interfaz de la PC: rvasm.disassemble lo envuelve (decisión 034) y su test exige que
+    el texto vuelva a ensamblarse con rvasm (tools/assembler/tests/test_disasm.py)."""
     r = lambda n: f"x{n}"                                   # noqa: E731
     k = ins.kind
     if k == "R":
