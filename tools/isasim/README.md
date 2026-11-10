@@ -212,6 +212,9 @@ tools/isasim/
 ```
 
 **Si cambia `isa.md`:** se actualizan las tablas de `isa.py` y se agregan casos a
-`test_isa.py`. **Si cambia `pipeline.md`** (campos de un latch, costo de un salto o del
+`test_isa.py`. **Si cambia el texto de `disassemble`** (`isa.py`): también cambia lo que
+muestra la interfaz de la PC, porque `rvasm.disassemble` lo envuelve
+([decisión 034](../../docs/decisiones/034_desensamblador.md)); se corre
+`tools/assembler/tests/test_disasm.py`. **Si cambia `pipeline.md`** (campos de un latch, costo de un salto o del
 stall): `latches.py` o `pipeline.py`, y se recalculan a mano los `.exp` afectados; los tests
 de `test_sw_programas.py` dicen cuáles.

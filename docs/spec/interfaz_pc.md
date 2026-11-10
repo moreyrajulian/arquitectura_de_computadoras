@@ -207,7 +207,9 @@ puede pasar `--port` por línea de comandos.
 - La salida del ensamblador (formato de errores, `.hex`) está en
   [`tools/assembler/README.md`](../../tools/assembler/README.md) §4 y §5; la API que usa la
   interfaz (`assemble`, `Program.source_map`, `AssemblerError.errors`), en §1 y en la
-  [decisión 017](../decisiones/017_ensamblador.md).
+  [decisión 017](../decisiones/017_ensamblador.md). El desensamblado del panel Programa y de
+  cada etapa sale de `disassemble`, en §8 del mismo README y en la
+  [decisión 034](../decisiones/034_desensamblador.md).
 - El formato del JSON exportado se acuerda con el modelo de referencia (I-16).
 
 ## 8. Checklist de revisión

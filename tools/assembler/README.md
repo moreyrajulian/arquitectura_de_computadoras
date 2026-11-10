@@ -9,7 +9,7 @@ verificar sin la FPGA. El porqué de cada elección está en la
 
 | | |
 |---|---|
-| **Issue** | I-10 — Ensamblador |
+| **Issue** | I-10 — Ensamblador. I-51 — Desensamblador (§8) |
 | **Requisitos** | Python ≥ 3.11, sin dependencias. Tests: `pytest`. Validación en vivo (opcional): un ensamblador RISC-V estándar (§7) |
 | **Entrada** | Un archivo `.s` |
 | **Salida** | `.hex` (por defecto), `.bin`, `.coe`, `.lst` (§4) |
@@ -66,6 +66,15 @@ from rvasm.isa import SUPPORTED, UNRECOGNIZED, UNSPECIFIED
 classify(0x0020C063)   # WordClass(kind='unspecified', name=None, reason='branch con funct3 = 100')
 classify(0x003100B3)   # WordClass(kind='supported', name='add', reason='')
 classify(word).kind == UNSPECIFIED    # las constantes valen 'supported', 'unrecognized', 'unspecified'
+```
+
+Y `disassemble` hace el camino inverso, de palabra a texto (§8):
+
+```python
+from rvasm import disassemble
+
+disassemble(0x00500093)   # 'addi x1, x0, 5'
+disassemble(0xFE208CE3)   # 'beq x1, x2, -8'
 ```
 
 ## 2. Sintaxis
@@ -296,6 +305,7 @@ contra la referencia guardada corre igual.
 | `test_syntax.py` | Etiquetas, comentarios, mayúsculas, nombres ABI, formas de operandos, `.equ`, `.word`, expansión de pseudos y que `li` reconstruye el valor exacto |
 | `test_errors.py` | Cada error, su línea y su mensaje (también `.word` fuera de `isa.md`); varios errores juntos; límite de 1024 palabras; advertencia sin HALT |
 | `test_classify.py` | `classify`: toda palabra que genera rvasm es `SUPPORTED` con su nombre, y las tres clases con palabras armadas a mano desde sus campos. `tools/isasim/tests/test_isa.py` además barre opcode × `funct3` × `funct7` y verifica que el modelo decodifica igual |
+| `test_disasm.py` | `disassemble`: el texto de cada instrucción de `isa.md` (escrito a mano), los saltos con desplazamiento no múltiplo de 4, las palabras fuera de `isa.md`, y la ida y vuelta (ensamblar → desensamblar → ensamblar) sobre los programas de `sw/` y de `tests/programs/` y sobre 10 000 palabras de `isa.md` al azar |
 | `test_output.py` | Los cuatro formatos, `--fill` y la CLI (archivos, stdout, códigos de salida) |
 | `test_reference.py` | Los programas de `tests/programs/` contra la salida de un ensamblador estándar (§7) |
 
@@ -337,7 +347,36 @@ Diferencias encontradas al validar, que no son errores de rvasm:
   `bne` + `jal`). rvasm genera la imagen final sin linker, así que en los programas de
   validación no se marca global ninguna etiqueta destino de un salto.
 
-## 8. Estructura
+## 8. Desensamblador
+
+`disassemble(palabra)` devuelve el texto de una palabra de 32 bits. Lo usa la interfaz de la
+PC para mostrar el programa cargado y la instrucción de cada etapa
+([`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) §2). Por qué está acá y cómo funciona:
+[decisión 034](../../docs/decisiones/034_desensamblador.md).
+
+| Palabra | Texto |
+|---|---|
+| Instrucción de `isa.md` | `add x1, x2, x3`, `lw x10, 0(x2)`, `sw x10, -4(x2)`, `lui x1, 0xFFFFF`, `jalr x0, 0(x1)`, `halt` |
+| Salto | Con el desplazamiento relativo al PC, que rvasm lee igual que una etiqueta (§2.5): `beq x1, x2, -8`, `jal x1, +16` |
+| `0x00000013` | `nop` |
+| Salto con desplazamiento no múltiplo de 4 | `.word 0xDEADBEEF  # jal x29, -150038: desplazamiento no multiplo de 4` |
+| Fuera de `isa.md` (§3) | `.word 0x00000000  # fuera de isa.md: opcode 0000000 fuera de la tabla; el hardware la ejecuta como NOP` |
+
+- **El texto se vuelve a ensamblar:** ensamblar → desensamblar → ensamblar da las mismas
+  palabras para toda instrucción de `isa.md`. Las pseudos salen como la instrucción en la que
+  se expanden (`ret` → `jalr x0, 0(x1)`, `li` largo → `lui` + `addi`), los registros como
+  `x0`…`x31` y las etiquetas como desplazamientos.
+- **Saltos con desplazamiento no múltiplo de 4:** son palabras de `isa.md` (el hardware salta a
+  un PC desalineado, `memoria.md` §6.1), pero rvasm no acepta ese desplazamiento en la fuente.
+  Por eso salen como `.word`, que sí los acepta.
+- **Fuera de `isa.md`:** el comentario dice qué haría el hardware, con el mismo motivo que da
+  `classify`. Ese `.word` el ensamblador lo rechaza (decisión 025).
+- **Decodifica el modelo de referencia.** La palabra la decodifica `tools/isasim`, con tablas
+  propias escritas desde `isa.md`, no las de `rvasm/isa.py`: así la ida y vuelta compara dos
+  implementaciones hechas por separado. `isasim` se importa recién en el primer
+  `disassemble`, así que el ensamblador sigue sin depender de él.
+
+## 9. Estructura
 
 ```
 tools/assembler/
@@ -348,6 +387,7 @@ tools/assembler/
 │   ├── isa.py              Tablas de registros e instrucciones (copia de isa.md) y classify
 │   ├── assembler.py        Dos pasadas: direcciones y etiquetas, después codificación
 │   ├── output.py           Formatos hex, bin, coe, lst
+│   ├── disasm.py           Desensamblador: classify y el decodificador de tools/isasim
 │   └── cli.py
 └── tests/
     ├── programs/           Programas de validación (.s)
