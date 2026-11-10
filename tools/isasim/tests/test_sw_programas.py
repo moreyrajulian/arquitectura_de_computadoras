@@ -34,8 +34,9 @@ TRACE_ONLY_FORWARDING = {"salto_depende": {20, 21, 22}}
 ONLY_STALL = ["loaduse_rs1_rs2", "halt_stall"]
 NEEDS_FLUSH = [p for p in NEEDS_STALL_OR_FLUSH if p not in ONLY_STALL]
 # verificacion.md §8.2 (I-41): con forwarding y stall, sin flush. loaduse_sw_beq es
-# el load seguido de un beq tomado: x20 es del camino equivocado
-TRACE_ONLY_FORWARDING_STALL = {**TRACE_ONLY_FORWARDING, "loaduse_sw_beq": {20}}
+# el load seguido de un beq tomado y, desde I-43, de un jalr: x20 y x21 son del
+# camino equivocado
+TRACE_ONLY_FORWARDING_STALL = {**TRACE_ONLY_FORWARDING, "loaduse_sw_beq": {20, 21}}
 
 
 def run_program(name, mode):
@@ -114,6 +115,24 @@ def test_trace_only_programs_run_with_forwarding_stall(name):
     diffs = compare_exp(r, expected(name))
     assert sorted(d.split(":")[0] for d in diffs) == sorted(
         f"x{i}" for i in TRACE_ONLY_FORWARDING_STALL[name])
+
+
+@pytest.mark.parametrize("name", PROGRAMS)
+def test_cycles_follow_formula(name):
+    """verificacion.md §5 (I-43): ciclos = n + 4 + stalls + 2 · saltos tomados.
+
+    n y los saltos salen de la capa ISA (las instrucciones ejecutadas y los saltos que se
+    toman); los stalls, de la traza del pipeline. scripts/ciclos.py cuenta lo mismo desde la
+    traza para la tabla de verificacion.md §8.8, así que las dos cuentas tienen que coincidir.
+    """
+    r = run_program(name, COMPLETO)
+    snaps = r.snapshots[:r.cycles]
+    n = len(r.effects)
+    saltos = sum(e.taken for e in r.effects)       # beq/bne tomados, jal y jalr
+    stalls = sum("stall" in s.events for s in snaps)
+    assert r.cycles == n + 4 + stalls + 2 * saltos
+    assert n == sum(s.values["mem_wb"]["valid"] for s in snaps)
+    assert saltos == sum(any(e.startswith("redirect") for e in s.events) for s in snaps)
 
 
 @pytest.mark.parametrize("name", NEEDS_HAZARD_UNITS)
