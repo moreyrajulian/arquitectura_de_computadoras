@@ -103,6 +103,14 @@ def main(argv=None):
                         "normal, sin programas ni --mutante)")
     args = p.parse_args(argv)
 
+    # Las tres listas que lee regresion.tcl se borran antes de cualquier cosa que pueda
+    # fallar: si regresion.py termina con error, regresion.tcl no corre la de antes
+    lista_corr = SALIDA / "corridas.txt"
+    lista_mut = SALIDA / "mutantes.txt"
+    lista_unit = SALIDA / "unitarios.txt"
+    for lista in (lista_corr, lista_mut, lista_unit):
+        lista.unlink(missing_ok=True)
+
     solo_traza = SOLO_TRAZA.get(args.modo, [])
     nombres = args.programas or PROGRAMAS[args.modo] + solo_traza
     faltan = [n for n in nombres if n not in PROGRAMS]
@@ -131,13 +139,11 @@ def main(argv=None):
     if args.pausas is not None:
         corridas += [f"{n}_pausas {n}{plusargs(n)} PAUSAS={args.pausas}" for n in nombres]
     SALIDA.mkdir(parents=True, exist_ok=True)
-    (SALIDA / "corridas.txt").write_text("\n".join(corridas) + "\n", encoding="utf-8")
+    lista_corr.write_text("\n".join(corridas) + "\n", encoding="utf-8")
 
     # Mutantes (decisión 031): una línea por mutante con su nombre, el archivo original y la
-    # copia mutada, relativos a la raíz. Sin --mutante se borra la lista: una regresión
-    # normal nunca corre con un mutante que quedó de antes
-    lista_mut = SALIDA / "mutantes.txt"
-    lista_mut.unlink(missing_ok=True)
+    # copia mutada, relativos a la raíz. Sin --mutante no hay lista: una regresión normal
+    # nunca corre con un mutante que quedó de antes
     elegidos = args.mutante or []
     if "todos" in elegidos:
         elegidos = [*mutantes.MUTANTES, *(m for m in elegidos if m != "todos")]
@@ -150,21 +156,19 @@ def main(argv=None):
             except ValueError as e:
                 print(f"error: {e}", file=sys.stderr)
                 return 4
-            lineas.append(f"{m} {mutantes.MUTANTES[m].archivo} {copia.relative_to(ROOT).as_posix()}")
+            lineas.append(f"{m} {mutantes.TODOS[m].archivo} {copia.relative_to(ROOT).as_posix()}")
         lista_mut.write_text("\n".join(lineas) + "\n", encoding="utf-8")
 
     # Testbenches unitarios (decisión 032): solo en la regresión normal. Con --mutante no,
     # porque un mutante de un módulo lo detecta su propio testbench y eso no dice nada de los
     # programas (verificacion.md §6). Sin la lista, regresion.tcl no corre ninguno
-    lista_unit = SALIDA / "unitarios.txt"
-    lista_unit.unlink(missing_ok=True)
     tbs = [] if (args.programas or elegidos or args.sin_unitarios) else unitarios()
     if tbs:
         lista_unit.write_text("\n".join(tbs) + "\n", encoding="utf-8")
 
     sin_final = [n for n in nombres if n in solo_traza]
     nota = f", sin +FINAL: {', '.join(sin_final)}" if sin_final else ""
-    print(f"{len(corridas)} corridas ({args.modo}{nota}) en {SALIDA / 'corridas.txt'}")
+    print(f"{len(corridas)} corridas ({args.modo}{nota}) en {lista_corr}")
     if elegidos:
         print(f"{len(elegidos)} mutantes, cada uno con todas las corridas: {', '.join(elegidos)}")
         equiv = [m for m in elegidos if m in mutantes.EQUIVALENTES]
