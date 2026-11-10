@@ -665,19 +665,27 @@ eso no se ve, porque el control de la burbuja anula esos datos. `bypass_sin_we` 
 `stall_sin_mem_read` sacan justamente esa condición: mientras la burbuja del reset recorre el
 pipeline, ven el `rd` y el dato que quedaron. En la primera corrida de la simulación son X; en
 las siguientes, lo que dejó la anterior, como en la placa cuando se carga un programa después de
-otro (decisión 033).
+otro (decisión 033). MEM/WB tiene burbujas del reset hasta el ciclo 4, así que en la traza estas
+fallas aparecen hasta el ciclo 5. El ciclo solo no alcanza para separarlas: muchas fallas propias del
+programa también aparecen en los ciclos 4 y 5 (el flush en `jump`, el forwarding en `fwd_exmem`).
+Lo que las separa es el orden. Las corridas en orden inverso salen de `regresion.py --invertir`:
+
+```sh
+python scripts/regresion.py --mutante bypass_sin_we --mutante stall_sin_mem_read --invertir
+```
+
 - **`bypass_sin_we`.** Además de los 3 de la tabla, falla en el ciclo 3 en `alu_i`, que es la
-  primera corrida, con X, y en `salto_depende`, con el `0x4` que dejó `mixto_lazo_nops`. Con la
-  lista invertida esas dos pasan, falla `shifts` (que ahora es la primera), y los 3 de la tabla
+  primera corrida, con X, y en `salto_depende`, con el `0x4` que dejó `mixto_lazo_nops`. Con
+  `--invertir` esas dos pasan, falla `shifts` (que ahora es la primera), y los 3 de la tabla
   fallan en los mismos ciclos, el 16, el 25 y el 66. Por eso la tabla cuenta 3 y no las 5 del
   resumen. Con una simulación por corrida, la X hacía fallar las 39 en el ciclo 3 o 4, y no se
   veía qué programas lo detectan.
 - **`stall_sin_mem_read`.** En `loaduse_rs1_rs2_nops` falla en el ciclo 3, por el `rd` que dejó
-  `loaduse_rs1_rs2`. Con la lista invertida falla en el ciclo 16, por un frenado del propio
-  programa: las 19 corridas son las mismas en los dos órdenes.
+  `loaduse_rs1_rs2`. Con `--invertir` falla en el ciclo 16, por un frenado del propio programa:
+  las 19 corridas son las mismas en los dos órdenes.
 
-Un mutante que falla en los primeros 4 ciclos, con X o con un valor que no sale del programa,
-hay que mirarlo en el log antes de contar ese programa como detector.
+Si un mutante nuevo falla hasta el ciclo 5 con X, o con un valor que no sale del programa, se
+corre también con `--invertir`. Un programa cuenta como detector si falla en los dos órdenes.
 
 **Equivalentes.** `stall_sin_redirect` (el stall sin `~redirect`) y `stall_sin_valid` (la
 carga-uso sin `if_id_valid`) dan `NO DETECTADO`, con las 39 corridas en `TEST PASSED`, como se
@@ -820,6 +828,7 @@ python scripts/regresion.py --mutante sin_forwarding   # con un mutante del RTL 
 python scripts/regresion.py --mutante todos            # con cada uno de scripts/mutantes.py
 python scripts/regresion.py --mutante stall_sin_valid  # un equivalente, a mano: NO DETECTADO (§8.2)
 python scripts/regresion.py --sin-unitarios            # sin los testbenches de tb/unit/
+python scripts/regresion.py --mutante bypass_sin_we --invertir  # las corridas al revés (§8.2)
 ```
 
 ```tcl

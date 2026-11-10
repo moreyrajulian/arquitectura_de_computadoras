@@ -62,8 +62,9 @@ Restricciones:
     entero queda en `pipeline_tb.log`.
   - Una corrida que no aparece en el log, o cuya parte no tiene línea `TEST`, queda en `ERROR`.
 
-De la 028, esta decisión reemplaza `-step simulate`. `corridas.txt`, `regresion.py`, el resto de
-la 028 y las decisiones 031 y 032 no cambian.
+De la 028, esta decisión reemplaza `-step simulate`. `corridas.txt`, el resto de la 028 y las
+decisiones 031 y 032 no cambian. `regresion.py` suma `--invertir`, que escribe las corridas en
+orden inverso (ver Consecuencias).
 
 Con el reset alcanza porque es lo que hace la Debug Unit en la placa: `LOAD` y `RESET` de un
 programa atrás de otro, sin reconfigurar la FPGA. Si algún estado del core sobrevive al reset,
@@ -94,12 +95,14 @@ falla la pasada sin mutante, y eso es un bug del core que hay que corregir.
 - **Estado que el reset no borra a propósito.** Los caminos de datos de los registros de
   segmentación no se resetean (decisión [010](010_convenciones-rtl.md)). El core correcto no los
   usa, porque el control de la burbuja los anula, pero un mutante que saca esa condición
-  (`bypass_sin_we`, `stall_sin_mem_read`) los ve en los primeros 4 ciclos. En la primera corrida
-  son X, como antes en todas las corridas; en las siguientes, lo que dejó la anterior, como en la
-  placa.
+  (`bypass_sin_we`, `stall_sin_mem_read`) los ve mientras la burbuja del reset recorre el
+  pipeline: en la traza, hasta el ciclo 5. En la primera corrida son X, como antes en todas las
+  corridas; en las siguientes, lo que dejó la anterior, como en la placa.
   - Con una simulación por corrida, `bypass_sin_we` fallaba en las 39 corridas en el ciclo 3 o
     4, por la X.
-  - Con `+LISTA` falla en 5. De esas, solo 3 se mantienen con la lista invertida, en los mismos
-    ciclos, y son las que cuenta `verificacion.md` §8.2.
-  - Una falla de un mutante en esos ciclos se mira en el log antes de contar el programa como
-    detector.
+  - Con `+LISTA` falla en 5. De esas, solo 3 se mantienen con `regresion.py --invertir`, que
+    escribe las corridas en orden inverso, en los mismos ciclos. Son las que cuenta
+    `verificacion.md` §8.2.
+  - Un programa cuenta como detector de un mutante así si falla en los dos órdenes. El ciclo
+    solo no alcanza para separar estas fallas, porque muchas fallas propias del programa
+    también aparecen en los ciclos 4 y 5.
