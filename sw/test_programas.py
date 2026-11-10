@@ -137,9 +137,9 @@ def test_trace_only_forwarding_stall_programs():
 def test_completo_programs():
     """Decision 029 (I-42): el flush suma los originales que faltaban y el modo completo son todos."""
     assert not sorted(set(SOLO_FLUSH) - set(NOPS + SOLO_M8))
-    assert not sorted(set(SOLO_FLUSH) & set(FORWARDING_STALL + SOLO_TRAZA_FORWARDING_STALL))
-    assert len(COMPLETO) == len(set(COMPLETO))
-    assert sorted(COMPLETO) == PROGRAMS
+    m8 = FORWARDING_STALL + SOLO_TRAZA_FORWARDING_STALL + SOLO_FLUSH
+    assert len(m8) == len(set(m8))
+    assert sorted(m8) == COMPLETO == PROGRAMS
 
 
 def test_every_instruction_is_covered():

@@ -63,5 +63,7 @@ SOLO_TRAZA_FORWARDING_STALL = SOLO_TRAZA_FORWARDING + ["loaduse_sw_beq"]
 SOLO_FLUSH = ["branch_cond", "jump", "mixto_lazo", "halt_camino_equivocado"]
 
 # Desde I-42 el RTL tiene forwarding, stall y flush: modo completo, todos los programas
-# con +FINAL (decision 029). Los de SOLO_TRAZA_FORWARDING_STALL ya dan su .exp
-COMPLETO = FORWARDING_STALL + SOLO_TRAZA_FORWARDING_STALL + SOLO_FLUSH
+# con +FINAL (decision 029). Es PROGRAMS, asi un .s nuevo entra solo a la regresion; los
+# de SOLO_TRAZA_FORWARDING_STALL ya dan su .exp. test_programas.py comprueba que las
+# listas de M8 juntas son todos los programas
+COMPLETO = PROGRAMS

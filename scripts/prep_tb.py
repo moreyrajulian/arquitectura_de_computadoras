@@ -16,10 +16,13 @@ nombres fijos para que el banco no cambie de un programa a otro (decisión 021):
 
 Uso (desde la raíz del repositorio):
 
-    python scripts/prep_tb.py sw/indep_alu_r.s                      # modo completo
-    python scripts/prep_tb.py sw/alu_r.s --modo forwarding_stall    # I-41
-    python scripts/prep_tb.py sw/alu_r.s --modo forwarding          # I-39 e I-40
-    python scripts/prep_tb.py sw/alu_r.s --modo sin_riesgos         # M7
+    python scripts/prep_tb.py sw/indep_alu_r.s                      # modo completo (master)
+    python scripts/prep_tb.py sw/alu_r.s --modo forwarding_stall    # RTL de I-41
+    python scripts/prep_tb.py sw/alu_r.s --modo forwarding          # RTL de I-39 e I-40
+    python scripts/prep_tb.py sw/alu_r.s --modo sin_riesgos         # RTL de M7
+
+Solo completo corresponde al RTL de master; los otros modos sirven con el commit de su
+integración (verificacion.md §8.7).
 """
 
 import argparse
