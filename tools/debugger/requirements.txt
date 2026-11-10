@@ -1,0 +1,2 @@
+# Puerto serie real (los tests no lo necesitan)
+pyserial>=3.5
