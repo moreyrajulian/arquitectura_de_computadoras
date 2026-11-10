@@ -68,11 +68,20 @@ SOLO_TRAZA = {"forwarding": SOLO_TRAZA_FORWARDING,
 SALIDA = ROOT / "build" / "regresion"
 TB_UNIT = ROOT / "tb" / "unit"
 
+# Testbenches de tb/unit/ de otro diseño: su DUT no está en el proyecto riscv_basys3, así que
+# no elaboran ahí (decisión 032). La I-44 saca uart_tb de la lista cuando lo amplíe para la
+# UART de debug (verificacion.md §3.3)
+OTRO_DISENO = {
+    "uart_tb": "TP2: su DUT es fpga/tp2_uart/top.v (UART + interfaz + ALU)",
+}
+
 
 def unitarios():
     """Testbenches de tb/unit/: el módulo superior se llama como el archivo (verificacion.md §7).
-    Los que empiezan con _ (la plantilla) no son pruebas."""
-    return sorted(p.stem for p in TB_UNIT.glob("*_tb.v") if not p.name.startswith("_"))
+    Los que empiezan con _ (la plantilla) no son pruebas, y los de OTRO_DISENO no corren en el
+    proyecto del procesador."""
+    return sorted(p.stem for p in TB_UNIT.glob("*_tb.v")
+                  if not p.name.startswith("_") and p.stem not in OTRO_DISENO)
 
 
 def main(argv=None):
@@ -162,7 +171,8 @@ def main(argv=None):
         if equiv:
             print(f"equivalentes, lo esperado es NO DETECTADO: {', '.join(equiv)}")
     if tbs:
-        print(f"{len(tbs)} testbenches unitarios en {lista_unit}")
+        print(f"{len(tbs)} testbenches unitarios en {lista_unit}; de otro diseño, no se corren: "
+              + "; ".join(f"{tb} ({motivo})" for tb, motivo in OTRO_DISENO.items()))
     print(f"Vivado: source {(ROOT / 'scripts' / 'regresion.tcl').as_posix()}")
     return 0
 
