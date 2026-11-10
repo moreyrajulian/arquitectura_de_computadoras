@@ -19,8 +19,9 @@
 //     (enable = 0), salto tomado (gana sobre el stall, §3.3), stall por
 //     carga-uso, HALT en vuelo (§3.4) y normal. Lo que hace cada registro
 //     con las salidas del DUT sale de la prioridad rst > en > flush de §2:
-//     en = 0 retiene aunque flush = 1. Así el oráculo no repite las
-//     ecuaciones del RTL, sino el efecto sobre el pipeline.
+//     en = 0 retiene aunque flush = 1, y una X o Z en en o flush nunca
+//     coincide con lo esperado. Así el oráculo no repite las ecuaciones
+//     del RTL, sino el efecto sobre el pipeline.
 //
 // Casos:
 //   - Dirigidos de carga-uso con palabras reales de los programas de sw/
@@ -55,6 +56,7 @@ module hazard_unit_tb;
     localparam [1:0] RETIENE = 2'd0;
     localparam [1:0] CARGA   = 2'd1;
     localparam [1:0] BURBUJA = 2'd2;
+    localparam [1:0] ILEGAL  = 2'd3;   // en o flush en X o Z: ninguna fila lo espera
 
     // Palabras de rvasm (comentario: la instrucción). Los campos se sacan
     // en el testbench, como en riscv_core
@@ -153,13 +155,17 @@ module hazard_unit_tb;
 
     //------------------------------------------------------------------
     // Qué hace un registro con las entradas que recibe (pipeline.md §2):
-    // en = 0 retiene aunque flush = 1
+    // en = 0 retiene aunque flush = 1. Una X o Z en cualquiera de las dos
+    // da ILEGAL, que no coincide con ninguna acción esperada: sin esto,
+    // if (!en) y if (flush) la convertirían en una acción válida
     //------------------------------------------------------------------
     function [1:0] accion;
         input en;
         input flush;
         begin
-            if (!en)
+            if (^{en, flush} === 1'bx)
+                accion = ILEGAL;
+            else if (!en)
                 accion = RETIENE;
             else if (flush)
                 accion = BURBUJA;
