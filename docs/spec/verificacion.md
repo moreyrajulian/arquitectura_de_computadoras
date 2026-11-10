@@ -177,8 +177,8 @@ Los 22 programas necesitan el pipeline completo. Para las etapas anteriores hay 
 | `indep_alu_r`, `indep_alu_i`, `indep_cargas`, `indep_stores`, `indep_store_load`, `indep_saltos`, `indep_lui` | 2, de IF a MEM (M3 a M6), antes de que exista WB | Ninguna instrucción lee un registro que escribe otra: parten de un **estado inicial** de registros y de `dmem` (`sw/estado_inicial/`, en formato `$readmemh`) y cada resultado se ve en el registro de segmentación de su etapa |
 | `<nombre>_nops`, de los programas de riesgos y de saltos | 3 sin riesgos (I-38, M7): pipeline completo sin forwarding, stall ni flush | Llevan `nop` para que toda dependencia quede a distancia 3 y detrás de cada salto haya dos `nop`. Mismo estado final que el original y los mismos ciclos en M7 y en M8 |
 
-En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; en I-43,
-todos. Entre medio, cada integración de M8 compara contra el modelo con los
+En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; desde I-42,
+todos (I-43 suma los mutantes del resto de los mecanismos, §6). Entre medio, cada integración de M8 compara contra el modelo con los
 mecanismos que ya tiene el RTL (decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)):
 desde I-39, `--modo forwarding` (forwarding sin stall ni flush), con los 27 de M7 y los
 originales que solo necesitan forwarding: `fwd_exmem`, `fwd_memwb`, `fwd_prioridad` y
@@ -404,11 +404,15 @@ escrito a mano (nivel 3). El porqué de cada elección está en la decisión
 
 ```sh
 # 1. Preparar el programa: ensambla, corre el modelo y convierte el .exp
-python scripts/prep_tb.py sw/indep_alu_r.s --modo sin_riesgos   # M3 a M7
-python scripts/prep_tb.py sw/fwd_exmem.s --modo forwarding       # I-39 e I-40
-python scripts/prep_tb.py sw/fwd_exmem.s --modo forwarding_stall # I-41
+python scripts/prep_tb.py sw/indep_alu_r.s --modo sin_riesgos   # RTL de M3 a M7
+python scripts/prep_tb.py sw/fwd_exmem.s --modo forwarding       # RTL de I-39 e I-40
+python scripts/prep_tb.py sw/fwd_exmem.s --modo forwarding_stall # RTL de I-41
 python scripts/prep_tb.py sw/fwd_exmem.s                         # --modo completo, desde I-42
 ```
+
+Cada modo describe el RTL de una integración (§4.3, decisión
+[029](../decisiones/029_modo-del-modelo-en-m8.md)), y desde I-42 el de `master` es `completo`.
+Los otros sirven con el commit de su integración (§8.7).
 
 `prep_tb.py` escribe en `build/tb/<nombre>/` los archivos de la tabla y, al final, la línea
 para pasarle el directorio a xsim:
@@ -695,10 +699,10 @@ Los programas que en el modo se comparan solo contra la traza corren sin `+FINAL
 [030](../decisiones/030_corridas-solo-traza.md)):
 
 ```sh
-python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL (I-42)
-python scripts/regresion.py --modo forwarding_stall # los 33 de I-41 y 2 sin +FINAL
-python scripts/regresion.py --modo forwarding      # los 31 de I-39 e I-40 y salto_depende sin +FINAL
-python scripts/regresion.py --modo sin_riesgos     # los 27 programas de M7 (I-38)
+python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL (master)
+python scripts/regresion.py --modo forwarding_stall # RTL de I-41: los 33 y 2 sin +FINAL
+python scripts/regresion.py --modo forwarding      # RTL de I-39 e I-40: los 31 y salto_depende sin +FINAL
+python scripts/regresion.py --modo sin_riesgos     # RTL de M7: los 27 programas (I-38)
 python scripts/regresion.py alu_r fwd_x0       # solo esos
 python scripts/regresion.py --pausas 47        # además, cada uno con +PAUSAS=47
 python scripts/regresion.py --mutante sin_forwarding   # con un mutante del RTL (§6)
@@ -720,8 +724,12 @@ corridas, 64 con `--pausas`. `forwarding_stall` (desde I-41) son esos 31, `loadu
 `+FINAL` (lista `SOLO_TRAZA_FORWARDING_STALL`, §8.2): 35 corridas, 70 con `--pausas`. `completo`
 (desde I-42) son los 39 programas de `sw/`, todos con `+FINAL` (lista `COMPLETO`, §4.3): 39
 corridas, 78 con `--pausas`. Cada línea de `corridas.txt` es la etiqueta, el programa y los
-plusargs además de `DIR` (por ejemplo, `salto_depende_pausas salto_depende PAUSAS=47`). El modo
-por defecto es el que corresponde al RTL de `master`.
+plusargs además de `DIR` (por ejemplo, `salto_depende_pausas salto_depende FINAL PAUSAS=47`, o
+sin `FINAL` en los modos con solo traza). El modo por defecto es el que corresponde al RTL de
+`master`. Los otros describen el RTL de una integración anterior y sirven con su commit, por
+ejemplo para repetir la regresión de una PR vieja: con el RTL de `master`, que siempre hace
+flush, los programas con saltos tomados (las variantes `_nops`, `indep_saltos`, `mem_avisos`)
+no coinciden con esas trazas, que dejan válidas las dos instrucciones de detrás del salto.
 
 `regresion.tcl` usa el proyecto abierto o lo crea con `create_project.tcl`. Compila y elabora
 una vez, corre cada línea con `launch_simulation -step simulate` y guarda el log de cada
