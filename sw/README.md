@@ -183,7 +183,7 @@ No tienen variante:
 | `fwd_x0` | Escritura en `x0`: no se reenvía, no pasa por el bypass, un `lw x0` no frena. Una instrucción que no escribe (`sw`) tampoco se reenvía, aunque su campo `rd` coincida | — |
 | `bypass_banco` | RAW a distancia 3: bypass del banco | — |
 | `loaduse_rs1_rs2` | Carga-uso en `rs1`, `rs2` y los dos (también para `STEP` en medio de un stall) | `_nops` |
-| `loaduse_sw_beq` | Load seguido de `sw` (dato y base), de `beq` tomado y de `bne` no tomado | `_nops` |
+| `loaduse_sw_beq` | Load seguido de `sw` (dato y base), de `beq` tomado, de `bne` no tomado y de `jalr` que salta a la dirección cargada (I-43) | `_nops` |
 | `load_sin_dep` | Load seguido de algo que no depende de él: sin stall | `_nops` |
 | `salto_depende` | `beq`, `bne` y `jalr` que usan el resultado de la anterior o de la de hace dos | `_nops` |
 | `halt_stall` | Stall con el HALT en ID (falso positivo de la detección conservadora) | — |

@@ -32,6 +32,19 @@
 //   python scripts/prep_tb.py sw/<programa>.s [--modo sin_riesgos|forwarding|forwarding_stall|completo]
 //   xsim ... -testplusarg DIR=<build/tb/<programa>, ruta absoluta> [-testplusarg FINAL]
 //            [-testplusarg PAUSAS=<semilla>]
+//   xsim ... -testplusarg LISTA=<archivo, ruta absoluta>
+//
+// Varias corridas en una simulación (+LISTA, decisión 033): una por línea
+// del archivo, con la etiqueta, el directorio (ruta absoluta, sin
+// espacios), final (0 o 1), pausas (0 o 1) y la semilla, separados por
+// espacios. La escribe scripts/regresion.tcl desde corridas.txt. Antes de
+// cada corrida imprime "CORRIDA <etiqueta>" y al terminarla su línea TEST,
+// la misma que con +DIR. Entre una y otra vuelve a cargar todo con el core
+// en reset, como LOAD, y pone en cero los contadores, el watchdog y la
+// semilla: cada corrida es la misma que con +DIR. Un timeout o un archivo
+// que falta terminan esa corrida con TEST FAILED, y sigue la próxima. Al
+// final imprime "LISTA: n de m corridas con TEST PASSED", que no empieza
+// con TEST.
 //
 // Etapas: cada integración agrega su define (abajo, o con -d en xvlog). Los
 // defines son acumulativos: definir una etapa define las anteriores. IF
@@ -321,6 +334,18 @@ module pipeline_tb;
     reg     final_mode;
     reg     pausas;
     reg     fallo;
+    reg     paso;                               // la corrida terminó con TEST PASSED
+    integer n_wd;                               // watchdog: ciclos con enable = 1
+
+    // +LISTA (decisión 033)
+    reg [8*512-1:0] lista;
+    reg [8*64-1:0]  etiqueta;
+    integer fd_lista;
+    integer leidos;
+    integer final_i;
+    integer pausas_i;
+    integer n_corridas;
+    integer n_pasan;
 `ifdef STAGE_HALT
     reg [NB_MEM_WB-1:0] mw_halt;                // MEM/WB de la traza con el HALT
     reg [NB_DATA-1:0]   exp_pc;
@@ -608,290 +633,349 @@ module pipeline_tb;
         end
     endtask
 
+    // Termina la corrida, no la simulación: con +LISTA sigue la próxima
     task terminar_mal;
         input [8*80-1:0] motivo;
         begin
             $display("TEST FAILED: %0s", motivo);
-            $finish;
+            disable correr;
         end
     endtask
 
     //------------------------------------------------------------------
-    // Secuencia
+    // Una corrida: el programa de dir, con final_mode, pausas y semilla.
+    // Empieza con el core en reset y pone en cero lo que cuenta, así que da
+    // lo mismo si es la primera de la simulación o no (+LISTA)
     //------------------------------------------------------------------
-    initial begin
-        errors         = 0;
-        checks         = 0;
-        fallo          = 1'b0;
-        ciclos_run     = 0;
-        tb_rst         = 1'b1;
-        tb_enable      = 1'b0;
-        tb_imem_b_en   = 1'b0;
-        tb_imem_b_we   = 1'b0;
-        tb_imem_b_addr = {NB_ADDR{1'b0}};
-        tb_imem_b_din  = {NB_DATA{1'b0}};
-        tb_dbg_reg_addr = 5'd0;
+    task correr;
+        begin
+            errors         = 0;
+            checks         = 0;
+            fallo          = 1'b0;
+            paso           = 1'b0;
+            tb_rst         = 1'b1;
+            tb_enable      = 1'b0;
+            tb_imem_b_en   = 1'b0;
+            tb_imem_b_we   = 1'b0;
+            tb_imem_b_addr = {NB_ADDR{1'b0}};
+            tb_imem_b_din  = {NB_DATA{1'b0}};
+            tb_dbg_reg_addr = 5'd0;
 `ifdef STAGE_MEM
-        tb_dmem_b_en   = 1'b0;
-        tb_dmem_b_we   = 4'b0000;
-        tb_dmem_b_addr = {NB_ADDR{1'b0}};
-        tb_dmem_b_din  = {NB_DATA{1'b0}};
+            tb_dmem_b_en   = 1'b0;
+            tb_dmem_b_we   = 4'b0000;
+            tb_dmem_b_addr = {NB_ADDR{1'b0}};
+            tb_dmem_b_din  = {NB_DATA{1'b0}};
 `endif
 
-        if (!$value$plusargs("DIR=%s", dir))
-            terminar_mal("falta +DIR=<directorio de scripts/prep_tb.py>");
-        final_mode = $test$plusargs("FINAL");
-        pausas     = $value$plusargs("PAUSAS=%d", semilla);
 `ifndef STAGE_WB
-        if (final_mode)
-            terminar_mal("+FINAL necesita STAGE_WB");
+            if (final_mode)
+                terminar_mal("+FINAL necesita STAGE_WB");
 `endif
 
-        // corte.hex primero: dice cuántas líneas tiene la traza
-        for (i = 0; i < 6; i = i + 1) corte[i] = 0;
-        leer("corte.hex", fname);
-        $readmemh(fname, corte);
-        lineas = corte[C_LINEAS];
-        if (lineas == 0)
-            terminar_mal("no se pudo leer corte.hex (¿corriste prep_tb.py?)");
-        if (lineas > MAX_LINES)
-            terminar_mal("la traza es más larga que MAX_CYCLES");
+            // corte.hex primero: dice cuántas líneas tiene la traza
+            for (i = 0; i < 6; i = i + 1) corte[i] = 0;
+            leer("corte.hex", fname);
+            $readmemh(fname, corte);
+            lineas = corte[C_LINEAS];
+            if (lineas == 0)
+                terminar_mal("no se pudo leer corte.hex (¿corriste prep_tb.py?)");
+            if (lineas > MAX_LINES)
+                terminar_mal("la traza es más larga que MAX_CYCLES");
 
-        leer("modelo.ciclo.if_id.hex",       fname); $readmemh(fname, ref_if_id,       0, lineas-1);
-        leer("modelo.ciclo.if_id.mask.hex",  fname); $readmemh(fname, ref_if_id_mask,  0, lineas-1);
-        leer("modelo.ciclo.id_ex.hex",       fname); $readmemh(fname, ref_id_ex,       0, lineas-1);
-        leer("modelo.ciclo.id_ex.mask.hex",  fname); $readmemh(fname, ref_id_ex_mask,  0, lineas-1);
-        leer("modelo.ciclo.ex_mem.hex",      fname); $readmemh(fname, ref_ex_mem,      0, lineas-1);
-        leer("modelo.ciclo.ex_mem.mask.hex", fname); $readmemh(fname, ref_ex_mem_mask, 0, lineas-1);
-        leer("modelo.ciclo.mem_wb.hex",      fname); $readmemh(fname, ref_mem_wb,      0, lineas-1);
-        leer("modelo.ciclo.mem_wb.mask.hex", fname); $readmemh(fname, ref_mem_wb_mask, 0, lineas-1);
-        leer("imem.hex",      fname); $readmemh(fname, imem_words);
-        leer("dmem_init.hex", fname); $readmemh(fname, dmem_init);
-        leer("regs_init.hex", fname); $readmemh(fname, regs_init);
-        if (final_mode) begin
-            for (i = 0; i < 4; i = i + 1) exp_misc[i] = 0;
-            leer("exp_regs.hex", fname); $readmemh(fname, exp_regs);
-            leer("exp_misc.hex", fname); $readmemh(fname, exp_misc);
-            if (exp_misc[E_CICLOS] == 0)
-                terminar_mal("no se pudo leer exp_misc.hex (¿el programa tiene .exp?)");
-        end
+            leer("modelo.ciclo.if_id.hex",       fname); $readmemh(fname, ref_if_id,       0, lineas-1);
+            leer("modelo.ciclo.if_id.mask.hex",  fname); $readmemh(fname, ref_if_id_mask,  0, lineas-1);
+            leer("modelo.ciclo.id_ex.hex",       fname); $readmemh(fname, ref_id_ex,       0, lineas-1);
+            leer("modelo.ciclo.id_ex.mask.hex",  fname); $readmemh(fname, ref_id_ex_mask,  0, lineas-1);
+            leer("modelo.ciclo.ex_mem.hex",      fname); $readmemh(fname, ref_ex_mem,      0, lineas-1);
+            leer("modelo.ciclo.ex_mem.mask.hex", fname); $readmemh(fname, ref_ex_mem_mask, 0, lineas-1);
+            leer("modelo.ciclo.mem_wb.hex",      fname); $readmemh(fname, ref_mem_wb,      0, lineas-1);
+            leer("modelo.ciclo.mem_wb.mask.hex", fname); $readmemh(fname, ref_mem_wb_mask, 0, lineas-1);
+            leer("imem.hex",      fname); $readmemh(fname, imem_words);
+            leer("dmem_init.hex", fname); $readmemh(fname, dmem_init);
+            leer("regs_init.hex", fname); $readmemh(fname, regs_init);
+            if (final_mode) begin
+                for (i = 0; i < 4; i = i + 1) exp_misc[i] = 0;
+                leer("exp_regs.hex", fname); $readmemh(fname, exp_regs);
+                leer("exp_misc.hex", fname); $readmemh(fname, exp_misc);
+                if (exp_misc[E_CICLOS] == 0)
+                    terminar_mal("no se pudo leer exp_misc.hex (¿el programa tiene .exp?)");
+            end
 `ifdef STAGE_MEM
-        // dmem esperada: para +FINAL y para la comparación al final de la traza
-        for (i = 0; i < MEM_WORDS; i = i + 1) exp_dmem[i] = {NB_DATA{1'bx}};
-        leer("exp_dmem.hex", fname); $readmemh(fname, exp_dmem);
-        if (exp_dmem[0] === {NB_DATA{1'bx}})
-            terminar_mal("no se pudo leer exp_dmem.hex (¿el programa tiene .exp?)");
+            // dmem esperada: para +FINAL y para la comparación al final de la traza
+            for (i = 0; i < MEM_WORDS; i = i + 1) exp_dmem[i] = {NB_DATA{1'bx}};
+            leer("exp_dmem.hex", fname); $readmemh(fname, exp_dmem);
+            if (exp_dmem[0] === {NB_DATA{1'bx}})
+                terminar_mal("no se pudo leer exp_dmem.hex (¿el programa tiene .exp?)");
 `endif
 
-        // Hasta qué ciclo se compara cada latch (ver encabezado)
-        for (i = 0; i < 4; i = i + 1) begin
-            lim[i] = lineas;
+            // Hasta qué ciclo se compara cada latch (ver encabezado)
+            for (i = 0; i < 4; i = i + 1) begin
+                lim[i] = lineas;
 `ifndef STAGE_HALT
-            if (corte[C_HALT + i] != 0)
-                lim[i] = corte[C_HALT + i];
+                if (corte[C_HALT + i] != 0)
+                    lim[i] = corte[C_HALT + i];
 `endif
 `ifndef STAGE_REDIRECT
-            if (corte[C_REDIRECT] != 0 && corte[C_REDIRECT] + 1 + i < lim[i]) begin
-                lim[i] = corte[C_REDIRECT] + 1 + i;
-                $display("INFO: %0s se compara hasta el ciclo %0d: salto tomado en EX en el ciclo %0d sin STAGE_REDIRECT",
-                         nombre_latch(i), lim[i], corte[C_REDIRECT]);
-            end
-`endif
-        end
-        ultimo = 0;
-`ifdef STAGE_IF
-        if (lim[L_IF_ID]  > ultimo) ultimo = lim[L_IF_ID];
-`endif
-`ifdef STAGE_ID
-        if (lim[L_ID_EX]  > ultimo) ultimo = lim[L_ID_EX];
-`endif
-`ifdef STAGE_EX
-        if (lim[L_EX_MEM] > ultimo) ultimo = lim[L_EX_MEM];
-`endif
-`ifdef STAGE_MEM
-        if (lim[L_MEM_WB] > ultimo) ultimo = lim[L_MEM_WB];
-`endif
-        $display("INFO: %0s, %0d líneas de traza, se comparan los ciclos 1 a %0d",
-                 dir, lineas, ultimo);
-        if (pausas)
-            $display("INFO: pausas con enable = 0, semilla %0d", semilla);
-
-        // Carga con el core en reset, como LOAD (memoria.md §3.5 y §4)
-        repeat (2) @(negedge tb_clk);
-        for (i = 0; i < MEM_WORDS; i = i + 1) begin
-            tb_imem_b_en   = 1'b1;
-            tb_imem_b_we   = 1'b1;
-            tb_imem_b_addr = i[NB_ADDR-1:0];
-            tb_imem_b_din  = imem_words[i];
-            @(negedge tb_clk);
-        end
-        tb_imem_b_en = 1'b0;
-        tb_imem_b_we = 1'b0;
-`ifdef STAGE_MEM
-        for (i = 0; i < MEM_WORDS; i = i + 1) begin
-            tb_dmem_b_en   = 1'b1;
-            tb_dmem_b_we   = 4'b1111;
-            tb_dmem_b_addr = i[NB_ADDR-1:0];
-            tb_dmem_b_din  = dmem_init[i];
-            @(negedge tb_clk);
-        end
-        tb_dmem_b_en = 1'b0;
-        tb_dmem_b_we = 4'b0000;
-`endif
-        @(negedge tb_clk);
-
-        // Ciclo 1: latches en burbuja por el reset, PC = 0
-        tb_rst    = 1'b0;
-`ifdef STAGE_ID
-        // El reset pone el banco en cero (decisión 007): se carga por jerarquía
-        // después de soltarlo, antes del primer flanco
-        for (i = 1; i < N_REGS; i = i + 1)
-            `REGFILE[i] = regs_init[i];
-        // Puerto de lectura de la Debug Unit (decisión 023), como READ_REGS:
-        // con el core detenido, x0..x31 contra el estado inicial. Con
-        // enable = 0 nada cambia, así que el ciclo 1 sigue siendo el mismo
-        errores_antes = errors;
-        for (i = 0; i < N_REGS; i = i + 1) begin
-            tb_dbg_reg_addr = i[4:0];
-            #1;
-            $sformat(fname, "puerto debug x%0d", i);
-            chk(fname[8*32-1:0], tb_o_dbg_reg_data,
-                (i == 0) ? {NB_DATA{1'b0}} : regs_init[i]);
-        end
-        if (errors != errores_antes)
-            fallo = 1'b1;
-        @(negedge tb_clk);
-`endif
-        tb_enable = 1'b1;
-        ciclo     = 1;
-        while (ciclo <= ultimo && !fallo) begin
-`ifdef STAGE_IF
-            if (ciclo <= lim[L_IF_ID])
-                chk_latch(L_IF_ID,  dut_if_id,  ref_if_id[ciclo-1],  ref_if_id_mask[ciclo-1]);
-`endif
-`ifdef STAGE_ID
-            // Ciclo 2: el banco conserva la carga. Ya pasó el primer flanco sin
-            // reset, y WB todavía no escribe (MEM/WB era burbuja en el ciclo 1)
-            if (ciclo == 2) begin
-                errores_antes = errors;
-                for (i = 1; i < N_REGS; i = i + 1) begin
-                    $sformat(fname, "ciclo 2 banco x%0d", i);
-                    chk(fname[8*32-1:0], `REGFILE[i], regs_init[i]);
+                if (corte[C_REDIRECT] != 0 && corte[C_REDIRECT] + 1 + i < lim[i]) begin
+                    lim[i] = corte[C_REDIRECT] + 1 + i;
+                    $display("INFO: %0s se compara hasta el ciclo %0d: salto tomado en EX en el ciclo %0d sin STAGE_REDIRECT",
+                             nombre_latch(i), lim[i], corte[C_REDIRECT]);
                 end
-                if (errors != errores_antes)
-                    fallo = 1'b1;
+`endif
             end
-            if (ciclo <= lim[L_ID_EX])
-                chk_latch(L_ID_EX,  dut_id_ex,  ref_id_ex[ciclo-1],  ref_id_ex_mask[ciclo-1]);
+            ultimo = 0;
+`ifdef STAGE_IF
+            if (lim[L_IF_ID]  > ultimo) ultimo = lim[L_IF_ID];
+`endif
+`ifdef STAGE_ID
+            if (lim[L_ID_EX]  > ultimo) ultimo = lim[L_ID_EX];
 `endif
 `ifdef STAGE_EX
-            if (ciclo <= lim[L_EX_MEM])
-                chk_latch(L_EX_MEM, dut_ex_mem, ref_ex_mem[ciclo-1], ref_ex_mem_mask[ciclo-1]);
+            if (lim[L_EX_MEM] > ultimo) ultimo = lim[L_EX_MEM];
 `endif
 `ifdef STAGE_MEM
-            if (ciclo <= lim[L_MEM_WB])
-                chk_latch(L_MEM_WB, dut_mem_wb, ref_mem_wb[ciclo-1], ref_mem_wb_mask[ciclo-1]);
+            if (lim[L_MEM_WB] > ultimo) ultimo = lim[L_MEM_WB];
 `endif
-            if (ciclo < ultimo && !fallo) begin
-                // Una pausa cada ~4 ciclos, de 1 a 3 ciclos con enable = 0
-                if (pausas) begin
-                    p = $random(semilla);
-                    if ((p & 3) == 0) begin
-                        n_pausa = 1 + ((p >> 2) & 3) % 3;
-                        pausa(n_pausa);
+            $display("INFO: %0s, %0d líneas de traza, se comparan los ciclos 1 a %0d",
+                     dir, lineas, ultimo);
+            if (pausas)
+                $display("INFO: pausas con enable = 0, semilla %0d", semilla);
+
+            // Carga con el core en reset, como LOAD (memoria.md §3.5 y §4)
+            repeat (2) @(negedge tb_clk);
+            for (i = 0; i < MEM_WORDS; i = i + 1) begin
+                tb_imem_b_en   = 1'b1;
+                tb_imem_b_we   = 1'b1;
+                tb_imem_b_addr = i[NB_ADDR-1:0];
+                tb_imem_b_din  = imem_words[i];
+                @(negedge tb_clk);
+            end
+            tb_imem_b_en = 1'b0;
+            tb_imem_b_we = 1'b0;
+`ifdef STAGE_MEM
+            for (i = 0; i < MEM_WORDS; i = i + 1) begin
+                tb_dmem_b_en   = 1'b1;
+                tb_dmem_b_we   = 4'b1111;
+                tb_dmem_b_addr = i[NB_ADDR-1:0];
+                tb_dmem_b_din  = dmem_init[i];
+                @(negedge tb_clk);
+            end
+            tb_dmem_b_en = 1'b0;
+            tb_dmem_b_we = 4'b0000;
+`endif
+            @(negedge tb_clk);
+
+            // Ciclo 1: latches en burbuja por el reset, PC = 0
+            tb_rst    = 1'b0;
+`ifdef STAGE_ID
+            // El reset pone el banco en cero (decisión 007): se carga por jerarquía
+            // después de soltarlo, antes del primer flanco
+            for (i = 1; i < N_REGS; i = i + 1)
+                `REGFILE[i] = regs_init[i];
+            // Puerto de lectura de la Debug Unit (decisión 023), como READ_REGS:
+            // con el core detenido, x0..x31 contra el estado inicial. Con
+            // enable = 0 nada cambia, así que el ciclo 1 sigue siendo el mismo
+            errores_antes = errors;
+            for (i = 0; i < N_REGS; i = i + 1) begin
+                tb_dbg_reg_addr = i[4:0];
+                #1;
+                $sformat(fname, "puerto debug x%0d", i);
+                chk(fname[8*32-1:0], tb_o_dbg_reg_data,
+                    (i == 0) ? {NB_DATA{1'b0}} : regs_init[i]);
+            end
+            if (errors != errores_antes)
+                fallo = 1'b1;
+            @(negedge tb_clk);
+`endif
+            tb_enable = 1'b1;
+            ciclo     = 1;
+            while (ciclo <= ultimo && !fallo) begin
+`ifdef STAGE_IF
+                if (ciclo <= lim[L_IF_ID])
+                    chk_latch(L_IF_ID,  dut_if_id,  ref_if_id[ciclo-1],  ref_if_id_mask[ciclo-1]);
+`endif
+`ifdef STAGE_ID
+                // Ciclo 2: el banco conserva la carga. Ya pasó el primer flanco sin
+                // reset, y WB todavía no escribe (MEM/WB era burbuja en el ciclo 1)
+                if (ciclo == 2) begin
+                    errores_antes = errors;
+                    for (i = 1; i < N_REGS; i = i + 1) begin
+                        $sformat(fname, "ciclo 2 banco x%0d", i);
+                        chk(fname[8*32-1:0], `REGFILE[i], regs_init[i]);
                     end
+                    if (errors != errores_antes)
+                        fallo = 1'b1;
                 end
-                if (!fallo)
-                    @(negedge tb_clk);
+                if (ciclo <= lim[L_ID_EX])
+                    chk_latch(L_ID_EX,  dut_id_ex,  ref_id_ex[ciclo-1],  ref_id_ex_mask[ciclo-1]);
+`endif
+`ifdef STAGE_EX
+                if (ciclo <= lim[L_EX_MEM])
+                    chk_latch(L_EX_MEM, dut_ex_mem, ref_ex_mem[ciclo-1], ref_ex_mem_mask[ciclo-1]);
+`endif
+`ifdef STAGE_MEM
+                if (ciclo <= lim[L_MEM_WB])
+                    chk_latch(L_MEM_WB, dut_mem_wb, ref_mem_wb[ciclo-1], ref_mem_wb_mask[ciclo-1]);
+`endif
+                if (ciclo < ultimo && !fallo) begin
+                    // Una pausa cada ~4 ciclos, de 1 a 3 ciclos con enable = 0
+                    if (pausas) begin
+                        p = $random(semilla);
+                        if ((p & 3) == 0) begin
+                            n_pausa = 1 + ((p >> 2) & 3) % 3;
+                            pausa(n_pausa);
+                        end
+                    end
+                    if (!fallo)
+                        @(negedge tb_clk);
+                end
+                ciclo = ciclo + 1;
             end
-            ciclo = ciclo + 1;
-        end
 
 `ifdef STAGE_MEM
-        // dmem al terminar la traza (verificacion.md §8.3), con el core
-        // detenido. Con +FINAL se compara con el estado final, más abajo
-        if (!final_mode && !fallo) begin
+            // dmem al terminar la traza (verificacion.md §8.3), con el core
+            // detenido. Con +FINAL se compara con el estado final, más abajo
+            if (!final_mode && !fallo) begin
 `ifndef STAGE_REDIRECT
-            if (corte[C_REDIRECT] != 0)
-                $display("INFO: dmem no se compara: salto tomado en EX en el ciclo %0d sin STAGE_REDIRECT",
-                         corte[C_REDIRECT]);
-            else
+                if (corte[C_REDIRECT] != 0)
+                    $display("INFO: dmem no se compara: salto tomado en EX en el ciclo %0d sin STAGE_REDIRECT",
+                             corte[C_REDIRECT]);
+                else
 `endif
-            begin
-                tb_enable = 1'b0;
-                leer_dmem;
+                begin
+                    tb_enable = 1'b0;
+                    leer_dmem;
+                end
             end
-        end
 `endif
 
 `ifdef STAGE_WB
-        // Estado final contra el .exp (verificacion.md §5)
-        if (final_mode && !fallo) begin
-            while (!tb_o_halted)
-                @(negedge tb_clk);
-            // primer ciclo con halted = 1: el pipeline tiene que estar vacío
-            tb_enable = 1'b0;
-            chk("halted", {{(NB_DATA-1){1'b0}}, tb_o_halted}, exp_misc[E_HALTED]);
+            // Estado final contra el .exp (verificacion.md §5)
+            if (final_mode && !fallo) begin
+                while (!tb_o_halted)
+                    @(negedge tb_clk);
+                // primer ciclo con halted = 1: el pipeline tiene que estar vacío
+                tb_enable = 1'b0;
+                chk("halted", {{(NB_DATA-1){1'b0}}, tb_o_halted}, exp_misc[E_HALTED]);
 `ifdef STAGE_HALT
-            chk("pipeline_vacio", {{(NB_DATA-1){1'b0}}, dut_vacio}, exp_misc[E_VACIO]);
-            // pc_reg queda en la dirección del HALT + 4 (§3.4). La del HALT es
-            // el pc de MEM/WB en la traza, en el primer ciclo con el HALT ahí
-            mw_halt = ref_mem_wb[corte[C_HALT + L_MEM_WB] - 1];
-            exp_pc  = mw_halt[NB_MEM_WB-2 -: NB_DATA] + 32'd4;
-            chk("pc", tb_o_pc, exp_pc);
+                chk("pipeline_vacio", {{(NB_DATA-1){1'b0}}, dut_vacio}, exp_misc[E_VACIO]);
+                // pc_reg queda en la dirección del HALT + 4 (§3.4). La del HALT es
+                // el pc de MEM/WB en la traza, en el primer ciclo con el HALT ahí
+                mw_halt = ref_mem_wb[corte[C_HALT + L_MEM_WB] - 1];
+                exp_pc  = mw_halt[NB_MEM_WB-2 -: NB_DATA] + 32'd4;
+                chk("pc", tb_o_pc, exp_pc);
 `else
-            $display("INFO: pipeline_vacio no se compara sin STAGE_HALT (verificacion.md §8.3)");
+                $display("INFO: pipeline_vacio no se compara sin STAGE_HALT (verificacion.md §8.3)");
 `endif
-            chk("avisos {imem_fault, dmem_oob, dmem_misaligned}",
-                {{(NB_DATA-3){1'b0}}, tb_o_imem_fault, tb_o_dmem_oob, tb_o_dmem_misaligned},
-                exp_misc[E_AVISOS]);
-            chk("ciclos", ciclos_run, exp_misc[E_CICLOS]);
+                chk("avisos {imem_fault, dmem_oob, dmem_misaligned}",
+                    {{(NB_DATA-3){1'b0}}, tb_o_imem_fault, tb_o_dmem_oob, tb_o_dmem_misaligned},
+                    exp_misc[E_AVISOS]);
+                chk("ciclos", ciclos_run, exp_misc[E_CICLOS]);
 `ifdef STAGE_HALT
-            // halted sostiene la parada (pipeline.md §3.4): con enable = 1 no
-            // entra nada y el PC no se mueve. Los registros y dmem se comparan
-            // después, así que tampoco se escribe nada
-            tb_enable = 1'b1;
-            for (i = 1; i <= N_TRAS_HALT; i = i + 1) begin
-                @(negedge tb_clk);
-                $sformat(fname, "pipeline_vacio, halted + %0d", i);
-                chk(fname[8*32-1:0], {{(NB_DATA-1){1'b0}}, dut_vacio}, 32'd1);
-                $sformat(fname, "pc, halted + %0d", i);
-                chk(fname[8*32-1:0], tb_o_pc, exp_pc);
-            end
-            tb_enable = 1'b0;
+                // halted sostiene la parada (pipeline.md §3.4): con enable = 1 no
+                // entra nada y el PC no se mueve. Los registros y dmem se comparan
+                // después, así que tampoco se escribe nada
+                tb_enable = 1'b1;
+                for (i = 1; i <= N_TRAS_HALT; i = i + 1) begin
+                    @(negedge tb_clk);
+                    $sformat(fname, "pipeline_vacio, halted + %0d", i);
+                    chk(fname[8*32-1:0], {{(NB_DATA-1){1'b0}}, dut_vacio}, 32'd1);
+                    $sformat(fname, "pc, halted + %0d", i);
+                    chk(fname[8*32-1:0], tb_o_pc, exp_pc);
+                end
+                tb_enable = 1'b0;
 `endif
-            for (i = 1; i < N_REGS; i = i + 1) begin
-                $sformat(fname, "x%0d", i);
-                chk(fname[8*32-1:0], `REGFILE[i], exp_regs[i]);
+                for (i = 1; i < N_REGS; i = i + 1) begin
+                    $sformat(fname, "x%0d", i);
+                    chk(fname[8*32-1:0], `REGFILE[i], exp_regs[i]);
+                end
+                leer_dmem;
             end
-            leer_dmem;
-        end
 `endif
 
-        if (errors == 0)
-            $display("TEST PASSED: %0d chequeos, 0 errores", checks);
-        else
-            $display("TEST FAILED: %0d errores sobre %0d chequeos", errors, checks);
+            if (errors == 0) begin
+                $display("TEST PASSED: %0d chequeos, 0 errores", checks);
+                paso = 1'b1;
+            end else
+                $display("TEST FAILED: %0d errores sobre %0d chequeos", errors, checks);
+        end
+    endtask
+
+    // Una corrida con watchdog: la que termina primero corta a la otra. El
+    // watchdog cuenta solo los ciclos con el core andando, no la carga ni la
+    // lectura, y un timeout termina la corrida, no la simulación
+    task vigilada;
+        begin
+            fork : corrida
+                begin
+                    correr;
+                    disable corrida;
+                end
+                begin
+                    n_wd = 0;
+                    while (n_wd < MAX_CYCLES) begin
+                        @(posedge tb_clk);
+                        if (!tb_rst && tb_enable)
+                            n_wd = n_wd + 1;
+                    end
+                    $display("TEST FAILED: timeout de %0d ciclos", MAX_CYCLES);
+                    disable corrida;
+                end
+            join
+        end
+    endtask
+
+    //------------------------------------------------------------------
+    // Secuencia: una corrida con +DIR, o las de +LISTA una tras otra
+    //------------------------------------------------------------------
+    initial begin
+        if ($value$plusargs("LISTA=%s", lista)) begin
+            fd_lista = $fopen(lista, "r");
+            if (fd_lista == 0) begin
+                $display("TEST FAILED: no se pudo abrir +LISTA=%0s", lista);
+                $finish;
+            end
+            n_corridas = 0;
+            n_pasan    = 0;
+            leidos = $fscanf(fd_lista, "%s %s %d %d %d", etiqueta, dir, final_i, pausas_i, semilla);
+            while (leidos == 5) begin
+                // Cada una empieza en un flanco de bajada, como la primera: un
+                // timeout termina la anterior en uno de subida
+                if (n_corridas > 0)
+                    @(negedge tb_clk);
+                final_mode = (final_i != 0);
+                pausas     = (pausas_i != 0);
+                $display("CORRIDA %0s", etiqueta);
+                vigilada;
+                n_corridas = n_corridas + 1;
+                if (paso)
+                    n_pasan = n_pasan + 1;
+                leidos = $fscanf(fd_lista, "%s %s %d %d %d", etiqueta, dir, final_i, pausas_i, semilla);
+            end
+            $fclose(fd_lista);
+            // $fscanf devuelve -1 al llegar al final del archivo
+            if (leidos != -1)
+                $display("LISTA: la línea %0d no tiene los 5 campos", n_corridas + 1);
+            $display("LISTA: %0d de %0d corridas con TEST PASSED", n_pasan, n_corridas);
+        end else begin
+            if (!$value$plusargs("DIR=%s", dir)) begin
+                $display("TEST FAILED: falta +DIR=<directorio de scripts/prep_tb.py> o +LISTA=<archivo>");
+                $finish;
+            end
+            final_mode = $test$plusargs("FINAL");
+            pausas     = $value$plusargs("PAUSAS=%d", semilla);
+            vigilada;
+        end
         $finish;
     end
 
-    // Ciclos con enable = 1 hasta el HALT en WB inclusive (verificacion.md §5)
+    // Ciclos con enable = 1 hasta el HALT en WB inclusive (verificacion.md §5).
+    // El reset los pone en cero: con +LISTA, al empezar cada corrida
     always @(posedge tb_clk)
-        if (!tb_rst && tb_enable && !tb_o_halted)
+        if (tb_rst)
+            ciclos_run <= 0;
+        else if (tb_enable && !tb_o_halted)
             ciclos_run <= ciclos_run + 1;
-
-    // Watchdog: cuenta solo los ciclos con el core andando, no la carga ni la lectura
-    initial begin : watchdog
-        integer n;
-        n = 0;
-        while (n < MAX_CYCLES) begin
-            @(posedge tb_clk);
-            if (!tb_rst && tb_enable)
-                n = n + 1;
-        end
-        $display("TEST FAILED: timeout de %0d ciclos", MAX_CYCLES);
-        $finish;
-    end
 
 endmodule
 

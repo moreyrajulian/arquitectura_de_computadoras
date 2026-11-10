@@ -8,15 +8,20 @@ regs:
   x7  = 0x00000033
   x8  = 0x00000020
   x9  = 0x00000099
+  x10 = 0x000000AC
+  x11 = 0x000000AC
+  x12 = 0x00000098
 dmem:
   0x000 = 0x00000033
   0x004 = 0x00000033
+  0x008 = 0x000000AC
   0x010 = 0x00000020
   0x020 = 0x00000033
 halted = 1
 pipeline_vacio = 1
 avisos = ninguno
-# Ejecutadas: 15 de loaduse_sw_beq + 8 nop de los lw + 2 nop del bne no
-#   tomado = 25. Los 2 nop del beq tomado los anula el flush y se cuentan como
-#   el costo del salto (sin flush, en M7, se ejecutan y suman lo mismo).
-ciclos = 31          # n = 25, + 4 de llenado, + 2 * 1 salto tomado
+# Ejecutadas: 19 de loaduse_sw_beq + 10 nop de los lw + 2 nop del addi x10
+#   + 2 nop del bne no tomado = 33. Los 2 nop de cada salto tomado (beq y jalr)
+#   los anula el flush y se cuentan como el costo del salto (sin flush, en M7,
+#   se ejecutan y suman lo mismo).
+ciclos = 41          # n = 33, + 4 de llenado, + 2 * 2 saltos tomados

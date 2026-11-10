@@ -80,8 +80,8 @@ dentro de la carpeta `build/`.
 2. [x] TP2: UART
 3. [x] Especificación: ISA, protocolo de debug, diagrama del pipeline (`docs/spec/`)
 4. [x] Ensamblador (`tools/assembler/`)
-5. [ ] Etapas del pipeline + registros de segmentación
-6. [ ] Forwarding y detección de riesgos
+5. [x] Etapas del pipeline + registros de segmentación
+6. [x] Forwarding y detección de riesgos
 7. [ ] Memoria de programa por UART + Debug Unit
 8. [ ] Interfaz de debug en la PC
 9. [ ] Integración, análisis de camino crítico y Clock Wizard

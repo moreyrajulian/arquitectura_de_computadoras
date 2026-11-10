@@ -54,8 +54,9 @@ SOLO_STALL = ["loaduse_rs1_rs2", "halt_stall"]
 FORWARDING_STALL = FORWARDING + SOLO_STALL
 
 # Con forwarding y stall, sin +FINAL (decision 030): ademas de salto_depende,
-# loaduse_sw_beq, el unico load seguido de un salto que usa el dato. Su beq se
-# toma y el .exp difiere solo en x20, del camino equivocado (I-42)
+# loaduse_sw_beq, el unico load seguido de un salto que usa el dato. Su beq y su
+# jalr (desde I-43) se toman y el .exp difiere solo en x20 y x21, del camino
+# equivocado (I-42)
 SOLO_TRAZA_FORWARDING_STALL = SOLO_TRAZA_FORWARDING + ["loaduse_sw_beq"]
 
 # Programas que suma el flush por saltos (I-42): los originales con saltos tomados que

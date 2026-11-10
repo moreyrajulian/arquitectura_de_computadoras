@@ -149,7 +149,7 @@ Es la lista de `pipeline.md` §10.7. Cada línea de esa lista tiene su programa:
 | Destino `x0` en la instrucción anterior (no se reenvía). Además, una instrucción que no escribe (`reg_write = 0`) tampoco se reenvía (§10.2) | `fwd_x0` |
 | Dependencia a distancia 3 (bypass del banco) | `bypass_banco` |
 | Load-use en `rs1` y en `rs2` | `loaduse_rs1_rs2` |
-| Load seguido de `sw` que guarda el dato; load seguido de `beq` | `loaduse_sw_beq` |
+| Load seguido de `sw` que guarda el dato; load seguido de `beq` y de `jalr` | `loaduse_sw_beq` |
 | Load seguido de una instrucción que no depende de él (sin stall) | `load_sin_dep` |
 | Salto tomado y no tomado, `jal` y `jalr`; salto que depende de la instrucción anterior | `branch_cond`, `jump`, `salto_depende` |
 | Stall con un HALT en ID | `halt_stall` |
@@ -200,7 +200,9 @@ Desde I-42 (flush por saltos) el RTL tiene los tres mecanismos y la traza sale d
 a `FORWARDING_STALL` los que solo esperaban el flush (`SOLO_FLUSH`: `branch_cond`, `jump`,
 `mixto_lazo` y `halt_camino_equivocado`) y pasa `salto_depende` y `loaduse_sw_beq` a `+FINAL`,
 porque con el flush el camino equivocado ya no se ejecuta. Así la regresión de `master` ya
-corre todos los programas; I-43 la cierra con los mutantes del resto de los mecanismos (§6).
+corre todos los programas; I-43 la cierra con los mutantes del resto de los mecanismos (§6),
+los testbenches unitarios (decisión [032](../decisiones/032_testbenches-unitarios-en-la-regresion.md))
+y la tabla de ciclos por programa (§8.8).
 `halt_stall` y `halt_camino_equivocado` no tienen variante: lo que prueban es la interacción
 del HALT con el stall y el flush.
 
@@ -332,14 +334,17 @@ Cuándo se considera aprobado cada nivel:
 **Regresión.** La regresión (I-43) corre todos los testbenches y todos los programas y la
 aprobación es única: ningún `TEST FAILED` (el timeout también lo imprime). Se corre completa antes de integrar a
 `master` un cambio de RTL. Los testbenches se corren en modo por lotes de `xsim` y el resultado se
-decide leyendo la línea final, que es lo que permite automatizarlo. Para `pipeline_tb` lo hace `scripts/regresion.tcl` (§8.7).
+decide leyendo la línea final, que es lo que permite automatizarlo. Lo hace `scripts/regresion.tcl`
+(§8.7): `pipeline_tb` con cada programa y, en la regresión normal, cada testbench de `tb/unit/`
+(decisión [032](../decisiones/032_testbenches-unitarios-en-la-regresion.md)).
 
 **Que la prueba pueda fallar.** Para cada mecanismo de riesgo (forwarding, bypass del banco,
 stall, flush de saltos, parada por HALT), al menos una vez se lo desactiva a propósito en el RTL y
 se comprueba que algún programa pasa a `TEST FAILED`. Si nada falla, los programas no cubren ese
 mecanismo y hay que agregar uno. Los mutantes están en `scripts/mutantes.py` y se corren con
 `regresion.py --mutante` (§8.7, decisión [031](../decisiones/031_mutantes-de-la-regresion.md)).
-I-40 lo hace para el forwarding (§8.2); I-43 para el resto.
+I-40 lo hace para el forwarding (§8.2); I-43, para el resto y con todos los programas (§8.2,
+*Regresión completa*).
 
 ---
 
@@ -438,12 +443,14 @@ xsim corre en `build/vivado_<diseño>/…/xsim`.
 
 | Plusarg | Efecto |
 |---|---|
-| `DIR=<ruta>` | Obligatorio: directorio de `prep_tb.py` |
+| `DIR=<ruta>` | Directorio de `prep_tb.py`: una corrida. Obligatorio si no hay `LISTA` |
+| `LISTA=<archivo>` | Varias corridas en la misma simulación (decisión [033](../decisiones/033_varias-corridas-por-simulacion.md)), una por línea: etiqueta, directorio (ruta absoluta, sin espacios), `final` y `pausas` (0 o 1) y semilla. Antes de cada una imprime `CORRIDA <etiqueta>`, la corre como si fuera con `DIR` (vuelve a cargar todo con el core en reset, como `LOAD`, y pone en cero los contadores, el watchdog y la semilla) y termina con su línea `TEST`. Al final imprime `LISTA: n de m corridas con TEST PASSED`. La escribe `regresion.tcl` (§8.7) |
 | `FINAL` | Al terminar la traza, sigue hasta `halted` y compara el estado final (necesita `STAGE_WB`) |
 | `PAUSAS=<semilla>` | Entre ciclos de la traza baja `enable` de 1 a 3 ciclos al azar (en promedio una pausa cada 4 ciclos) y comprueba que ningún latch integrado cambia, ni `halted` ni los avisos (con `STAGE_WB`). Después la traza tiene que seguir coincidiendo, y así se detecta un elemento con estado que no respeta `enable` (decisión [018](../decisiones/018_paso-a-paso-sin-clock.md)). Las pausas no cuentan para el watchdog ni para `ciclos` |
 
-Parámetro `MAX_CYCLES` (por defecto 2000): watchdog sobre los ciclos con `enable = 1`. La
-carga y la lectura final no cuentan.
+Parámetro `MAX_CYCLES` (por defecto 2000): watchdog sobre los ciclos con `enable = 1` de cada
+corrida. La carga y la lectura final no cuentan. Un timeout, o un archivo de `prep_tb.py` que
+falta, terminan la corrida con `TEST FAILED`. Con `LISTA`, la simulación sigue con la próxima.
 
 ### 8.2 Etapas integradas
 
@@ -590,6 +597,112 @@ registros del camino equivocado quedan en 0. La regresión `completo` pasa las 7
 sin `+PAUSAS=47`. `hazard_unit_tb` suma las filas de la tabla de §10.4 y el barrido de las
 1.048.576 combinaciones de entradas (§3.2): `TEST PASSED` con 7.340.247 chequeos.
 
+**Regresión completa (I-43).** Lo que compara el banco no cambia, y la traza sigue saliendo de
+`--modo completo`. Cambia cómo se corre: con `+LISTA`, varias corridas en una simulación (§8.1 y
+§8.7, decisión [033](../decisiones/033_varias-corridas-por-simulacion.md)).
+`loaduse_sw_beq` suma un load seguido de un `jalr` que salta a la dirección cargada (§4.2), como un
+retorno que recupera la dirección de la memoria: frena un ciclo y el destino sale del dato
+reenviado desde MEM/WB. Hasta ahí ningún `jalr` tomaba `rs1` de un load (`salto_depende` lo trae
+desde EX/MEM y `jump` lo lee del banco). Pasa a 32 ciclos (5 stalls y 2 saltos tomados) y su
+`_nops`, a 41. `python scripts/regresion.py --pausas 47` y `regresion.tcl` pasan las 78 corridas
+(los 39 programas, con y sin `+PAUSAS=47`) y los 19 testbenches unitarios del procesador
+(decisión [032](../decisiones/032_testbenches-unitarios-en-la-regresion.md); `uart_tb`, del TP2,
+queda afuera). Las 78 corridas pasan con una simulación por corrida y también con `+LISTA`, con
+la misma cantidad de chequeos en cada una.
+
+**Mutantes de la I-43 (§6).** `python scripts/regresion.py --mutante todos` y `regresion.tcl`
+corren en `--modo completo` y sin `--pausas`, 39 corridas por pasada. La pasada sin mutante pasa
+las 39, y cada uno de los 39 mutantes de `scripts/mutantes.py` hace fallar al menos una. Los de
+forwarding se vuelven a correr porque, respecto de la I-40, `completo` tiene más programas y el
+flush. Las 42 pasadas tardan 920 s (decisión
+[033](../decisiones/033_varias-corridas-por-simulacion.md)).
+
+| Mutante | Fallan | Programas que lo detectan |
+|---|---|---|
+| **Forwarding** (`forwarding_unit.v`, §10.2) | | |
+| `sin_forwarding` | 20 | `fwd_exmem`, `fwd_memwb`, `fwd_prioridad`, `salto_depende` y 16 más |
+| `fwd_prioridad` | 1 | `fwd_prioridad` |
+| `fwd_rd0_ex_mem`, `fwd_rd0_mem_wb` | 1 | `fwd_x0` |
+| `fwd_reg_write_ex_mem` | 8 | `fwd_x0`, `bypass_banco`, `mem_byte_media`, `indep_store_load`, `branch_cond`, `loaduse_sw_beq`, `loaduse_sw_beq_nops`, `mixto_lazo` |
+| `fwd_reg_write_mem_wb` | 8 | `fwd_x0`, `mem_byte_media`, `mem_avisos`, `indep_stores`, `branch_cond`, `loaduse_rs1_rs2`, `loaduse_rs1_rs2_nops`, `mixto_lazo` |
+| `fwd_a_ex_mem_con_rs2`, `fwd_b_ex_mem_con_rs1`, `fwd_b_codigo_ex_mem` | 16 | `fwd_exmem`, `fwd_memwb`, `fwd_prioridad`, `salto_depende` y 12 más |
+| `fwd_a_mem_wb_con_rs2` | 9 | `fwd_memwb`, `fwd_prioridad`, `load_sin_dep`, `salto_depende`, `halt_basico`, `halt_stall`, `loaduse_rs1_rs2`, `loaduse_sw_beq`, `mixto_lazo` |
+| `fwd_b_mem_wb_con_rs1` | 10 | los mismos y `mem_palabra` |
+| `fwd_a_sin_mem_wb`, `fwd_a_codigo_mem_wb` | 5 | `fwd_memwb`, `load_sin_dep`, `salto_depende`, `loaduse_rs1_rs2`, `loaduse_sw_beq` |
+| `fwd_b_sin_mem_wb`, `fwd_b_codigo_mem_wb` | 8 | `fwd_memwb`, `load_sin_dep`, `mem_palabra`, `halt_basico`, `halt_stall`, `loaduse_rs1_rs2`, `loaduse_sw_beq`, `mixto_lazo` |
+| `fwd_a_codigo_ex_mem` | 4 | `fwd_exmem`, `fwd_prioridad`, `salto_depende`, `mixto_lazo` |
+| **Bypass del banco** (`regfile.v`) | | |
+| `sin_bypass` | 28 | todos menos `fwd_exmem`, `fwd_memwb`, `halt_basico`, `halt_camino_equivocado` y los 7 `indep_*` |
+| `sin_bypass_rs1` | 24 | todos menos esos 11, `halt_stall`, `load_sin_dep`, `loaduse_rs1_rs2` y `loaduse_sw_beq` |
+| `sin_bypass_rs2` | 20 | `bypass_banco`, `fwd_prioridad`, `loaduse_rs1_rs2`, `mem_palabra` y 16 más |
+| `bypass_sin_we` (bypass aunque WB no escriba) | 3 | `mem_palabra`, `mem_byte_media`, `mixto_lazo_nops` (ver más abajo) |
+| `bypass_x0` (`x0` pasa por el bypass) | 5 | `fwd_x0`, `jump`, `jump_nops`, `mem_avisos`, `halt_camino_equivocado` |
+| **Stall de carga-uso** (`hazard_unit.v`, §10.3 y §10.4) | | |
+| `sin_stall`, `stall_solo_rs1`, `stall_sin_burbuja`, `stall_sin_en_if_id` | 4 | `loaduse_rs1_rs2`, `loaduse_sw_beq`, `halt_stall`, `mixto_lazo` |
+| `stall_sin_en_pc` | 3 | `loaduse_rs1_rs2`, `loaduse_sw_beq`, `mixto_lazo` |
+| `stall_solo_rs2` | 2 | `loaduse_rs1_rs2`, `loaduse_sw_beq` |
+| `stall_rd0` (frena con un load a `x0`) | 1 | `fwd_x0` |
+| `stall_sin_mem_read` (frena aunque en EX no haya un load) | 19 | `fwd_exmem`, `fwd_x0`, `alu_r`, `shifts` y 15 más |
+| **Flush** (`hazard_unit.v`, §10.5) | | |
+| `sin_flush`, `flush_sin_if_id`, `flush_sin_id_ex` | 13 | `branch_cond`, `jump`, `salto_depende`, `halt_camino_equivocado` y 9 más |
+| **Parada por HALT** (§3.4) | | |
+| `sin_stop_fetch`, `stop_fetch_solo_id`, `stop_fetch_sin_halted`, `stop_fetch_sin_flush`, `stop_fetch_sin_pc` | 39 | todos |
+| `stop_fetch_gana_a_redirect` | 1 | `halt_camino_equivocado` |
+| `if_id_flush_gana_a_en` | 1 | `halt_stall` |
+
+Cada mutante que detecta un solo programa es un caso que tiene su programa en §4.2:
+- la prioridad del forwarding, `fwd_prioridad`;
+- el destino `x0`, en el forwarding y en el stall, `fwd_x0`;
+- el HALT en el camino equivocado, `halt_camino_equivocado`;
+- el HALT retenido por un stall, `halt_stall`.
+
+En `--modo forwarding` (I-40), a `fwd_rd0_ex_mem` y `fwd_rd0_mem_wb` también los detectaban
+`mem_avisos` y `jump_nops`; en `completo`, solo `fwd_x0`.
+
+**Estado que el reset no borra.** El reset pone en cero el control, los `valid` y el PC, pero no
+los caminos de datos (decisión [010](../decisiones/010_convenciones-rtl.md)). En el core correcto
+eso no se ve, porque el control de la burbuja anula esos datos. `bypass_sin_we` y
+`stall_sin_mem_read` sacan justamente esa condición: mientras la burbuja del reset recorre el
+pipeline, ven el `rd` y el dato que quedaron. En la primera corrida de la simulación son X; en
+las siguientes, lo que dejó la anterior, como en la placa cuando se carga un programa después de
+otro (decisión 033). MEM/WB tiene burbujas del reset hasta el ciclo 4, así que en la traza estas
+fallas aparecen hasta el ciclo 5. El ciclo solo no alcanza para separarlas: muchas fallas propias del
+programa también aparecen en los ciclos 4 y 5 (el flush en `jump`, el forwarding en `fwd_exmem`).
+Lo que las separa es el orden. Las corridas en orden inverso salen de `regresion.py --invertir`:
+
+```sh
+python scripts/regresion.py --mutante bypass_sin_we --mutante stall_sin_mem_read --invertir
+```
+
+- **`bypass_sin_we`.** Además de los 3 de la tabla, falla en el ciclo 3 en `alu_i`, que es la
+  primera corrida, con X, y en `salto_depende`, con el `0x4` que dejó `mixto_lazo_nops`. Con
+  `--invertir` esas dos pasan, falla `shifts` (que ahora es la primera), y los 3 de la tabla
+  fallan en los mismos ciclos, el 16, el 25 y el 66. Por eso la tabla cuenta 3 y no las 5 del
+  resumen. Con una simulación por corrida, la X hacía fallar las 39 en el ciclo 3 o 4, y no se
+  veía qué programas lo detectan.
+- **`stall_sin_mem_read`.** En `loaduse_rs1_rs2_nops` falla en el ciclo 3, por el `rd` que dejó
+  `loaduse_rs1_rs2`. Con `--invertir` falla en el ciclo 16, por un frenado del propio programa:
+  las 19 corridas son las mismas en los dos órdenes.
+
+Si un mutante nuevo falla hasta el ciclo 5 con X, o con un valor que no sale del programa, se
+corre también con `--invertir`. Un programa cuenta como detector si falla en los dos órdenes.
+
+**Equivalentes.** `stall_sin_redirect` (el stall sin `~redirect`) y `stall_sin_valid` (la
+carga-uso sin `if_id_valid`) dan `NO DETECTADO`, con las 39 corridas en `TEST PASSED`, como se
+espera. Ningún programa puede activar esos términos en el core:
+- un stall y un salto tomado no coinciden nunca (párrafo siguiente);
+- cuando IF/ID es una burbuja (después del reset, de un flush o del HALT), en ID/EX no hay un
+  load válido.
+
+Los dos términos los prueba `hazard_unit_tb`, con las entradas sueltas (§3.2).
+
+**Salto y carga-uso a la vez.** Con los saltos resueltos en EX un stall y un salto tomado no
+coinciden nunca: la instrucción en EX es un load o un salto (decisión
+[012](../decisiones/012_resolucion-saltos.md), `pipeline.md` §10.4). En el core, la combinación es
+un load seguido de un salto que usa el dato: 1 ciclo de stall y después 2 de flush. La cubre
+`loaduse_sw_beq` con un `beq` tomado, un `bne` no tomado y el `jalr`. La regla
+`stall = load_use & ~redirect`, para el caso que no ocurre, la prueba `hazard_unit_tb` (§3.2).
+
 ### 8.3 Hasta qué ciclo se compara
 
 El modelo simula siempre el pipeline completo. Mientras falte una parte, el RTL se aparta de
@@ -683,7 +796,11 @@ El stub tiene el banco de registros en `u_dut.u_id_stage.u_regfile.regs`, el cam
 `` `REGFILE ``, así que no hace falta pasar ningún `-d REGFILE=...`. Como el banco real, el
 reset lo pone en cero (decisión 007). En Windows, `xvlog.bat`,
 `xelab.bat` y `xsim.bat` parten los argumentos en el `=`: el plusarg va entre
-comillas dobles (`-testplusarg "DIR=..."`), y PowerShell las pierde antes de llegar al `.bat`: desde ahí se envuelve el comando en `cmd /c '...'`. En Linux no hace falta nada de esto.
+comillas dobles (`-testplusarg "DIR=..."`), y PowerShell las pierde antes de llegar al `.bat`: desde ahí se envuelve el comando en `cmd /c '...'`. En Linux no hace falta nada de esto,
+pero en Ubuntu, y en otras distribuciones con rutas multiarch, `xelab` enlaza la simulación con el
+gcc que trae Vivado, que no encuentra `crt1.o` ni `crti.o` (`Failed to link the design`). Se
+resuelve exportando `LIBRARY_PATH=/usr/lib/x86_64-linux-gnu` antes de abrir Vivado, también para
+`regresion.tcl` en batch.
 
 Con `-testplusarg STUB_ERROR=<ciclo>` invierte un bit de `if_id_pc` en ese ciclo, y con
 `STUB_SIN_HALT` nunca activa `halted`: sirven para ver que el banco falla cuando debe. Con
@@ -694,12 +811,14 @@ la foto final. Para ver el watchdog de `+FINAL` se compila con `-d STAGES_CLI -d
 ### 8.7 Regresión por lotes
 
 `scripts/regresion.py` y `scripts/regresion.tcl` corren `pipeline_tb` con `+FINAL` para una
-lista de programas, uno detrás del otro (decisión [028](../decisiones/028_regresion-por-lotes.md)).
+lista de programas, uno detrás del otro (decisión [028](../decisiones/028_regresion-por-lotes.md)),
+y después los testbenches de `tb/unit/` (decisión
+[032](../decisiones/032_testbenches-unitarios-en-la-regresion.md)).
 Los programas que en el modo se comparan solo contra la traza corren sin `+FINAL` (decisión
 [030](../decisiones/030_corridas-solo-traza.md)):
 
 ```sh
-python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL (master)
+python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL, y los 19 de tb/unit/ (master)
 python scripts/regresion.py --modo forwarding_stall # RTL de I-41: los 33 y 2 sin +FINAL
 python scripts/regresion.py --modo forwarding      # RTL de I-39 e I-40: los 31 y salto_depende sin +FINAL
 python scripts/regresion.py --modo sin_riesgos     # RTL de M7: los 27 programas (I-38)
@@ -707,6 +826,9 @@ python scripts/regresion.py alu_r fwd_x0       # solo esos
 python scripts/regresion.py --pausas 47        # además, cada uno con +PAUSAS=47
 python scripts/regresion.py --mutante sin_forwarding   # con un mutante del RTL (§6)
 python scripts/regresion.py --mutante todos            # con cada uno de scripts/mutantes.py
+python scripts/regresion.py --mutante stall_sin_valid  # un equivalente, a mano: NO DETECTADO (§8.2)
+python scripts/regresion.py --sin-unitarios            # sin los testbenches de tb/unit/
+python scripts/regresion.py --mutante bypass_sin_we --invertir  # las corridas al revés (§8.2)
 ```
 
 ```tcl
@@ -731,15 +853,36 @@ ejemplo para repetir la regresión de una PR vieja: con el RTL de `master`, que 
 flush, los programas con saltos tomados (las variantes `_nops`, `indep_saltos`, `mem_avisos`)
 no coinciden con esas trazas, que dejan válidas las dos instrucciones de detrás del salto.
 
-`regresion.tcl` usa el proyecto abierto o lo crea con `create_project.tcl`. Compila y elabora
-una vez, corre cada línea con `launch_simulation -step simulate` y guarda el log de cada
-corrida en `build/regresion/logs/<etiqueta>.log`. Una corrida pasa si la última línea del log
-que empieza con `TEST ` es `TEST PASSED...`. Antes de cada corrida borra el `simulate.log` de la
-anterior: si Vivado da error, xsim no deja log o el log no tiene línea `TEST`, la corrida queda
-como `ERROR`, cuenta como falla y el script sigue con la próxima, así que nunca se decide con el
-log de otra. El resumen sale por consola y queda en
+`regresion.tcl` usa el proyecto abierto o lo crea con `create_project.tcl`. Un proyecto creado
+antes de que se agregara un `.v` a `rtl/` o a `tb/` no lo tiene: hay que volver a crearlo (o
+agregar el archivo) antes de correr la regresión. Cada pasada es una sola simulación (decisión
+[033](../decisiones/033_varias-corridas-por-simulacion.md)): el script escribe
+`build/regresion/lista_tb.txt` desde `corridas.txt`, con las rutas absolutas, y `pipeline_tb`,
+con `+LISTA`, corre las corridas una tras otra, con el core en reset entre una y otra (§8.1).
+Después parte el log en las líneas `CORRIDA <etiqueta>` y guarda la parte de cada corrida en
+`build/regresion/logs/<etiqueta>.log`; el log entero queda en `pipeline_tb.log`. Una corrida pasa
+si la última línea de su parte que empieza con `TEST ` es `TEST PASSED...`. Antes de cada pasada
+borra el `simulate.log` de la anterior. Si Vivado da error, xsim no deja log, o el log no tiene
+la parte de una corrida o su línea `TEST`, esa corrida queda como `ERROR` y cuenta como falla,
+así que nunca se decide con el log de otra. El resumen sale por consola y queda en
 `build/regresion/resumen.txt`. Si alguna corrida falla, el script termina con error: en batch,
-Vivado sale con código 1.
+Vivado sale con código 1. Con `--pausas 47 --sin-unitarios`, las 78 corridas tardan 32 s en
+Vivado 2026.1 (Linux), contando abrir el proyecto y compilar. Con un arranque de xsim por
+corrida, como hasta la I-43, tardaban unos 5 minutos: casi todo ese tiempo era cargar el
+snapshot (~3,8 s por corrida). La ruta del repositorio no puede tener espacios, porque
+`pipeline_tb` lee cada campo de la lista hasta el próximo espacio. `regresion.tcl` lo comprueba
+antes de empezar.
+
+**Testbenches unitarios** (decisión [032](../decisiones/032_testbenches-unitarios-en-la-regresion.md)).
+En la regresión normal (sin nombres de programas, sin `--mutante` y sin `--sin-unitarios`),
+`regresion.py` escribe en `build/regresion/unitarios.txt` los testbenches de `tb/unit/`, menos la
+plantilla y los de otro diseño (lista `OTRO_DISENO`: hoy `uart_tb`, el del sistema del TP2, cuyo
+DUT `fpga/tp2_uart/top.v` no está en el proyecto `riscv_basys3`); en cualquier otro caso borra la
+lista. `regresion.tcl` los corre después de los
+programas, cada uno con su `top` y compilando desde cero, deja el log en
+`build/regresion/logs/unit/<tb>.log` y los decide igual, por la última línea `TEST`. El resumen
+suma `UNITARIOS: n de m testbenches con TEST PASSED`, y una falla de un unitario hace fallar la
+regresión.
 
 **Con mutantes** (decisión [031](../decisiones/031_mutantes-de-la-regresion.md)), `regresion.py`
 escribe cada copia mutada en `build/mutantes/<nombre>/` y la lista en
@@ -754,7 +897,8 @@ quedó sin resultado (por ejemplo, la copia mutada no compila). En ese caso no s
 se detecta, y el resumen muestra el mensaje de Vivado. El script termina con error si algún
 mutante no se detecta o queda en `ERROR`. Al terminar, o si algo falla en el medio, el
 proyecto queda como estaba. `python scripts/mutantes.py` lista los mutantes y comprueba que se
-pueden aplicar al RTL actual.
+pueden aplicar al RTL actual. Los dos **equivalentes** (§8.2, *Regresión completa*) están en una
+tabla aparte: `--mutante todos` no los incluye y se corren por nombre, esperando `NO DETECTADO`.
 
 `scripts/ondas.tcl` es para mirar, no para aprobar (§6). Lanza un programa (por defecto
 `load_sin_dep_nops`) en la GUI con el PC, los campos principales de cada registro de
@@ -763,3 +907,66 @@ latch (`id_ex_rs1_data` se ve como `rs1_data` bajo el divisor ID/EX). Para 1 cic
 `halted` y pone marcadores en el ciclo 1 y en el final. De ahí sale
 `docs/diagramas/ondas_load_sin_dep_nops.png`: dos capturas de la ventana de ondas (de Banco a
 MEM/WB y de ID/EX a WB), unidas y sin la columna Value, desde el ciclo 2 hasta que sube `halted`.
+
+### 8.8 Ciclos por programa (I-43)
+
+Cuánto cuestan los riesgos en los 22 programas del plan (§4.1 y §4.2), con el pipeline completo.
+La tabla la genera `python scripts/ciclos.py` (`--todos` para los 39 de `sw/`): corre cada
+programa en el modelo de referencia, en `--modo completo`, y cuenta en la traza
+
+- **`n`**: las instrucciones que llegan válidas a WB, el HALT incluido;
+- **Stalls**: los ciclos de stall de carga-uso; entre paréntesis, los falsos positivos de la
+  comparación conservadora (decisión [011](../decisiones/011_deteccion-load-use.md)), en los que la
+  instrucción frenada no usa el registro del load;
+- **Saltos tomados**: `beq`/`bne` tomados, `jal` y `jalr`, 2 ciclos de flush cada uno (§10.5 de
+  `pipeline.md`).
+
+El script comprueba que `ciclos = n + 4 + stalls + 2 · saltos_tomados` (§5) y que coincide con el
+`ciclos` del `.exp`, escrito a mano; el test `test_cycles_follow_formula` de `tools/isasim` hace la
+misma cuenta con `n` y los saltos de la capa ISA. El RTL lo compara `pipeline_tb` con `+FINAL`, así
+que con la regresión aprobada los tres dan el mismo número, que es también el campo `cycles` del
+bloque de estado de la Debug Unit. CPI es `ciclos / n`, con los 4 de llenado incluidos. Stalls y
+Flush son la parte de los ciclos que se va en cada uno. *Con `_nops`* son los ciclos de la variante
+que resuelve los riesgos en software, con `nop` (§4.3), y entre paréntesis lo que cuesta de más.
+
+| Programa | `n` | Stalls | Saltos tomados | Ciclos | CPI | Stalls | Flush | Con `_nops` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `alu_r` | 24 | 0 | 0 | 28 | 1.17 | — | — | — |
+| `alu_i` | 19 | 0 | 0 | 23 | 1.21 | — | — | — |
+| `shifts` | 20 | 0 | 0 | 24 | 1.20 | — | — | — |
+| `lui` | 14 | 0 | 0 | 18 | 1.29 | — | — | — |
+| `mem_palabra` | 15 | 0 | 0 | 19 | 1.27 | — | — | — |
+| `mem_byte_media` | 54 | 0 | 0 | 58 | 1.07 | — | — | — |
+| `branch_cond` | 30 | 0 | 7 | 48 | 1.60 | — | 29 % | 54 (+6) |
+| `jump` | 13 | 0 | 5 | 27 | 2.08 | — | 37 % | 29 (+2) |
+| `halt_basico` | 3 | 0 | 0 | 7 | 2.33 | — | — | — |
+| `mem_avisos` | 11 | 0 | 1 | 17 | 1.55 | — | 12 % | — |
+| `fwd_exmem` | 8 | 0 | 0 | 12 | 1.50 | — | — | 22 (+10) |
+| `fwd_memwb` | 10 | 0 | 0 | 14 | 1.40 | — | — | 18 (+4) |
+| `fwd_prioridad` | 11 | 0 | 0 | 15 | 1.36 | — | — | 21 (+6) |
+| `fwd_x0` | 17 | 0 | 0 | 21 | 1.24 | — | — | — |
+| `bypass_banco` | 18 | 0 | 0 | 22 | 1.22 | — | — | — |
+| `loaduse_rs1_rs2` | 12 | 3 | 0 | 19 | 1.58 | 16 % | — | 22 (+3) |
+| `loaduse_sw_beq` | 19 | 5 | 2 | 32 | 1.68 | 16 % | 12 % | 41 (+9) |
+| `load_sin_dep` | 11 | 0 | 0 | 15 | 1.36 | — | — | 17 (+2) |
+| `salto_depende` | 13 | 0 | 3 | 23 | 1.77 | — | 26 % | 32 (+9) |
+| `halt_stall` | 6 | 1 (1 falso) | 0 | 11 | 1.83 | 9 % | — | — |
+| `halt_camino_equivocado` | 8 | 0 | 2 | 16 | 2.00 | — | 25 % | — |
+| `mixto_lazo` | 58 | 5 | 8 | 83 | 1.43 | 6 % | 19 % | 113 (+30) |
+| **Total** | 394 | 14 (1 falso) | 28 | 552 | 1.40 | 3 % | 10 % | |
+
+Lo que muestra:
+
+- **El flush cuesta más que el stall:** 56 ciclos (28 saltos tomados) contra 14, un 10 % y un 3 %
+  del total. El llenado, 4 ciclos por programa, es otro 16 %: son programas cortos. Sin contar el
+  llenado, el CPI de los 22 es (552 − 88) / 394 = 1,18.
+- **El lazo de `mixto_lazo`** (`lw`, `add`, `addi`, `addi`, `bne`) tarda 8 ciclos por vuelta: 5
+  instrucciones, 1 stall y 2 de flush, lo que la decisión [012](../decisiones/012_resolucion-saltos.md)
+  calculó para la suma de un arreglo con los saltos en EX.
+- **Un solo falso positivo** en 14 stalls, y es el de `halt_stall`, que existe para provocarlo. La
+  decisión 011 deja abierto revisar la detección si los programas mostraran muchos; no es el caso.
+- **El forwarding y el stall en hardware ahorran ciclos frente a los `nop`:** las variantes `_nops`
+  tardan entre 2 y 30 ciclos más (`mixto_lazo`, 113 contra 83: un 36 % más). La diferencia es lo
+  que cuestan en software las dependencias que el forwarding resuelve gratis y los dos `nop` en
+  lugar del ciclo de stall. Detrás de un salto la variante no pierde nada: sus dos `nop` cuestan lo
+  mismo que el flush.
