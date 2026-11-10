@@ -1,0 +1,2 @@
+# Tests del cliente: sin FPGA ni pyserial.
+pytest>=8
