@@ -1125,7 +1125,8 @@ Cada mecanismo de esta sección tiene que aparecer en algún programa de prueba 
 - Las dos instrucciones anteriores escriben el mismo registro (gana EX/MEM).
 - Destino `x0` en la instrucción anterior (no se reenvía).
 - Dependencia a distancia 3 (bypass del banco).
-- Load-use en `rs1` y en `rs2`; load seguido de `sw` que guarda el dato; load seguido de `beq`.
+- Load-use en `rs1` y en `rs2`; load seguido de `sw` que guarda el dato; load seguido de `beq`
+  y de `jalr` que salta a la dirección cargada.
 - Load seguido de una instrucción que no depende de él (sin stall).
 - Salto tomado y no tomado, `jal` y `jalr`; salto que depende de la instrucción anterior.
 - Stall con un HALT en ID (§3.4) y `STEP` en medio de un stall.
