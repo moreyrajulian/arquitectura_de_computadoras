@@ -130,8 +130,10 @@ class DebugClient:
     # ---- comandos -----------------------------------------------------------------
 
     def connect(self) -> Info:
-        """Vacía los buffers, manda INFO y verifica la versión del protocolo (§5)."""
+        """Vacía los buffers, manda INFO y verifica la versión del protocolo (§5). Olvida el
+        último estado: la placa pudo haberse reseteado."""
         with self._lock:
+            self.last_status = None
             self.port.reset_input_buffer()
             info = self.info()
             if info.proto_version != p.PROTO_VERSION:
@@ -363,6 +365,9 @@ class DebugClient:
         self.port.reset_input_buffer()
 
     def _no_response(self, cmd: Cmd) -> NoResponseError:
+        # la FPGA pudo haber hecho el comando aunque no llegó la respuesta: el último estado
+        # ya no sirve, y step() lo compararía con un `cycles` viejo
+        self.last_status = None
         return NoResponseError(f"{cmd.name}: la FPGA no responde después de {self.retries} "
                                "reintentos (revisar cable, puerto, baudrate o apretar el "
                                "reset de la placa)")

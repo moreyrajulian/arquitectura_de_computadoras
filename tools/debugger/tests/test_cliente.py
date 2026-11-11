@@ -42,6 +42,15 @@ def test_connect_descarta_basura_previa(client, port):
     assert len(port.requests(Cmd.INFO)) == 1
 
 
+def test_connect_olvida_el_estado_anterior(connected, port):
+    connected.load(PROG)
+    connected.step()
+    connected.connect()                       # p. ej. después de apretar el reset de la placa
+    assert connected.last_status is None
+    connected.step()
+    assert [w[1] for w in port.written][-2:] == [Cmd.STATUS, Cmd.STEP]
+
+
 def test_basura_antes_de_la_respuesta(connected, port):
     port.inject(b"\x00\x13\xa5")
     assert connected.status().state == State.NO_PROG
@@ -172,6 +181,13 @@ def test_reintenta_si_se_pierde_la_respuesta(connected, port, clock):
     assert clock() - t0 >= response_timeout(5 + 6, 115200) + 0.15   # T_RESP y la espera
 
 
+def test_load_grande_no_vence_mientras_sale_por_la_linea(connected, port):
+    # T_RESP cuenta la petición (§5): 4101 B tardan 0,356 s y la respuesta sola daría 0,202 s
+    port.latency = (4 + 4 * 1024 + 1) * 10 / 115200
+    assert connected.load([HALT] * 1024).state == State.READY
+    assert len(port.requests(Cmd.LOAD)) == 1
+
+
 def test_reintenta_si_la_respuesta_llega_rota(connected, port):
     port.corrupt_responses = 1
     connected.status()
@@ -242,6 +258,19 @@ def test_step_sin_estado_previo_pide_status(client, port):
     client.last_status = None
     client.step()
     assert [w[1] for w in port.written][-2:] == [Cmd.STATUS, Cmd.STEP]
+
+
+def test_step_despues_de_un_load_sin_respuesta(connected, port, device):
+    connected.load(PROG)
+    for _ in range(3):
+        connected.step()
+    port.drop_responses = 4            # la FPGA hace el LOAD (cycles = 0), pero no responde
+    with pytest.raises(NoResponseError):
+        connected.load(PROG)
+    assert connected.last_status is None
+    port.drop_responses = 1            # y se pierde la respuesta del STEP
+    assert connected.step().cycles == 1
+    assert device.cycles == 1          # con el cycles = 3 viejo, lo habría repetido
 
 
 def test_run_con_confirmacion_perdida_no_se_repite(connected, port, device):

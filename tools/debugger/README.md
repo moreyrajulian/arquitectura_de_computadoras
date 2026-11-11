@@ -84,10 +84,12 @@ Sigue [`protocolo_debug.md`](../../docs/spec/protocolo_debug.md) §5.
 
 Todas las excepciones heredan de `DebugError`.
 
+Si se levanta `NoResponseError`, `last_status` queda en `None`: la FPGA pudo haber hecho el
+comando aunque no llegó la respuesta, así que el próximo `step()` pide `STATUS` antes de
+avanzar. `connect()` también lo borra.
+
 Detalles que el protocolo deja al cliente:
 
-- **`T_RESP` cuenta también los bytes de la petición.** `write` puede volver antes de que
-  salgan, y un `LOAD` de 1024 palabras tarda ~0,36 s en la línea.
 - **Antes del `SOF` (`0x5A`) se descarta todo**, como hace la FPGA en reposo.
 - **Un `LEN` mayor que el máximo posible para ese `CMD`** se toma como trama rota enseguida,
   sin esperar 65 535 bytes que no van a llegar.
