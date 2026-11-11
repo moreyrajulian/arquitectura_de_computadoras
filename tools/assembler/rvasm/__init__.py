@@ -7,14 +7,16 @@ Uso como biblioteca (por ejemplo desde la interfaz de la PC):
     payload = program.to_bytes()      # payload de LOAD
 
     classify(word).kind               # SUPPORTED, UNRECOGNIZED o UNSPECIFIED
+    disassemble(word)                 # 'addi x1, x0, 5' (usa el modelo, tools/isasim)
 """
 
 from .assembler import AssemblerError, Diagnostic, Program, assemble, parse_int
+from .disasm import disassemble
 from .isa import HALT_WORD, IMEM_WORDS, WordClass, classify
 from .output import FORMATS, render, to_bin, to_coe, to_hex, to_listing
 
 __all__ = [
     "AssemblerError", "Diagnostic", "Program", "assemble", "parse_int",
-    "HALT_WORD", "IMEM_WORDS", "WordClass", "classify",
+    "HALT_WORD", "IMEM_WORDS", "WordClass", "classify", "disassemble",
     "FORMATS", "render", "to_bin", "to_coe", "to_hex", "to_listing",
 ]
