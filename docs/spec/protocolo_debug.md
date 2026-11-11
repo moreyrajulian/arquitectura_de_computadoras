@@ -238,6 +238,17 @@ Sirve para volver a correr el mismo programa. Queda en `READY` si había program
   depuración, no el final de la ejecución. Se puede seguir con `RUN`/`STEP` o terminar con
   `RESET`/`LOAD`.
 
+**Orden con el `EVT_HALTED`.** El cliente de la PC depende de dos garantías para distinguir
+el evento de la ejecución actual de uno viejo:
+
+- La confirmación de `RUN` sale **antes** que el `EVT_HALTED` de esa ejecución, aunque el
+  programa termine en pocos ciclos.
+- Si el bloque de estado de una respuesta dice `RUNNING`, el `EVT_HALTED` de esa ejecución
+  sale **después** de esa respuesta.
+
+Las dos salen de la organización de §7 (el `halt` marca `evt_pending` y el evento espera a
+que termine la respuesta en curso, §2), pero el RTL tiene que respetarlas.
+
 El reloj nunca se detiene: parar y avanzar el core es siempre con `enable`.
 
 ### 3.6 Lecturas
@@ -349,8 +360,12 @@ entre paquetes (1 a 16 ms con el latency timer del FTDI), así que no hay falsos
 
 | Situación | Timeout de la PC |
 |---|---|
-| Respuesta a cualquier petición | `T_RESP = 200 ms + 1,5 × 10 × (bytes esperados) / BAUD` |
+| Respuesta a cualquier petición | `T_RESP = 200 ms + 1,5 × 10 × (bytes de la petición + bytes de la respuesta esperada) / BAUD` |
 | `EVT_HALTED` después de `RUN` | Sin límite fijo. Un *watchdog* configurable (por defecto 5 s) avisa al usuario y ofrece mandar `STOP` |
+
+`T_RESP` cuenta también la petición porque en la PC `write` puede volver antes de que la
+petición salga por la línea. Un `LOAD` de 1024 palabras son 4101 bytes, ~0,36 s a 115200;
+contando solo la respuesta (18 bytes), el plazo sería de 0,2 s.
 
 Cuando vence un timeout o llega `ERR_CHECKSUM`/`ERR_TIMEOUT`:
 
