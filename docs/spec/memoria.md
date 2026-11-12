@@ -256,7 +256,7 @@ El porqué de este mecanismo frente a las alternativas está en la decisión
 
 ```mermaid
 flowchart LR
-    PC["PC (host)"] -- "UART 115200 8N1" --> UART["uart_rx / intf_circ"]
+    PC["PC (host)"] -- "UART 115200 8N1" --> UART["uart<br/>(FIFO de RX)"]
     UART -- "r_data, rx_empty" --> DU["Debug Unit<br/>FSM de protocolo"]
     DU -- "imem_b_en, imem_b_we,<br/>imem_b_addr, imem_b_din" --> IMB["imem_bram<br/>puerto B"]
     DU -- "dmem_b_*" --> DMB["dmem_bram<br/>puerto B"]

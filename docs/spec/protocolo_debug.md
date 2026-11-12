@@ -27,9 +27,10 @@ Configuración abreviada: **115200 8N1**. En pyserial:
 
 ### Divisor del baud generator
 
-`DVSR = round(f_clk / (16 × BAUD))`. Tiene que calcularse en el top a partir de un parámetro
-`CLK_FREQ_HZ`, no escribirse a mano, porque la frecuencia va a cambiar cuando se aplique el
-Clock Wizard (ver `docs/timing/`).
+`DVSR = round(f_clk / (16 × BAUD))`. Lo calcula el módulo `uart` a partir de los parámetros
+`CLK_FREQ_HZ` y `BAUD` que le pasa el top (decisión
+[035](../decisiones/035_uart-de-la-debug-unit.md)); no se escribe a mano, porque la frecuencia
+va a cambiar cuando se aplique el Clock Wizard (ver `docs/timing/`).
 
 | `f_clk` | `DVSR` | Baudrate real | Error |
 |---|---|---|---|
@@ -53,19 +54,31 @@ se siente lento y cargar un programa de 1 K palabras tarda más de 2 s. El chip 
 Basys 3 (FT2232) soporta 115200 sin problemas. Si en la placa aparecen errores, se vuelve a
 19200 cambiando solo el parámetro `BAUD` y la configuración del cliente.
 
-### Interfaz con la UART existente
+### Interfaz con la UART
 
-La Debug Unit se conecta a `intf_circ` igual que `alu_top` en el TP2:
+La Debug Unit se conecta a `rtl/peripherals/uart/uart.v`, que envuelve `baud_gen`, `uart_rx`,
+`uart_tx` y `flag_buff` del TP2 sin modificarlos (decisión
+[035](../decisiones/035_uart-de-la-debug-unit.md)). Las señales son las de `intf_circ` en el
+TP2, con los prefijos de la decisión 010:
 
 | Señal | Dirección | Uso en la Debug Unit |
 |---|---|---|
-| `r_data[7:0]`, `rx_empty` | UART → DU | Hay byte disponible cuando `rx_empty = 0` |
-| `rd` | DU → UART | Pulso de un ciclo después de leer `r_data` |
-| `w_data[7:0]`, `wr` | DU → UART | Escribe un byte para transmitir |
-| `tx_full` | UART → DU | La DU solo escribe con `tx_full = 0` |
+| `o_r_data[7:0]`, `o_rx_empty` | UART → DU | El byte más viejo de la FIFO de recepción; hay byte disponible cuando `rx_empty = 0` |
+| `i_rd` | DU → UART | Pulso de un ciclo después de leer `r_data`: lo saca de la FIFO. Con la FIFO vacía no tiene efecto |
+| `i_w_data[7:0]`, `i_wr` | DU → UART | Pulso de un ciclo: escribe un byte para transmitir |
+| `o_tx_full` | UART → DU | El byte anterior todavía está saliendo. La DU solo escribe con `tx_full = 0`; un `wr` con `tx_full = 1` se ignora |
 
-`flag_buff` guarda un solo byte. No es un problema: a 115200 llega un byte cada ~87 µs
-(~8700 ciclos a 100 MHz) y la Debug Unit consume cada byte en pocos ciclos.
+Parámetros: `CLK_FREQ_HZ` y `BAUD`, con los que calcula `DVSR` como dice la sección anterior.
+`i_rst` es el reset del sistema, no `core_rst`.
+
+- **Recepción con FIFO de 32 bytes.** A 115200 llega un byte cada ~87 µs (~8700 ciclos a
+  100 MHz) y la FSM de protocolo consume cada byte en pocos ciclos, pero mientras transmite no
+  lee. Eso pasa cuando una petición se cruza con un `EVT_HALTED`, que la FPGA manda sin
+  petición (§3.5, §5): la FIFO guarda lo que llega durante esos 17 bytes. Si llega un byte con
+  la FIFO llena, se descarta (lo resuelven el checksum o el timeout de §5).
+- **Transmisión de a un byte, sin FIFO.** La velocidad del volcado la fija el baudrate, no la
+  FSM, y durante el volcado el core está detenido: la FSM escribe un byte, espera
+  `tx_full = 0` y escribe el siguiente.
 
 ## 2. Formato de las tramas
 

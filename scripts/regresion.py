@@ -70,10 +70,10 @@ SALIDA = ROOT / "build" / "regresion"
 TB_UNIT = ROOT / "tb" / "unit"
 
 # Testbenches de tb/unit/ de otro diseño: su DUT no está en el proyecto riscv_basys3, así que
-# no elaboran ahí (decisión 032). La I-44 saca uart_tb de la lista cuando lo amplíe para la
-# UART de debug (verificacion.md §3.3)
+# no elaboran ahí (decisión 032). Desde la I-44, uart_tb prueba la UART de la Debug Unit y el
+# del TP2 es tp2_uart_top_tb (decisión 035, verificacion.md §3.3)
 OTRO_DISENO = {
-    "uart_tb": "TP2: su DUT es fpga/tp2_uart/top.v (UART + interfaz + ALU)",
+    "tp2_uart_top_tb": "TP2: su DUT es fpga/tp2_uart/top.v (UART + interfaz + ALU)",
 }
 
 

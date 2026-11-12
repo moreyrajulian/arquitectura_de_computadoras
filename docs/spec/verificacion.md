@@ -98,7 +98,8 @@ agregar más, no quitar.
 
 | Módulo | Issue | Testbench | Casos mínimos |
 |---|---|---|---|
-| UART para debug | I-44 | `uart_tb.v` (existente, ampliado) | Los bytes de ida y vuelta con el divisor calculado como fija [003](../decisiones/003_baudrate-uart.md) (115200 baud, `DVSR` a partir de `CLK_FREQ_HZ`); recepción de tramas seguidas sin perder bytes |
+| UART para debug (`uart`) | I-44 | `uart_tb.v` | Los bytes de ida y vuelta, en loopback TX → RX y decodificando `tx` con un receptor propio del testbench (start, 8 datos LSB primero, stop); `DVSR` calculado como fija [003](../decisiones/003_baudrate-uart.md) a partir de `CLK_FREQ_HZ` y `BAUD`, con la tabla de `protocolo_debug.md` §1 (100, 80, 75 y 50 MHz) y error menor al 2 %; bytes a 115200 exactos (como la PC) recibidos con el `DVSR` real de 100 MHz; recepción de tramas seguidas sin perder bytes, también mientras se transmite (el caso del `EVT_HALTED`, decisión [035](../decisiones/035_uart-de-la-debug-unit.md)); 32 bytes sin leer se conservan y el 33 se descarta; byte con stop en 0: su dato no entra, y entra el `0xFF` del falso start que deja `uart_rx` (decisión 035); `wr` con `tx_full = 1` ignorado, también en el último ciclo del stop bit (el único en que `uart_tx` lo tomaría); `rd` con la FIFO vacía sin efecto; reset con bytes en la FIFO y en medio de una transmisión. El testbench del sistema del TP2 (UART + ALU) es `tp2_uart_top_tb.v` y elabora solo en el proyecto `tp2_uart` |
+| FIFO de recepción (`uart_fifo`) | I-44 | `uart_fifo_tb.v` | Orden FIFO; `empty` y `full` en los bordes (0, 1, 31 y 32 elementos); push con la FIFO llena descartado; pop con la FIFO vacía sin efecto; push y pop en el mismo ciclo, también con la FIFO llena y vacía; reset con datos adentro; aleatorio con semilla fija contra una cola del testbench |
 | FSM de comandos | I-45 | `debug_cmd_fsm_tb.v` | Las tramas de ejemplo de `protocolo_debug.md` §4; checksum incorrecto; comando desconocido; **cada celda ✗ de la tabla de §3.7** responde `ERR_STATE` sin efectos; timeouts de la FPGA (§5); `LOAD` con `LEN` no múltiplo de 4 o fuera de `1…1024` → `ERR_LENGTH` |
 | Carga de programa | I-46 | `debug_load_tb.v` | `LOAD` escribe `imem` y rellena el resto con HALT; deja `dmem` en cero y el mapa de palabras usadas vacío, con `dmem_used = 0` (decisión [004](../decisiones/004_carga-y-reprogramacion.md), `memoria.md` §7); reprogramar con un programa ya cargado y en cualquier estado; error durante la carga (`memoria.md` §4.3) |
 | Modos de ejecución | I-47 | `debug_run_tb.v` | `RUN` hasta el HALT con `EVT_HALTED`; `STEP` avanza exactamente un ciclo; `STOP` detiene sin perder estado; **`STEP` en medio de un stall** continúa donde quedó; `RUN` y `STEP` repetido dan el mismo estado final |
@@ -818,7 +819,7 @@ Los programas que en el modo se comparan solo contra la traza corren sin `+FINAL
 [030](../decisiones/030_corridas-solo-traza.md)):
 
 ```sh
-python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL, y los 19 de tb/unit/ (master)
+python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL, y los 21 de tb/unit/ (master)
 python scripts/regresion.py --modo forwarding_stall # RTL de I-41: los 33 y 2 sin +FINAL
 python scripts/regresion.py --modo forwarding      # RTL de I-39 e I-40: los 31 y salto_depende sin +FINAL
 python scripts/regresion.py --modo sin_riesgos     # RTL de M7: los 27 programas (I-38)
@@ -876,7 +877,7 @@ antes de empezar.
 **Testbenches unitarios** (decisión [032](../decisiones/032_testbenches-unitarios-en-la-regresion.md)).
 En la regresión normal (sin nombres de programas, sin `--mutante` y sin `--sin-unitarios`),
 `regresion.py` escribe en `build/regresion/unitarios.txt` los testbenches de `tb/unit/`, menos la
-plantilla y los de otro diseño (lista `OTRO_DISENO`: hoy `uart_tb`, el del sistema del TP2, cuyo
+plantilla y los de otro diseño (lista `OTRO_DISENO`: hoy `tp2_uart_top_tb`, el del sistema del TP2, cuyo
 DUT `fpga/tp2_uart/top.v` no está en el proyecto `riscv_basys3`); en cualquier otro caso borra la
 lista. `regresion.tcl` los corre después de los
 programas, cada uno con su `top` y compilando desde cero, deja el log en
