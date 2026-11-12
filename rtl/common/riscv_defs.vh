@@ -3,8 +3,9 @@
 //
 // Codificaciones compartidas del RV32I soportado (docs/spec/isa.md), del
 // control de la ALU (docs/spec/pipeline.md §4.5), del formato del
-// inmediato (docs/spec/pipeline.md §4.3) y de los selectores de
-// forwarding (docs/spec/pipeline.md §5.1). Es el único
+// inmediato (docs/spec/pipeline.md §4.3), de los selectores de
+// forwarding (docs/spec/pipeline.md §5.1) y del protocolo de la Debug Unit
+// (docs/spec/protocolo_debug.md §2, §3 y §5). Es el único
 // include de codificaciones de la decisión 010: ningún módulo repite estas
 // constantes.
 //
@@ -17,7 +18,8 @@
 //     puertos ANSI. Por lo mismo, no declarar un parameter con un nombre de
 //     este archivo.
 //
-// Si cambia isa.md, pipeline.md §4.3, §4.5 o §5.1, actualizar este archivo.
+// Si cambia isa.md, pipeline.md §4.3, §4.5 o §5.1, o protocolo_debug.md
+// §2, §3 o §5, actualizar este archivo.
 //======================================================================
 
 // Opcodes (instr[6:0])
@@ -94,3 +96,40 @@ localparam [2:0] IMM_J = 3'b100;               // jal
 localparam [1:0] FWD_ID_EX  = 2'b00;            // lo leído en ID (id_ex_rs*_data)
 localparam [1:0] FWD_EX_MEM = 2'b10;            // ex_mem_result
 localparam [1:0] FWD_WB     = 2'b01;            // wb_data
+
+// Protocolo de la Debug Unit (protocolo_debug.md). Los usan la FSM de
+// protocolo (debug_unit, I-45) y la de ejecución (I-47).
+// Inicio de trama (§2)
+localparam [7:0] DBG_SOF_REQ = 8'hA5;           // petición, PC -> FPGA
+localparam [7:0] DBG_SOF_RSP = 8'h5A;           // respuesta y evento, FPGA -> PC
+
+// CMD (§3)
+localparam [7:0] DBG_CMD_INFO           = 8'h01;
+localparam [7:0] DBG_CMD_STATUS         = 8'h02;
+localparam [7:0] DBG_CMD_LOAD           = 8'h10;
+localparam [7:0] DBG_CMD_RESET          = 8'h11;
+localparam [7:0] DBG_CMD_RUN            = 8'h20;
+localparam [7:0] DBG_CMD_STEP           = 8'h21;
+localparam [7:0] DBG_CMD_STOP           = 8'h22;
+localparam [7:0] DBG_CMD_READ_REGS      = 8'h30;
+localparam [7:0] DBG_CMD_READ_LATCHES   = 8'h31;
+localparam [7:0] DBG_CMD_READ_DMEM      = 8'h32;
+localparam [7:0] DBG_CMD_READ_DMEM_USED = 8'h33;
+localparam [7:0] DBG_CMD_READ_ALL       = 8'h34;
+localparam [7:0] DBG_CMD_EVT_HALTED     = 8'hE0;  // solo FPGA -> PC
+
+// STATUS (§5)
+localparam [7:0] DBG_OK              = 8'h00;
+localparam [7:0] DBG_ERR_UNKNOWN_CMD = 8'h01;
+localparam [7:0] DBG_ERR_CHECKSUM    = 8'h02;
+localparam [7:0] DBG_ERR_LENGTH      = 8'h03;
+localparam [7:0] DBG_ERR_STATE       = 8'h04;
+localparam [7:0] DBG_ERR_ADDR        = 8'h05;
+localparam [7:0] DBG_ERR_TIMEOUT     = 8'h06;
+
+// Estado de ejecución del core: campo state del bloque de estado (§3.1)
+localparam [2:0] DBG_ST_NO_PROG = 3'd0;
+localparam [2:0] DBG_ST_READY   = 3'd1;
+localparam [2:0] DBG_ST_RUNNING = 3'd2;
+localparam [2:0] DBG_ST_PAUSED  = 3'd3;
+localparam [2:0] DBG_ST_HALTED  = 3'd4;
