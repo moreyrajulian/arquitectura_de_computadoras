@@ -110,8 +110,9 @@ con `1 ≤ N ≤ imem_words`; `READ_DMEM`: 6; el resto: 0), estado y checksum.
   - Evento: `i_evt_pending` y `o_evt_done`, un pulso con el último byte del `EVT_HALTED`. Quien
     maneja `i_evt_pending` lo baja en ese mismo flanco.
   - Lecturas: `o_pl_idx` / `i_pl_byte` (opción 2). `i_pl_byte` puede llegar hasta 2 ciclos
-    después de que cambie `o_pl_idx`. En `READ_ALL`, los 12 primeros bytes son el bloque de
-    estado y los arma `debug_unit`; la fuente entrega desde el índice 12.
+    después de que cambie `o_pl_idx`, que cuenta desde el primer byte del payload. En
+    `READ_ALL`, los 12 primeros bytes son el bloque de estado y los arma `debug_unit`; el índice
+    no se reinicia, así que la fuente entrega desde `o_pl_idx = 12` (el byte 12 es `x0[7:0]`).
 - **`INFO` sale completo de `debug_unit`**: la versión, `IMEM_WORDS`, `DMEM_WORDS`, las palabras
   de cada latch, calculadas como `ceil(NB / 32)` de los anchos de los buses (parámetros
   `NB_*_LATCH`), y `clk_khz = CLK_FREQ_HZ / 1000`.

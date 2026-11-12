@@ -77,11 +77,14 @@
 //   o_cmd             : CMD de la trama en curso               [NB_BYTE-1:0]
 //   o_arg_addr        : addr de READ_DMEM                      [NB_WORD-1:0]
 //   o_arg_count       : count de READ_DMEM                     [NB_LEN-1:0]
-//   o_pl_idx          : índice del byte de payload que se envía [NB_LEN-1:0]
+//   o_pl_idx          : índice del byte de payload que se envía, contado
+//                       desde el primer byte del payload       [NB_LEN-1:0]
 //   i_pl_byte         : byte o_pl_idx de la respuesta a READ_REGS,
-//                       READ_LATCHES, READ_DMEM, READ_DMEM_USED y READ_ALL
-//                       (en READ_ALL, desde el 12: los 12 primeros son el
-//                       bloque de estado). Puede llegar hasta 2 ciclos
+//                       READ_LATCHES, READ_DMEM, READ_DMEM_USED y READ_ALL.
+//                       En READ_ALL o_pl_idx no se reinicia después del
+//                       bloque de estado: los bytes 0 a 11 los arma
+//                       debug_unit y la fuente entrega desde o_pl_idx = 12
+//                       (el 12 es x0[7:0]). Puede llegar hasta 2 ciclos
 //                       después de que cambie o_pl_idx (desde una BRAM)
 //                                                              [NB_BYTE-1:0]
 //

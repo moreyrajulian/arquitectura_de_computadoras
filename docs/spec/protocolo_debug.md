@@ -460,7 +460,7 @@ La FSM de ejecución es otro módulo (I-47). `debug_unit` se conecta a `uart` po
 | `i_evt_pending` / `o_evt_done` | ejecución ↔ protocolo | Hay un `EVT_HALTED` por enviar / pulso con su último byte; quien maneja `evt_pending` lo baja en ese flanco |
 | `o_cmd_valid`, `o_cmd[7:0]` | protocolo → resto | Pulso de un ciclo en `EXEC` con el comando aceptado sin errores. Una trama con error no lo pulsa |
 | `o_arg_addr[31:0]`, `o_arg_count[15:0]` | protocolo → I-48 | `addr` y `count` de `READ_DMEM`, ya validados |
-| `o_pl_idx[15:0]` / `i_pl_byte[7:0]` | protocolo ↔ I-48 | Índice del byte de payload que se va a enviar / ese byte, en las lecturas (en `READ_ALL`, desde el 12). Puede llegar hasta 2 ciclos después del índice |
+| `o_pl_idx[15:0]` / `i_pl_byte[7:0]` | protocolo ↔ I-48 | Índice del byte que se va a enviar, contado desde el primer byte del payload de la respuesta / ese byte, en las lecturas. En `READ_ALL` el índice no se reinicia después del bloque de estado: los bytes 0 a 11 los arma `debug_unit`, y la fuente entrega desde `o_pl_idx = 12` (el byte 12 es `x0[7:0]`). Puede llegar hasta 2 ciclos después del índice |
 
 `INFO` lo arma `debug_unit` con sus parámetros (`IMEM_WORDS`, `DMEM_WORDS`, los anchos de los
 latches y `CLK_FREQ_HZ`). Las codificaciones del protocolo (`DBG_CMD_*`, `DBG_ERR_*`, `DBG_ST_*`)
