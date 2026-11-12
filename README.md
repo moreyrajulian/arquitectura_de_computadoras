@@ -17,7 +17,8 @@ con una **Debug Unit** por UART y una interfaz en la PC para programarlo y obser
 ```
 rtl/                     Diseño sintetizable
 ├── common/              alu, debouncer, y bloques reutilizables
-├── peripherals/uart/    UART: baud generator, tx, rx, FSM, buffers
+├── peripherals/uart/    UART: baud generator, tx, rx, FSM y buffers del TP2, y uart (la de la
+│                        Debug Unit, con FIFO de recepción)
 ├── debug/               Debug Unit (comandos por UART, lectura de regs/latches/memoria)
 ├── pipeline/            Etapas y registros de segmentación (IF/ID/EX/MEM/WB)
 ├── control/             Unidad de control, forwarding, detección de riesgos
