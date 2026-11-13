@@ -286,13 +286,19 @@ Los estados son los de la FSM de protocolo ([`debug_unit_fsm`](../diagramas/debu
 | Estado | Qué pasa con la memoria de programa |
 |---|---|
 | `CHECK_HDR` | Valida `LEN` múltiplo de 4 y `1 ≤ N ≤ IMEM_WORDS` (`N = LEN / 4`). Si falla: `ERR_LENGTH` y la memoria no se toca |
-| `LOAD_PREP` | 1 ciclo: `enable = 0`, `core_rst = 1`, `prog_valid = 0`, `wptr = 0`, `byte_cnt = 0` |
+| `LOAD_PREP` | 1 ciclo: `o_load_start`. La FSM de ejecución baja `prog_valid` y pasa a `NO_PROG`, así que desde el ciclo siguiente `enable = 0` y `core_rst = 1`. `wptr = 0` |
 | `RX_PAYLOAD` | Arma cada palabra con 4 bytes (little-endian) y la escribe en `imem[wptr]` por el puerto B |
 | `RX_CHK` | Compara el checksum. Si está mal: `ERR_CHECKSUM`, queda `NO_PROG` (§4.3) |
-| `CLEAR` | Rellena `imem[N … 1023]` con HALT y, en el mismo recorrido, pone en cero `dmem` y el mapa de usadas |
-| fin de `CLEAR` | `core_rst = 0`, `prog_valid = 1`, estado `READY`, responde OK |
+| `EXEC` | `o_cmd_valid`: la FSM de ejecución pasa a `READY` con `prog_valid = 1` y `cycles = 0`. El core sigue en reset por `o_clearing` |
+| `CLEAR` | Rellena `imem[N … 1023]` con HALT y, en el mismo recorrido, pone en cero `dmem` y pulsa `o_used_clr` para el mapa de usadas. `o_clearing = 1` |
+| fin de `CLEAR` | `o_clearing = 0`: se libera `core_rst` y responde OK |
 
-Armado y escritura de las palabras en `RX_PAYLOAD` (un byte nuevo cada ~87 µs a 115200):
+Quién hace cada cosa entre `debug_unit` (FSM de protocolo) y la FSM de ejecución está en la
+decisión [038](../decisiones/038_carga-de-programa-en-la-debug-unit.md).
+
+Armado y escritura de las palabras en `RX_PAYLOAD` (un byte nuevo cada ~87 µs a 115200). En
+`debug_unit` el registro es `arg_reg`, que ya guarda el payload, y el contador de bytes son los
+dos bits bajos de `cnt_reg`, que baja desde `LEN` (decisión 038):
 
 ```verilog
 // por cada byte recibido (rx_strobe = 1, rx_byte = r_data)

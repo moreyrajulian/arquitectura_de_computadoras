@@ -467,8 +467,9 @@ La Debug Unit tiene **dos FSM independientes**:
 
 **Implementación** (decisión [036](../decisiones/036_fsm-de-protocolo-de-la-debug-unit.md)): la
 FSM de protocolo es `rtl/debug/debug_unit.v` (I-45). `RX_LEN` son dos estados (`RX_LEN_L` y
-`RX_LEN_H`); `LOAD_PREP` y `CLEAR` llegan con la I-46. No hay estado `STEP_PULSE`: el ciclo
-del `STEP` lo da la FSM de ejecución (decisión
+`RX_LEN_H`); `LOAD_PREP` y `CLEAR` son de la carga de programa (I-46, decisión
+[038](../decisiones/038_carga-de-programa-en-la-debug-unit.md)). No hay estado `STEP_PULSE`: el
+ciclo del `STEP` lo da la FSM de ejecución (decisión
 [037](../decisiones/037_fsm-de-ejecucion-de-la-debug-unit.md)). La FSM de ejecución es
 `rtl/debug/debug_exec.v` (I-47). `debug_unit` se conecta a `uart` por la interfaz de §1, y el
 top (I-49) instancia los tres. Además de esa interfaz, `debug_unit` tiene:
@@ -480,6 +481,11 @@ top (I-49) instancia los tres. Además de esa interfaz, `debug_unit` tiene:
 | `i_evt_pending` / `o_evt_done` | ejecución ↔ protocolo | Hay un `EVT_HALTED` por enviar / pulso con su último byte; quien maneja `evt_pending` lo baja en ese flanco |
 | `o_cmd_valid`, `o_cmd[7:0]` | protocolo → resto | Pulso de un ciclo en `EXEC` con el comando aceptado sin errores. Una trama con error no lo pulsa |
 | `o_arg_addr[31:0]`, `o_arg_count[15:0]` | protocolo → I-48 | `addr` y `count` de `READ_DMEM`, ya validados |
+| `o_load_start` | protocolo → ejecución | Pulso en `LOAD_PREP`, a `i_load_start` de `debug_exec`: baja `prog_valid` y pasa a `NO_PROG` (decisión 038) |
+| `o_clearing` | protocolo → ejecución | 1 durante `CLEAR`, a `i_mem_busy` de `debug_exec`: mantiene `core_rst` (decisión 038) |
+| `o_imem_b_en`, `o_imem_b_we`, `o_imem_b_addr[9:0]`, `o_imem_b_din[31:0]` | protocolo → BRAM | Puerto B de `imem`: cada palabra del `LOAD` y el HALT de `CLEAR` ([`memoria.md`](memoria.md) §4) |
+| `o_dmem_b_en`, `o_dmem_b_we[3:0]`, `o_dmem_b_addr[9:0]`, `o_dmem_b_din[31:0]` | protocolo → BRAM | Puerto B de `dmem`, solo en `CLEAR` (ceros con `we = 1111`). Las lecturas de la I-48 lo comparten con un multiplexor que elige `debug_unit` con `o_dmem_b_en = 1` |
+| `o_used_clr` | protocolo → I-48 | Pulso en `CLEAR`: borrar la palabra `o_dmem_b_addr` del mapa de usadas |
 | `o_pl_idx[15:0]` / `i_pl_byte[7:0]` | protocolo ↔ I-48 | Índice del byte que se va a enviar, contado desde el primer byte del payload de la respuesta / ese byte, en las lecturas. En `READ_ALL` el índice no se reinicia después del bloque de estado: los bytes 0 a 11 los arma `debug_unit`, y la fuente entrega desde `o_pl_idx = 12` (el byte 12 es `x0[7:0]`). Puede llegar hasta 2 ciclos después del índice |
 
 `INFO` lo arma `debug_unit` con sus parámetros (`IMEM_WORDS`, `DMEM_WORDS`, los anchos de los
@@ -492,8 +498,8 @@ están en `rtl/common/riscv_defs.vh`.
 | Puerto | Dirección | Uso |
 |---|---|---|
 | `i_cmd_valid`, `i_cmd[7:0]` | protocolo → ejecución | `o_cmd_valid` y `o_cmd` de `debug_unit`. Reacciona a `LOAD`, `RESET`, `RUN`, `STEP` y `STOP` |
-| `i_load_start` | I-46 → ejecución | Pulso: se aceptó el encabezado de un `LOAD`. Pasa a `NO_PROG` con `prog_valid = 0`, así un `LOAD` que falla ya queda así. En 0 hasta la I-46 |
-| `i_mem_busy` | I-46 → ejecución | `debug_unit` escribe `imem` o limpia `dmem` (`LOAD_PREP` a `CLEAR`): mantiene `core_rst`. En 0 hasta la I-46 |
+| `i_load_start` | protocolo → ejecución | `o_load_start` de `debug_unit`: se aceptó el encabezado de un `LOAD`. Pasa a `NO_PROG` con `prog_valid = 0`, así un `LOAD` que falla ya queda así |
+| `i_mem_busy` | protocolo → ejecución | `o_clearing` de `debug_unit`: 1 durante `CLEAR`, mantiene `core_rst`. De `LOAD_PREP` a `EXEC` no hace falta: el estado ya es `NO_PROG` (decisión [038](../decisiones/038_carga-de-programa-en-la-debug-unit.md)) |
 | `o_state[2:0]`, `o_prog_valid`, `o_cycles[31:0]` | ejecución → protocolo | `i_state`, `i_prog_valid` e `i_cycles` de `debug_unit`. `cycles` cuenta los ciclos con `enable = 1` desde el último `LOAD` o `RESET` |
 | `o_evt_pending` / `i_evt_done` | ejecución ↔ protocolo | Con `i_evt_pending` / `o_evt_done` de `debug_unit` |
 | `i_halted` | core → ejecución | `o_halted` del core |
