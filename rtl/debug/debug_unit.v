@@ -6,7 +6,7 @@
 //
 // FSM de protocolo de la Debug Unit (I-45, decisiones 006 y 036,
 // docs/spec/protocolo_debug.md §2 a §5 y §7, diagrama debug_unit_fsm),
-// con la carga de programa (I-46, decisión 037, memoria.md §4).
+// con la carga de programa (I-46, decisión 038, memoria.md §4).
 //
 // Función:
 //   Recibe peticiones por la interfaz de bytes de uart (decisión 035), las
@@ -21,8 +21,9 @@
 //                 (ERR_UNKNOWN_CMD), LEN del comando (ERR_LENGTH) y estado
 //                 de ejecución, tabla de §3.7 (ERR_STATE).
 //     LOAD_PREP   1 ciclo, con un LOAD válido: pulsa o_load_start (la FSM
-//                 de ejecución baja prog_valid y pasa a NO_PROG: core
-//                 detenido y en reset) y pone el puntero de imem en 0.
+//                 de ejecución, debug_exec, baja prog_valid y pasa a
+//                 NO_PROG: core detenido y en reset) y pone el puntero de
+//                 imem en 0.
 //     RX_PAYLOAD  guarda el payload (los 6 bytes de READ_DMEM quedan en
 //                 o_arg_addr y o_arg_count); chk ^= byte. En un LOAD arma
 //                 cada palabra con 4 bytes (little-endian) y la escribe en
@@ -38,8 +39,9 @@
 //                 direcciones 0 … max(IMEM_WORDS, DMEM_WORDS) − 1, un ciclo
 //                 por dirección. En un LOAD escribe HALT en imem[N …]; en
 //                 los dos escribe 0 en dmem y pulsa o_used_clr (mapa de
-//                 palabras usadas, I-48). o_clearing = 1 mientras dura: la
-//                 FSM de ejecución mantiene el core en reset.
+//                 palabras usadas, I-48). o_clearing = 1 mientras dura: va
+//                 a i_mem_busy de debug_exec, que mantiene el core en reset
+//                 (decisión 038).
 //     TX_HDR      envía 5A, CMD, STATUS, LEN_L, LEN_H.
 //     TX_PAYLOAD  envía LEN bytes: el bloque de INFO (§3.2), el bloque de
 //                 estado (§3.1) o i_pl_byte (lecturas, I-48).
@@ -93,8 +95,9 @@
 //   o_cmd             : CMD de la trama en curso               [NB_BYTE-1:0]
 //   o_arg_addr        : addr de READ_DMEM                      [NB_WORD-1:0]
 //   o_arg_count       : count de READ_DMEM                     [NB_LEN-1:0]
-//   o_load_start      : pulso en LOAD_PREP: empieza un LOAD válido
-//   o_clearing        : 1 durante CLEAR
+//   o_load_start      : pulso en LOAD_PREP: empieza un LOAD válido (a
+//                       i_load_start de debug_exec)
+//   o_clearing        : 1 durante CLEAR (a i_mem_busy de debug_exec)
 //   o_imem_b_en       : puerto B de imem: habilita (pulso por palabra)
 //   o_imem_b_we       : puerto B de imem: escritura (igual a o_imem_b_en)
 //   o_imem_b_addr     : puerto B de imem: índice de palabra [NB_MEM_ADDR-1:0]
