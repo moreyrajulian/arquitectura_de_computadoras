@@ -110,7 +110,8 @@ Falta decidir cómo saca `debug_unit` esas dos señales y las fronteras con otra
 - **I-49**: conecta `o_load_start` y `o_clearing` a `debug_exec`, el puerto B de `imem` directo
   y el de `dmem` con el multiplexor de arriba.
 - El testbench `debug_load_tb.v` usa el core real con las BRAM, así que corre solo en xsim, y
-  un modelo de la FSM de ejecución con la tabla de arriba.
+  `debug_exec` conectado como arriba: prueba la tabla contra la FSM de ejecución real, y que
+  toda escritura de `imem` y `dmem` llega con el core en reset.
 - Las preguntas de la consigna sobre qué se vacía al cargar siguen respondidas en la 004 y en
   `protocolo_debug.md` §3.3. La I-46 las implementa: el pipeline y los registros con
   `core_rst`, y `dmem`, el mapa de usadas y el resto de `imem` en `CLEAR`.
