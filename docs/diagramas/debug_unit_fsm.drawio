@@ -40,9 +40,6 @@
         <mxCell id="b12" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=1.8;fontSize=10.5;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;&lt;font style=&quot;font-size:12.5px&quot;&gt;EXEC&lt;/font&gt;&lt;/b&gt;&lt;br&gt;despacha comando" vertex="1">
           <mxGeometry height="64" width="170" x="310" y="520" as="geometry" />
         </mxCell>
-        <mxCell id="b13" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=1.8;fontSize=10.5;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;&lt;font style=&quot;font-size:12.5px&quot;&gt;STEP_PULSE&lt;/font&gt;&lt;/b&gt;&lt;br&gt;enable = 1 (1 ciclo)" vertex="1">
-          <mxGeometry height="64" width="170" x="600" y="460" as="geometry" />
-        </mxCell>
         <mxCell id="b14" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=1.8;fontSize=10.5;fontFamily=Helvetica;fontColor=#212121;align=center;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;&lt;font style=&quot;font-size:12.5px&quot;&gt;CLEAR&lt;/font&gt;&lt;/b&gt;&lt;br&gt;recorre BRAM (puerto B)" vertex="1">
           <mxGeometry height="64" width="170" x="600" y="600" as="geometry" />
         </mxCell>
@@ -225,19 +222,6 @@
         <mxCell id="t51" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#C62828;align=left;verticalAlign=middle;spacing=2;fontStyle=0;" value="timeout&lt;br&gt;err ← 06" vertex="1">
           <mxGeometry height="30.35" width="90" x="1176" y="440" as="geometry" />
         </mxCell>
-        <mxCell id="e52" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.5;endArrow=block;endFill=1;startArrow=none;startFill=1;">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="540" y="536" />
-              <mxPoint x="540" y="492" />
-            </Array>
-            <mxPoint x="480" y="536" as="sourcePoint" />
-            <mxPoint x="600" y="492" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="t53" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=left;verticalAlign=middle;spacing=2;fontStyle=0;" value="STEP válido" vertex="1">
-          <mxGeometry height="16.175" width="110" x="486" y="470" as="geometry" />
-        </mxCell>
         <mxCell id="e54" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.5;endArrow=block;endFill=1;startArrow=none;startFill=1;">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
@@ -257,20 +241,8 @@
             <mxPoint x="1010" y="552" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="t57" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="err ≠ 0, o INFO / STATUS / RUN /&lt;br&gt;STOP / READ_*" vertex="1">
+        <mxCell id="t57" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="err ≠ 0, o INFO / STATUS / RUN /&lt;br&gt;STEP / STOP / READ_*" vertex="1">
           <mxGeometry height="29" width="215" x="790" y="516" as="geometry" />
-        </mxCell>
-        <mxCell id="e58" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.5;endArrow=block;endFill=1;startArrow=none;startFill=1;">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="1040" y="492" />
-            </Array>
-            <mxPoint x="770" y="492" as="sourcePoint" />
-            <mxPoint x="1040" y="520" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="t59" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="1 ciclo después (halt ya se ve)" vertex="1">
-          <mxGeometry height="15.5" width="200" x="790" y="474" as="geometry" />
         </mxCell>
         <mxCell id="e60" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#37474F;strokeWidth=1.5;endArrow=block;endFill=1;startArrow=none;startFill=1;">
           <mxGeometry relative="1" as="geometry">
@@ -432,7 +404,7 @@
         <mxCell id="t91" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=left;verticalAlign=middle;spacing=2;fontStyle=0;" value="evento asíncrono" vertex="1">
           <mxGeometry height="16.175" width="150" x="1036" y="890" as="geometry" />
         </mxCell>
-        <mxCell id="b92" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#9E9E9E;strokeWidth=1.2;fontSize=11;fontFamily=Helvetica;fontColor=#212121;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;Qué hace cada estado&lt;/b&gt;&lt;br&gt;&amp;nbsp;&lt;br&gt;&lt;b&gt;IDLE&lt;/b&gt;&lt;br&gt;Sin timeout. Descarta bytes ≠ 0xA5. Si evt_pending, arma el EVT_HALTED.&lt;br&gt;&lt;b&gt;RX_CMD / RX_LEN&lt;/b&gt;&lt;br&gt;Guardan CMD y LEN; chk ^= byte; reinician el contador de timeout con cada&lt;br&gt;byte.&lt;br&gt;&lt;b&gt;CHECK_HDR&lt;/b&gt;&lt;br&gt;1 ciclo. Valida CMD, LEN y el estado del core (tabla 3.7). Carga err y cnt&lt;br&gt;← LEN.&lt;br&gt;&lt;b&gt;LOAD_PREP&lt;/b&gt;&lt;br&gt;1 ciclo. enable = 0, core_rst = 1, prog_valid = 0, wptr ← 0.&lt;br&gt;&lt;b&gt;RX_PAYLOAD&lt;/b&gt;&lt;br&gt;Guarda los argumentos (addr, count). En LOAD arma la palabra y escribe&lt;br&gt;imem[wptr++] cada 4 bytes.&lt;br&gt;&lt;b&gt;DISCARD&lt;/b&gt;&lt;br&gt;Consume los LEN bytes restantes y el CHK sin efectos, para no perder la&lt;br&gt;sincronía.&lt;br&gt;&lt;b&gt;RX_CHK&lt;/b&gt;&lt;br&gt;Compara el byte con chk. Si difiere: err ← ERR_CHECKSUM (en LOAD queda&lt;br&gt;NO_PROG).&lt;br&gt;&lt;b&gt;EXEC&lt;/b&gt;&lt;br&gt;1 ciclo. Valida direcciones (ERR_ADDR). RUN y STOP solo avisan a la FSM de&lt;br&gt;ejecución. Elige la fuente de datos de la respuesta y calcula LEN.&lt;br&gt;&lt;b&gt;STEP_PULSE&lt;/b&gt;&lt;br&gt;1 ciclo con enable = 1; en el ciclo siguiente halt ya es visible.&lt;br&gt;&lt;b&gt;CLEAR&lt;/b&gt;&lt;br&gt;Recorre las BRAM por el puerto B: imem[N…] ← HALT (solo LOAD), dmem ← 0,&lt;br&gt;dirty ← 0, cycles ← 0. Al terminar libera core_rst.&lt;br&gt;&lt;b&gt;TX_HDR&lt;/b&gt;&lt;br&gt;Envía 5A, CMD, STATUS, LEN_L, LEN_H. chk ← 0 y chk ^= byte (sin el 5A).&lt;br&gt;&lt;b&gt;TX_PAYLOAD&lt;/b&gt;&lt;br&gt;Envía LEN bytes desde la fuente elegida: estado, regs, latches o dmem (lee&lt;br&gt;la BRAM un ciclo antes).&lt;br&gt;&lt;b&gt;TX_CHK&lt;/b&gt;&lt;br&gt;Envía chk. Si era un evento, limpia evt_pending.&lt;br&gt;&amp;nbsp;&lt;br&gt;&lt;b&gt;Reglas comunes&lt;/b&gt;&lt;br&gt;Cada byte recibido: rx_empty = 0 → leer r_data y pulsar rd. Cada byte&lt;br&gt;enviado: esperar tx_full = 0 y pulsar wr.&lt;br&gt;Timeout: en cualquier estado del grupo de recepción, si el contador llega&lt;br&gt;a RX_TIMEOUT_CYCLES → err ← ERR_TIMEOUT y TX_HDR." vertex="1">
+        <mxCell id="b92" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#9E9E9E;strokeWidth=1.2;fontSize=11;fontFamily=Helvetica;fontColor=#212121;align=left;verticalAlign=middle;spacingLeft=6;spacingRight=6;" value="&lt;b&gt;Qué hace cada estado&lt;/b&gt;&lt;br&gt;&amp;nbsp;&lt;br&gt;&lt;b&gt;IDLE&lt;/b&gt;&lt;br&gt;Sin timeout. Descarta bytes ≠ 0xA5. Si evt_pending, arma el EVT_HALTED.&lt;br&gt;&lt;b&gt;RX_CMD / RX_LEN&lt;/b&gt;&lt;br&gt;Guardan CMD y LEN; chk ^= byte; reinician el contador de timeout con cada&lt;br&gt;byte.&lt;br&gt;&lt;b&gt;CHECK_HDR&lt;/b&gt;&lt;br&gt;1 ciclo. Valida CMD, LEN y el estado del core (tabla 3.7). Carga err y cnt&lt;br&gt;← LEN.&lt;br&gt;&lt;b&gt;LOAD_PREP&lt;/b&gt;&lt;br&gt;1 ciclo. enable = 0, core_rst = 1, prog_valid = 0, wptr ← 0.&lt;br&gt;&lt;b&gt;RX_PAYLOAD&lt;/b&gt;&lt;br&gt;Guarda los argumentos (addr, count). En LOAD arma la palabra y escribe&lt;br&gt;imem[wptr++] cada 4 bytes.&lt;br&gt;&lt;b&gt;DISCARD&lt;/b&gt;&lt;br&gt;Consume los LEN bytes restantes y el CHK sin efectos, para no perder la&lt;br&gt;sincronía.&lt;br&gt;&lt;b&gt;RX_CHK&lt;/b&gt;&lt;br&gt;Compara el byte con chk. Si difiere: err ← ERR_CHECKSUM (en LOAD queda&lt;br&gt;NO_PROG).&lt;br&gt;&lt;b&gt;EXEC&lt;/b&gt;&lt;br&gt;1 ciclo. Valida direcciones (ERR_ADDR). RUN, STEP y STOP solo avisan a la FSM&lt;br&gt;de ejecución (o_cmd_valid); el ciclo del STEP lo da ella (decisión 037).&lt;br&gt;Elige la fuente de datos de la respuesta y calcula LEN.&lt;br&gt;&lt;b&gt;CLEAR&lt;/b&gt;&lt;br&gt;Recorre las BRAM por el puerto B: imem[N…] ← HALT (solo LOAD), dmem ← 0,&lt;br&gt;dirty ← 0, cycles ← 0. Al terminar libera core_rst.&lt;br&gt;&lt;b&gt;TX_HDR&lt;/b&gt;&lt;br&gt;Envía 5A, CMD, STATUS, LEN_L, LEN_H. chk ← 0 y chk ^= byte (sin el 5A).&lt;br&gt;&lt;b&gt;TX_PAYLOAD&lt;/b&gt;&lt;br&gt;Envía LEN bytes desde la fuente elegida: estado, regs, latches o dmem (lee&lt;br&gt;la BRAM un ciclo antes).&lt;br&gt;&lt;b&gt;TX_CHK&lt;/b&gt;&lt;br&gt;Envía chk. Si era un evento, limpia evt_pending.&lt;br&gt;&amp;nbsp;&lt;br&gt;&lt;b&gt;Reglas comunes&lt;/b&gt;&lt;br&gt;Cada byte recibido: rx_empty = 0 → leer r_data y pulsar rd. Cada byte&lt;br&gt;enviado: esperar tx_full = 0 y pulsar wr.&lt;br&gt;Timeout: en cualquier estado del grupo de recepción, si el contador llega&lt;br&gt;a RX_TIMEOUT_CYCLES → err ← ERR_TIMEOUT y TX_HDR." vertex="1">
           <mxGeometry height="635.91" width="490" x="1260" y="162" as="geometry" />
         </mxCell>
       </root>

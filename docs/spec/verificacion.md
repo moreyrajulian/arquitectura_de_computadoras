@@ -102,7 +102,7 @@ agregar más, no quitar.
 | FIFO de recepción (`uart_fifo`) | I-44 | `uart_fifo_tb.v` | Orden FIFO; `empty` y `full` en los bordes (0, 1, 31 y 32 elementos); push con la FIFO llena descartado; pop con la FIFO vacía sin efecto; push y pop en el mismo ciclo, también con la FIFO llena y vacía; reset con datos adentro; aleatorio con semilla fija contra una cola del testbench |
 | FSM de comandos (`debug_unit`) | I-45 | `debug_cmd_fsm_tb.v` | Con un modelo de PC que manda y recibe tramas por la línea serie, a través de `uart`: `INFO` de punta a punta; las tramas de ejemplo de `protocolo_debug.md` §4; checksum incorrecto; comando desconocido (también `0xE0` y con payload); **cada celda ✗ de la tabla de §3.7** responde `ERR_STATE` sin efectos (sin pulso de `o_cmd_valid`), y las ✓ responden OK con su `LEN` y su payload; timeouts de la FPGA (§5) en cada estado de recepción, también en `DISCARD` y con `CMD = 0x00` si no llegó; una pausa menor a `T_BYTE` no lo dispara y en reposo no hay; `LOAD` con `LEN` no múltiplo de 4 o fuera de `1…1024` → `ERR_LENGTH`, y `N = 1024` pasa; `LEN` de los comandos sin payload y de `READ_DMEM`; el orden entre errores de encabezado y con el `CHK` mal (decisión [036](../decisiones/036_fsm-de-protocolo-de-la-debug-unit.md)); `ERR_ADDR` de `READ_DMEM`; basura antes del `SOF`; `EVT_HALTED` después de la confirmación de `RUN`, después de una respuesta en curso y antes de una petición que llega mientras sale; el bloque de estado tomado de una vez; reset en medio de una trama y de una respuesta. El resto de la Debug Unit (I-46, I-47) es un modelo del testbench |
 | Carga de programa | I-46 | `debug_load_tb.v` | `LOAD` escribe `imem` y rellena el resto con HALT; deja `dmem` en cero y el mapa de palabras usadas vacío, con `dmem_used = 0` (decisión [004](../decisiones/004_carga-y-reprogramacion.md), `memoria.md` §7); reprogramar con un programa ya cargado y en cualquier estado; error durante la carga (`memoria.md` §4.3) |
-| Modos de ejecución | I-47 | `debug_run_tb.v` | `RUN` hasta el HALT con `EVT_HALTED`; `STEP` avanza exactamente un ciclo; `STOP` detiene sin perder estado; **`STEP` en medio de un stall** continúa donde quedó; `RUN` y `STEP` repetido dan el mismo estado final |
+| Modos de ejecución (`debug_exec`) | I-47 | `debug_run_tb.v` | Desde tramas por la línea serie, a través de `uart` y `debug_unit`, con el `riscv_core` real y un segundo core de referencia que avanza un ciclo por cada `STEP` (decisión [037](../decisiones/037_fsm-de-ejecucion-de-la-debug-unit.md)): las tramas de `protocolo_debug.md` §4 con el core real; `RUN` hasta el HALT con la confirmación antes del `EVT_HALTED`, el estado final, el PC y `cycles` del `.exp`, y `enable = 1` exactamente esos ciclos; `STEP` avanza exactamente un ciclo (`cycles` + 1 y el core igual al de referencia en PC, registros y latches, en todos los ciclos) y en el último pasa a `HALTED` sin `EVT_HALTED`; **`STEP` en medio de un stall** continúa donde quedó (`loaduse_rs1_rs2`, `mixto_lazo`); `RUN` y `STEP` repetido dan el mismo estado final; `STOP` en el medio detiene sin perder estado (igual que el core de referencia después de los mismos ciclos, y la corrida termina con los ciclos de una sin cortes); `STOP` fuera de `RUNNING` sin cambios; `STEP` y `RUN` en `HALTED` → `ERR_STATE` sin `enable`; `RESET` y `LOAD` en `RUNNING` detienen y resetean el core; `RESET` con un `EVT_HALTED` pendiente lo descarta; `enable` nunca vale 1 con `halted` ni con `core_rst`. Sobre `debug_exec` solo, ciclo a ciclo: las prioridades (`LOAD`/`RESET` > `halt` > `STOP`), el pulso de `STEP`, el de `core_rst`, `i_load_start`, `i_mem_busy` e `i_evt_done`. Hasta la I-46, el testbench escribe `imem` y limpia `dmem` por el puerto B después de la respuesta del `LOAD`; hasta la I-48, lee registros y `dmem` por los puertos de debug |
 | Volcado de estado | I-48 | `debug_dump_tb.v` | `READ_REGS`, `READ_LATCHES`, `READ_DMEM` (rango válido y `ERR_ADDR`), `READ_DMEM_USED`, `READ_ALL`: orden, tamaños y endianness del protocolo; mapa de palabras usadas (`memoria.md` §7): un `sb`/`sh` marca la palabra completa, un store fuera de rango marca la de su alias y un load no marca nada; los latches coinciden con los registros de segmentación del core, bit a bit, según `pipeline.md` §8 |
 
 
@@ -272,8 +272,9 @@ ciclos = n + 4 + stalls + 2 · saltos_tomados
 
 El conteo termina en el ciclo en que el HALT está en WB, que es el último con `enable = 1`. Es el
 campo `cycles` del bloque de estado de la Debug Unit (`protocolo_debug.md` §3.1), así que la misma
-cifra sirve en simulación y en la placa. Para que coincida, la Debug Unit tiene que dejar de
-contar cuando `halted` pasa a 1 (I-47).
+cifra sirve en simulación y en la placa. Para que coincida, la Debug Unit deja de contar cuando
+`halted` pasa a 1: `debug_exec` baja `enable` en ese mismo ciclo y `cycles` cuenta los ciclos con
+`enable = 1` (decisión [037](../decisiones/037_fsm-de-ejecucion-de-la-debug-unit.md)).
 
 **Por qué verificar los ciclos.** Los resultados de un programa son los mismos con o sin
 forwarding bien hecho si el procesador frena de más: solo cambia el tiempo. Contar ciclos es la
@@ -819,7 +820,7 @@ Los programas que en el modo se comparan solo contra la traza corren sin `+FINAL
 [030](../decisiones/030_corridas-solo-traza.md)):
 
 ```sh
-python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL, y los 22 de tb/unit/ (master)
+python scripts/regresion.py                        # completo: los 39 de sw/, todos con +FINAL, y los 23 de tb/unit/ (master)
 python scripts/regresion.py --modo forwarding_stall # RTL de I-41: los 33 y 2 sin +FINAL
 python scripts/regresion.py --modo forwarding      # RTL de I-39 e I-40: los 31 y salto_depende sin +FINAL
 python scripts/regresion.py --modo sin_riesgos     # RTL de M7: los 27 programas (I-38)
