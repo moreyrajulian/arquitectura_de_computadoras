@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram id="debug_unit_estados_core" name="debug_unit_estados_core">
-    <mxGraphModel dx="1471" dy="894" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1380" pageHeight="960" math="0" shadow="0">
+    <mxGraphModel dx="1471" dy="894" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1380" pageHeight="900" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -111,7 +111,7 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="t24" parent="1" style="text;html=1;whiteSpace=wrap;fontSize=10.5;fontFamily=Helvetica;fontColor=#37474F;align=center;verticalAlign=middle;spacing=2;fontStyle=0;" value="halt (sin EVT_HALTED): el STEP llevó el HALT a WB,&lt;br&gt;o un STOP llegó justo antes" vertex="1">
-          <mxGeometry height="16.175" width="220" x="920" y="520" as="geometry" />
+          <mxGeometry height="16.175" width="220" x="920" y="536" as="geometry" />
         </mxCell>
         <mxCell id="e25" edge="1" parent="1" style="html=1;rounded=0;edgeStyle=none;strokeColor=#6A1B9A;strokeWidth=2;endArrow=block;endFill=1;startArrow=none;startFill=1;">
           <mxGeometry relative="1" as="geometry">
@@ -153,7 +153,7 @@
           <mxGeometry height="15.5" width="180" x="330" y="706" as="geometry" />
         </mxCell>
         <mxCell id="b34" parent="1" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#9E9E9E;strokeWidth=1.2;fontSize=11;fontFamily=Helvetica;fontColor=#212121;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;spacingTop=4;" value="&lt;b&gt;Salidas&lt;/b&gt;&lt;br&gt;enable = (state = RUNNING, o el ciclo siguiente a un STEP aceptado) y halt = 0: baja en el mismo ciclo en que llega halt&lt;br&gt;core_rst = 1 si state = NO_PROG, un ciclo después de LOAD ok o RESET, o mientras la FSM de protocolo está en LOAD_PREP … CLEAR&lt;br&gt;cycles cuenta los ciclos con enable = 1; LOAD ok y RESET lo ponen en 0. Módulo debug_exec (decisión 037)&lt;br&gt;&amp;nbsp;&lt;br&gt;&lt;b&gt;Notas&lt;/b&gt;&lt;br&gt;• LOAD y RESET se aceptan en cualquier estado, también en RUNNING: detienen el core antes de tocar memoria (reprogramación&lt;br&gt;dinámica).&lt;br&gt;• RUN y STEP solo desde READY o PAUSED; en otro estado responden ERR_STATE sin cambiar nada.&lt;br&gt;• STOP fuera de RUNNING no cambia el estado (responde OK). En PAUSED el pipeline puede tener instrucciones en vuelo.&lt;br&gt;• READY → HALTED con un solo STEP no puede ocurrir: el HALT necesita al menos 5 ciclos para llegar a WB.&lt;br&gt;• La FSM de protocolo sigue atendiendo la UART en RUNNING, por eso STOP y STATUS funcionan mientras el core ejecuta.&lt;br&gt;• En un mismo ciclo: LOAD y RESET ganan sobre halt y descartan un EVT_HALTED pendiente; halt gana sobre STOP." vertex="1">
-          <mxGeometry height="290" width="790" x="560" y="640" as="geometry" />
+          <mxGeometry height="200" width="790" x="560" y="640" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
