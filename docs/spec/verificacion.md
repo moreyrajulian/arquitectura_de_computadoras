@@ -585,7 +585,8 @@ HALT también con el core detenido. Esa corrida se hace a mano, porque la regres
 semilla para todos los programas. De la 1 a la 12, también sirven la 5 y la 8. Si se cambia
 la semilla de la regresión, hay que volver a comprobarlo, por ejemplo con
 `add_condition {/pipeline_tb/tb_clk == 0}` en xsim, leyendo `u_dut.stall` y `tb_enable`. El
-`STEP` real en medio de un stall, desde una trama UART, es de I-47 (§3.3).
+`STEP` real en medio de un stall, desde una trama UART, lo prueba `debug_run_tb` (I-47, §3.3): con
+`loaduse_rs1_rs2` y `mixto_lazo`, sin depender de una semilla.
 
 **Con el flush por saltos (I-42)** el banco no cambia y no hay define nuevo: la traza sale de
 `--modo completo` (§4.3). `hazard_unit` calcula el stall y todos los enables y flush de
