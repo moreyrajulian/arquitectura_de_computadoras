@@ -248,8 +248,13 @@ Sirve para volver a correr el mismo programa. Queda en `READY` si había program
   **sin petición** un `EVT_HALTED` con el bloque de estado. Mientras dura `RUNNING` solo se
   aceptan `STATUS`, `STOP`, `LOAD` y `RESET`.
 - **`STEP`**: `enable = 1` durante **un ciclo de reloj** (lo que pide la consigna: un comando,
-  un ciclo). Responde con el bloque de estado después de ese ciclo. Si en ese ciclo el HALT
-  llegó a WB, el estado pasa a `HALTED` (no se envía `EVT_HALTED`; ya lo dice la respuesta).
+  un ciclo). Es el ciclo siguiente a la aceptación del comando, y el reloj sigue corriendo para
+  todo lo demás: el core avanza un ciclo porque sus flip-flops solo capturan con `enable = 1`
+  (decisión [018](../decisiones/018_paso-a-paso-sin-clock.md)). Responde con el bloque de
+  estado después de ese ciclo. Si en ese ciclo el HALT llegó a WB, el estado pasa a `HALTED`
+  (no se envía `EVT_HALTED`; ya lo dice la respuesta). En `HALTED`, `STEP` responde
+  `ERR_STATE` (§3.7): el core ya no avanza, así que un OK no sumaría 1 a `cycles` y rompería la
+  regla de reintento de §5 (decisión [037](../decisiones/037_fsm-de-ejecucion-de-la-debug-unit.md)).
 - **`STOP`**: `enable = 0`. Desde `RUNNING` pasa a `PAUSED`. En otros estados no hace nada y
   responde OK con el estado (es idempotente). Existe para los programas que no terminan
   (bucle sin HALT). En `PAUSED` **el pipeline puede no estar vacío**: es una pausa de
@@ -266,6 +271,19 @@ el evento de la ejecución actual de uno viejo:
 
 Las dos salen de la organización de §7 (el `halt` marca `evt_pending` y el evento espera a
 que termine la respuesta en curso, §2), pero el RTL tiene que respetarlas.
+
+**Cuando coinciden en un ciclo** (decisión
+[037](../decisiones/037_fsm-de-ejecucion-de-la-debug-unit.md)). El core corre mientras entra
+una trama, así que un comando aceptado y el `halt` pueden caer en el mismo ciclo:
+
+- `LOAD` y `RESET` ganan sobre el `halt` y **descartan un `EVT_HALTED` pendiente**: la
+  ejecución terminó con ellos, y su respuesta ya trae el estado. Sin esto, después de la
+  respuesta saldría un evento con el estado del core reseteado (`READY`, `cycles = 0`).
+- El `halt` gana sobre `STOP`: el programa terminó, el estado es `HALTED` y sale el
+  `EVT_HALTED`. La respuesta del `STOP` ya dice `HALTED`, así que el cliente descarta el evento
+  por viejo.
+- Si `STOP` llega un ciclo antes que el `halt`, el estado pasa de `PAUSED` a `HALTED` sin
+  evento: la respuesta del `STOP` se toma miles de ciclos después y ya dice `HALTED`.
 
 El reloj nunca se detiene: parar y avanzar el core es siempre con `enable`.
 
@@ -328,6 +346,7 @@ Programa de dos instrucciones: `addi x1, x0, 5` (`0x00500093`) y `halt` (`0x0010
 | `RUN` | `A5 20 00 00 20` |
 | Confirmación de `RUN` | `5A 20 00 00 00 20` |
 | `EVT_HALTED` (HALTED, 0 palabras usadas, PC = 0x08, 6 ciclos)¹ | `5A E0 00 0C 00  04 03 00 00  08 00 00 00  06 00 00 00  E5` |
+| `STEP` en `HALTED` (error) | `5A 21 04 00 00 25` |
 | `STEP` | `A5 21 00 00 21` |
 | `READ_REGS` | `A5 30 00 00 30` |
 | `READ_REGS` en `RUNNING` (error) | `5A 30 04 00 00 34` |
@@ -338,9 +357,9 @@ Sin payload, el `CHK` de una petición es igual al `CMD` (por ejemplo `A5 20 00 
 Estas tramas sirven de casos de prueba para el testbench de la Debug Unit y para los tests
 del cliente de la PC.
 
-¹ El HALT se busca en el ciclo 2 y llega a WB en el ciclo 6. El valor exacto del PC y de
-`cycles` depende de en qué etapa se congela la búsqueda (decisión del HALT y `pipeline.md`);
-recalcular este ejemplo cuando esté cerrado.
+¹ El HALT se busca en el ciclo 2 y llega a WB en el ciclo 6, el último con `enable = 1`. El PC
+queda en la dirección del HALT + 4 (`pipeline.md` §3.4). `debug_run_tb` comprueba estas tramas
+de `LOAD`, `RUN`, la confirmación, el `EVT_HALTED` y el `STEP` en `HALTED` con el core real.
 
 ## 5. Errores y timeouts
 
@@ -441,17 +460,18 @@ La Debug Unit tiene **dos FSM independientes**:
 
 1. **FSM de protocolo** (`debug_unit_fsm`): recibe la trama, la valida, ejecuta el comando y
    transmite la respuesta. Estados: `IDLE`, `RX_CMD`, `RX_LEN`, `CHECK_HDR`, `LOAD_PREP`,
-   `RX_PAYLOAD`, `DISCARD`, `RX_CHK`, `EXEC`, `STEP_PULSE`, `CLEAR`, `TX_HDR`, `TX_PAYLOAD`,
-   `TX_CHK`.
+   `RX_PAYLOAD`, `DISCARD`, `RX_CHK`, `EXEC`, `CLEAR`, `TX_HDR`, `TX_PAYLOAD`, `TX_CHK`.
 2. **FSM de ejecución** (`debug_unit_estados_core`): `NO_PROG`, `READY`, `RUNNING`, `PAUSED`,
    `HALTED`. Genera `enable` y `core_rst` y detecta `halt` mientras la FSM de protocolo sigue
    escuchando la UART (por eso `STOP` funciona durante `RUNNING`).
 
 **Implementación** (decisión [036](../decisiones/036_fsm-de-protocolo-de-la-debug-unit.md)): la
 FSM de protocolo es `rtl/debug/debug_unit.v` (I-45). `RX_LEN` son dos estados (`RX_LEN_L` y
-`RX_LEN_H`); `LOAD_PREP` y `CLEAR` llegan con la I-46, y `STEP_PULSE` con la I-47 si hace falta.
-La FSM de ejecución es otro módulo (I-47). `debug_unit` se conecta a `uart` por la interfaz de
-§1, y el top (I-49) instancia los dos. Además de esa interfaz, `debug_unit` tiene:
+`RX_LEN_H`); `LOAD_PREP` y `CLEAR` llegan con la I-46. No hay estado `STEP_PULSE`: el ciclo
+del `STEP` lo da la FSM de ejecución (decisión
+[037](../decisiones/037_fsm-de-ejecucion-de-la-debug-unit.md)). La FSM de ejecución es
+`rtl/debug/debug_exec.v` (I-47). `debug_unit` se conecta a `uart` por la interfaz de §1, y el
+top (I-49) instancia los tres. Además de esa interfaz, `debug_unit` tiene:
 
 | Puerto | Dirección | Uso |
 |---|---|---|
@@ -466,7 +486,23 @@ La FSM de ejecución es otro módulo (I-47). `debug_unit` se conecta a `uart` po
 latches y `CLK_FREQ_HZ`). Las codificaciones del protocolo (`DBG_CMD_*`, `DBG_ERR_*`, `DBG_ST_*`)
 están en `rtl/common/riscv_defs.vh`.
 
-Separarlas permite que el core corra mientras llega una trama nueva, y que el `halt` se atienda
+`debug_exec` es el único dueño del estado de ejecución, también en `LOAD` y `RESET` (decisión
+037). Sus puertos:
+
+| Puerto | Dirección | Uso |
+|---|---|---|
+| `i_cmd_valid`, `i_cmd[7:0]` | protocolo → ejecución | `o_cmd_valid` y `o_cmd` de `debug_unit`. Reacciona a `LOAD`, `RESET`, `RUN`, `STEP` y `STOP` |
+| `i_load_start` | I-46 → ejecución | Pulso: se aceptó el encabezado de un `LOAD`. Pasa a `NO_PROG` con `prog_valid = 0`, así un `LOAD` que falla ya queda así. En 0 hasta la I-46 |
+| `i_mem_busy` | I-46 → ejecución | `debug_unit` escribe `imem` o limpia `dmem` (`LOAD_PREP` a `CLEAR`): mantiene `core_rst`. En 0 hasta la I-46 |
+| `o_state[2:0]`, `o_prog_valid`, `o_cycles[31:0]` | ejecución → protocolo | `i_state`, `i_prog_valid` e `i_cycles` de `debug_unit`. `cycles` cuenta los ciclos con `enable = 1` desde el último `LOAD` o `RESET` |
+| `o_evt_pending` / `i_evt_done` | ejecución ↔ protocolo | Con `i_evt_pending` / `o_evt_done` de `debug_unit` |
+| `i_halted` | core → ejecución | `o_halted` del core |
+| `o_enable`, `o_core_rst` | ejecución → core | `enable = (RUNNING \| step) & ~halted`, con `step` = 1 solo en el ciclo siguiente al `o_cmd_valid` del `STEP`; `core_rst = i_rst \| NO_PROG \| i_mem_busy`, más un ciclo después del `o_cmd_valid` de `LOAD` y de `RESET` |
+
+Las transiciones y su prioridad dentro de un ciclo están en la cabecera de `debug_exec.v` y en
+§3.5.
+
+Separar las dos FSM permite que el core corra mientras llega una trama nueva, y que el `halt` se atienda
 en el mismo ciclo aunque la FSM de protocolo esté ocupada: la FSM de ejecución baja `enable` y
 marca `evt_pending`, y la de protocolo manda el `EVT_HALTED` cuando vuelve a `IDLE`. Conviene
 seguir el mismo esquema que en la UART: FSM de control por un lado y camino de datos (contador

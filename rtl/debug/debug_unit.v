@@ -39,8 +39,9 @@
 //   El bloque de estado se arma con las entradas al terminar de enviar el
 //   encabezado (snapshot): ya pasaron los efectos del comando, y pc y
 //   cycles no cambian a mitad del envío si el core está corriendo.
-//   Los estados LOAD_PREP y CLEAR del diagrama los agrega la I-46, y
-//   STEP_PULSE la I-47 (decisión 036). No usa enable (decisión 018).
+//   Los estados LOAD_PREP y CLEAR del diagrama los agrega la I-46 (decisión
+//   036). No hay STEP_PULSE: el ciclo de enable del STEP lo da debug_exec,
+//   la FSM de ejecución (decisión 037). No usa enable (decisión 018).
 //
 // Parámetros:
 //   CLK_FREQ_HZ       : frecuencia de i_clk en Hz (clk_khz de INFO)
