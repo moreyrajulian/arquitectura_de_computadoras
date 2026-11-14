@@ -5,13 +5,19 @@
 //
 // Testbench autoverificante de la carga de programa de la Debug Unit
 // (I-46: LOAD y RESET en debug_unit; docs/spec/verificacion.md §3.3,
-// memoria.md §4, protocolo_debug.md §3.3 y §3.4, decisiones 004 y 037).
+// memoria.md §4, protocolo_debug.md §3.3 y §3.4, decisiones 004, 037 y
+// 038).
 //
 // Montaje: el testbench hace de PC y le habla a debug_unit por la línea
 // serie, a través de uart; debug_unit escribe imem y limpia dmem por el
 // puerto B del core real (riscv_core con imem_bram y dmem_bram), así que
-// corre en xsim dentro del proyecto de Vivado:
+// corre en xsim dentro del proyecto de Vivado. La FSM de ejecución es la
+// real (debug_exec, decisión 037), conectada como dice la decisión 038:
+// o_load_start a i_load_start y o_clearing a i_mem_busy.
 //   PC (testbench) --serie--> uart <--> debug_unit --puerto B--> riscv_core
+//                                       debug_unit <--> debug_exec
+//                                       debug_exec --enable, core_rst--> riscv_core
+//                                       debug_exec <------- halted ----- riscv_core
 //
 // Oráculo, escrito aparte del RTL:
 //   - Los programas, escritos a mano con un comentario por instrucción.
@@ -24,11 +30,8 @@
 //     y dmem leída por el puerto B cuando debug_unit no lo usa.
 //   - Las respuestas: encabezado, checksum calculado por el testbench y
 //     el bloque de estado de §3.1 con los valores esperados.
-//   - Un modelo de la FSM de ejecución (I-47) con el contrato de la
-//     decisión 037: o_load_start lleva a NO_PROG con prog_valid = 0;
-//     LOAD aceptado a READY con prog_valid = 1 y cycles = 0; RESET a
-//     READY o NO_PROG según prog_valid; core_rst = NO_PROG | o_clearing;
-//     enable = RUNNING | pulso de STEP. RUN corre hasta o_halted.
+//   - El estado, prog_valid, cycles, enable y core_rst de debug_exec,
+//     contra lo que dicen las decisiones 037 y 038 para cada caso.
 //
 // UART: CLK_FREQ_HZ = 32 × 115200 (DVSR = 2, un byte serie = 320 ciclos)
 // y RX_TIMEOUT_CYCLES = 3000, para simular rápido.
@@ -47,6 +50,7 @@
 //     CLEAR, en NO_PROG con el core en reset (RUN responde ERR_STATE)
 //   - RESET con programa: dmem y registros en cero, imem intacta (el
 //     programa vuelve a correr igual); RESET sin programa: queda NO_PROG
+//   - Cada RUN termina con el EVT_HALTED (HALTED, PC y cycles del programa)
 // Sin aleatoriedad: no hace falta semilla.
 //======================================================================
 
@@ -96,13 +100,13 @@ module debug_load_tb;
     wire [31:0] du_dmem_b_din;
     wire        du_used_clr;
 
-    // Modelo de la FSM de ejecución
-    reg  [2:0]  ex_state;
-    reg         ex_prog_valid;
-    reg  [31:0] ex_cycles;
-    reg         ex_step;
-    wire        core_rst = (ex_state == DBG_ST_NO_PROG) | du_clearing;
-    wire        core_en  = (ex_state == DBG_ST_RUNNING) | ex_step;
+    // debug_exec
+    wire [2:0]  ex_state;
+    wire        ex_prog_valid;
+    wire [31:0] ex_cycles;
+    wire        ex_evt_pending;
+    wire        core_rst;
+    wire        core_en;
 
     // Core
     wire        core_halted;
@@ -158,7 +162,7 @@ module debug_load_tb;
         .i_dmem_used       (16'd0),                // mapa de usadas: I-48
         .i_pc              (core_pc),
         .i_cycles          (ex_cycles),
-        .i_evt_pending     (1'b0),
+        .i_evt_pending     (ex_evt_pending),
         .o_evt_done        (du_evt_done),
         .o_cmd_valid       (du_cmd_valid),
         .o_cmd             (du_cmd),
@@ -177,6 +181,23 @@ module debug_load_tb;
         .o_used_clr        (du_used_clr),
         .o_pl_idx          (du_pl_idx),
         .i_pl_byte         (8'h00)                 // lecturas: I-48
+    );
+
+    debug_exec u_exec (
+        .i_clk         (tb_clk),
+        .i_rst         (tb_rst),
+        .i_cmd_valid   (du_cmd_valid),
+        .i_cmd         (du_cmd),
+        .i_load_start  (du_load_start),
+        .i_mem_busy    (du_clearing),
+        .i_evt_done    (du_evt_done),
+        .o_state       (ex_state),
+        .o_prog_valid  (ex_prog_valid),
+        .o_cycles      (ex_cycles),
+        .o_evt_pending (ex_evt_pending),
+        .i_halted      (core_halted),
+        .o_enable      (core_en),
+        .o_core_rst    (core_rst)
     );
 
     riscv_core u_core (
@@ -225,50 +246,6 @@ module debug_load_tb;
             end
         end
     endtask
-
-    //------------------------------------------------------------------
-    // Modelo de la FSM de ejecución (contrato de la decisión 037)
-    //------------------------------------------------------------------
-    always @(posedge tb_clk) begin
-        if (tb_rst) begin
-            ex_state      <= DBG_ST_NO_PROG;
-            ex_prog_valid <= 1'b0;
-            ex_cycles     <= 32'd0;
-            ex_step       <= 1'b0;
-        end
-        else begin
-            ex_step <= 1'b0;
-            if (core_en)
-                ex_cycles <= ex_cycles + 1;
-            if (ex_state == DBG_ST_RUNNING && core_halted)
-                ex_state <= DBG_ST_HALTED;
-            if (du_load_start) begin
-                ex_prog_valid <= 1'b0;
-                ex_state      <= DBG_ST_NO_PROG;
-            end
-            else if (du_cmd_valid) begin
-                case (du_cmd)
-                    DBG_CMD_LOAD: begin
-                        ex_prog_valid <= 1'b1;
-                        ex_state      <= DBG_ST_READY;
-                        ex_cycles     <= 32'd0;
-                    end
-                    DBG_CMD_RESET: begin
-                        ex_state  <= ex_prog_valid ? DBG_ST_READY : DBG_ST_NO_PROG;
-                        ex_cycles <= 32'd0;
-                    end
-                    DBG_CMD_RUN:  ex_state <= DBG_ST_RUNNING;
-                    DBG_CMD_STEP: begin
-                        ex_step  <= 1'b1;
-                        ex_state <= DBG_ST_PAUSED;
-                    end
-                    DBG_CMD_STOP:
-                        if (ex_state == DBG_ST_RUNNING) ex_state <= DBG_ST_PAUSED;
-                    default: ;
-                endcase
-            end
-        end
-    end
 
     //------------------------------------------------------------------
     // Monitor de los puertos B
@@ -543,9 +520,12 @@ module debug_load_tb;
         end
     endtask
 
-    // RUN hasta HALTED (la confirmación sale enseguida)
+    // RUN hasta HALTED: la confirmación sale enseguida y, al llegar el HALT,
+    // el EVT_HALTED con el bloque de estado (protocolo_debug.md §3.5)
     task correr;
         input [8*40-1:0] name;
+        input [31:0]     pc;
+        input [31:0]     cyc;
         integer          c;
         begin
             cmd0(DBG_CMD_RUN);
@@ -553,6 +533,11 @@ module debug_load_tb;
             for (c = 0; c < 200 && ex_state != DBG_ST_HALTED; c = c + 1)
                 @(negedge tb_clk);
             chk({name, ": HALTED"}, ex_state, DBG_ST_HALTED);
+            esperar_resp({name, " EVT_HALTED"}, DBG_CMD_EVT_HALTED, DBG_OK, 16'd12);
+            chk({name, ": EVT state"}, resp_buf[0], {5'b0, DBG_ST_HALTED});
+            chk({name, ": EVT flags"}, resp_buf[1], 8'h03);   // prog_valid y halted
+            chk({name, ": EVT pc"}, {resp_buf[7], resp_buf[6], resp_buf[5], resp_buf[4]}, pc);
+            chk({name, ": EVT cycles"}, {resp_buf[11], resp_buf[10], resp_buf[9], resp_buf[8]}, cyc);
         end
     endtask
 
@@ -617,7 +602,9 @@ module debug_load_tb;
         //--------------------------------------------------------------
         // Corre hasta el HALT y reprograma en HALTED
         //--------------------------------------------------------------
-        correr("programa 1");
+        // HALT en 0x08: PC = 0x0C y 3 + 4 = 7 ciclos desde el LOAD, contando
+        // los dos STEP (verificacion.md §5)
+        correr("programa 1", 32'h0C, 32'd7);
         leer_reg(5'd5, v);    chk("programa 1: x5", v, 32'd123);
         leer_dmem(10'd4, v);  chk("programa 1: dmem[4]", v, 32'd123);
         borrar_cuentas;
@@ -677,7 +664,7 @@ module debug_load_tb;
         esperar_resp("LOAD en READY", DBG_CMD_LOAD, DBG_OK, 16'd12);
         chk_imem("LOAD en READY", 3, 1'b1);
         chk_clear("LOAD en READY", 1);
-        correr("LOAD en READY");
+        correr("LOAD en READY", 32'h0C, 32'd7);
         leer_reg(5'd5, v);    chk("LOAD en READY: x5", v, 32'd123);
 
         //--------------------------------------------------------------
@@ -691,7 +678,7 @@ module debug_load_tb;
         chk_clear("RESET", 1);
         leer_reg(5'd5, v);    chk("RESET: x5 en 0", v, 32'd0);
         leer_dmem(10'd4, v);  chk("RESET: dmem[4] en 0", v, 32'd0);
-        correr("RESET: el programa vuelve a correr");
+        correr("RESET: el programa vuelve a correr", 32'h0C, 32'd7);
         leer_reg(5'd5, v);    chk("RESET: x5 otra vez", v, 32'd123);
         leer_dmem(10'd4, v);  chk("RESET: dmem[4] otra vez", v, 32'd123);
 
