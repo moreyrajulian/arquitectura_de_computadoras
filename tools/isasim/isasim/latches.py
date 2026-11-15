@@ -3,8 +3,8 @@
 Un latch se empaqueta en un número de `bits` bits con los campos **en el orden de
 las tablas de pipeline.md §8, el primero en los bits más altos**. Es el formato de
 una línea de los archivos de traza que lee el testbench con `$readmemh`, y el que
-usa el volcado de `READ_LATCHES` partido en palabras de 32 bits (propuesta para
-cerrar la tabla provisoria de protocolo_debug.md §3.6).
+usa el volcado de `READ_LATCHES` partido en palabras de 32 bits, la menos
+significativa primero (protocolo_debug.md §3.6, decisión 039).
 
 Junto con cada valor esperado se genera una **máscara**: los bits en 1 se comparan.
 Reglas (a respetar por el banco de pruebas, I-17):
