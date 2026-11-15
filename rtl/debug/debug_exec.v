@@ -51,9 +51,11 @@
 //   i_cmd_valid    : pulso: debug_unit aceptó i_cmd sin errores
 //   i_cmd          : CMD aceptado                          [NB_BYTE-1:0]
 //   i_load_start   : pulso: debug_unit aceptó el encabezado de un LOAD
-//                    (I-46; 0 mientras no exista)
-//   i_mem_busy     : debug_unit escribe imem o limpia dmem (LOAD_PREP a
-//                    CLEAR, I-46): mantiene core_rst (0 mientras no exista)
+//                    (o_load_start de debug_unit, I-46)
+//   i_mem_busy     : debug_unit limpia la memoria: mantiene core_rst
+//                    (o_clearing de debug_unit, 1 durante CLEAR; de
+//                    LOAD_PREP a EXEC ya hay core_rst por NO_PROG,
+//                    decisión 038)
 //   i_halted       : halted del core (HALT llegó a WB)
 //   i_evt_done     : pulso: debug_unit envió el último byte del EVT_HALTED
 //   o_state        : estado de ejecución, DBG_ST_*         [NB_STATE-1:0]

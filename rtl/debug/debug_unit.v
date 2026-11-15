@@ -5,7 +5,8 @@
 // debug_unit
 //
 // FSM de protocolo de la Debug Unit (I-45, decisiones 006 y 036,
-// docs/spec/protocolo_debug.md §2 a §5 y §7, diagrama debug_unit_fsm).
+// docs/spec/protocolo_debug.md §2 a §5 y §7, diagrama debug_unit_fsm),
+// con la carga de programa (I-46, decisión 038, memoria.md §4).
 //
 // Función:
 //   Recibe peticiones por la interfaz de bytes de uart (decisión 035), las
@@ -19,8 +20,14 @@
 //     CHECK_HDR   1 ciclo. Valida en este orden: CMD conocido
 //                 (ERR_UNKNOWN_CMD), LEN del comando (ERR_LENGTH) y estado
 //                 de ejecución, tabla de §3.7 (ERR_STATE).
+//     LOAD_PREP   1 ciclo, con un LOAD válido: pulsa o_load_start (la FSM
+//                 de ejecución, debug_exec, baja prog_valid y pasa a
+//                 NO_PROG: core detenido y en reset) y pone el puntero de
+//                 imem en 0.
 //     RX_PAYLOAD  guarda el payload (los 6 bytes de READ_DMEM quedan en
-//                 o_arg_addr y o_arg_count); chk ^= byte.
+//                 o_arg_addr y o_arg_count); chk ^= byte. En un LOAD arma
+//                 cada palabra con 4 bytes (little-endian) y la escribe en
+//                 imem por el puerto B con el 4.º byte (memoria.md §4.2).
 //     DISCARD     con error de encabezado: consume los LEN bytes que
 //                 faltan y el CHK, sin efectos, y responde ese error
 //                 aunque el CHK esté mal.
@@ -28,6 +35,13 @@
 //     EXEC        1 ciclo. Valida addr y count de READ_DMEM (ERR_ADDR). Si
 //                 no hay error, pulsa o_cmd_valid: el resto de la Debug
 //                 Unit ejecuta el comando. Calcula el LEN de la respuesta.
+//     CLEAR       solo LOAD y RESET, antes de responder: recorre las
+//                 direcciones 0 … max(IMEM_WORDS, DMEM_WORDS) − 1, un ciclo
+//                 por dirección. En un LOAD escribe HALT en imem[N …]; en
+//                 los dos escribe 0 en dmem y pulsa o_used_clr (mapa de
+//                 palabras usadas, I-48). o_clearing = 1 mientras dura: va
+//                 a i_mem_busy de debug_exec, que mantiene el core en reset
+//                 (decisión 038).
 //     TX_HDR      envía 5A, CMD, STATUS, LEN_L, LEN_H.
 //     TX_PAYLOAD  envía LEN bytes: el bloque de INFO (§3.2), el bloque de
 //                 estado (§3.1) o i_pl_byte (lecturas, I-48).
@@ -39,15 +53,18 @@
 //   El bloque de estado se arma con las entradas al terminar de enviar el
 //   encabezado (snapshot): ya pasaron los efectos del comando, y pc y
 //   cycles no cambian a mitad del envío si el core está corriendo.
-//   Los estados LOAD_PREP y CLEAR del diagrama los agrega la I-46 (decisión
-//   036). No hay STEP_PULSE: el ciclo de enable del STEP lo da debug_exec,
-//   la FSM de ejecución (decisión 037). No usa enable (decisión 018).
+//   Un LOAD con error de checksum o timeout después de LOAD_PREP deja imem
+//   a medio escribir y no llega a EXEC: no hay CLEAR ni o_cmd_valid, y la
+//   FSM de ejecución queda en NO_PROG (memoria.md §4.3). No hay
+//   STEP_PULSE: el ciclo de enable del STEP lo da debug_exec, la FSM de
+//   ejecución (decisión 037). No usa enable (decisión 018).
 //
 // Parámetros:
 //   CLK_FREQ_HZ       : frecuencia de i_clk en Hz (clk_khz de INFO)
 //   RX_TIMEOUT_CYCLES : T_BYTE en ciclos (§5: CLK_FREQ_HZ / 10 = 100 ms)
 //   IMEM_WORDS        : palabras de la memoria de programa (1024)
 //   DMEM_WORDS        : palabras de la memoria de datos (1024)
+//   NB_MEM_ADDR       : bits del índice de palabra de imem y dmem (10)
 //   NB_*_LATCH        : bits de cada bus de latch (pipeline.md §8,
 //                       decisión 023); INFO informa ceil(NB / 32) palabras
 //   NB_BYTE, NB_WORD, NB_LEN, NB_STATE : anchos fijos del protocolo (8,
@@ -78,6 +95,19 @@
 //   o_cmd             : CMD de la trama en curso               [NB_BYTE-1:0]
 //   o_arg_addr        : addr de READ_DMEM                      [NB_WORD-1:0]
 //   o_arg_count       : count de READ_DMEM                     [NB_LEN-1:0]
+//   o_load_start      : pulso en LOAD_PREP: empieza un LOAD válido (a
+//                       i_load_start de debug_exec)
+//   o_clearing        : 1 durante CLEAR (a i_mem_busy de debug_exec)
+//   o_imem_b_en       : puerto B de imem: habilita (pulso por palabra)
+//   o_imem_b_we       : puerto B de imem: escritura (igual a o_imem_b_en)
+//   o_imem_b_addr     : puerto B de imem: índice de palabra [NB_MEM_ADDR-1:0]
+//   o_imem_b_din      : puerto B de imem: palabra               [NB_WORD-1:0]
+//   o_dmem_b_en       : puerto B de dmem: habilita (solo en CLEAR)
+//   o_dmem_b_we       : puerto B de dmem: escritura por byte (1111 en CLEAR) [3:0]
+//   o_dmem_b_addr     : puerto B de dmem: índice de palabra [NB_MEM_ADDR-1:0]
+//   o_dmem_b_din      : puerto B de dmem: palabra (siempre 0)   [NB_WORD-1:0]
+//   o_used_clr        : pulso: borrar la palabra o_dmem_b_addr del mapa de
+//                       usadas (en CLEAR, con o_dmem_b_en)
 //   o_pl_idx          : índice del byte de payload que se envía, contado
 //                       desde el primer byte del payload       [NB_LEN-1:0]
 //   i_pl_byte         : byte o_pl_idx de la respuesta a READ_REGS,
@@ -90,7 +120,10 @@
 //                                                              [NB_BYTE-1:0]
 //
 // Latencia: la respuesta empieza 3 ciclos después del CHK (RX_CHK, EXEC,
-//           TX_HDR); o_cmd_valid está en el ciclo de EXEC. Cada byte
+//           TX_HDR), más max(IMEM_WORDS, DMEM_WORDS) ciclos de CLEAR en
+//           LOAD y RESET; o_cmd_valid está en el ciclo de EXEC. La
+//           palabra se escribe en imem en el ciclo en que se lee su 4.º
+//           byte. Cada byte
 //           espera i_tx_full = 0, y después de o_wr, i_tx_full = 1 en el
 //           ciclo siguiente (uart, decisión 035), así que o_pl_idx cambia
 //           al menos 2 ciclos antes de que se use i_pl_byte.
@@ -104,6 +137,7 @@ module debug_unit
     parameter integer RX_TIMEOUT_CYCLES = CLK_FREQ_HZ / 10,
     parameter integer IMEM_WORDS        = 1024,
     parameter integer DMEM_WORDS        = 1024,
+    parameter integer NB_MEM_ADDR       = 10,
     parameter integer NB_IF_ID_LATCH    = 65,
     parameter integer NB_ID_EX_LATCH    = 161,
     parameter integer NB_EX_MEM_LATCH   = 109,
@@ -141,6 +175,18 @@ module debug_unit
     output wire [NB_BYTE-1:0]  o_cmd,
     output wire [NB_WORD-1:0]  o_arg_addr,
     output wire [NB_LEN-1:0]   o_arg_count,
+    // Carga de programa (I-46)
+    output wire                   o_load_start,
+    output wire                   o_clearing,
+    output wire                   o_imem_b_en,
+    output wire                   o_imem_b_we,
+    output wire [NB_MEM_ADDR-1:0] o_imem_b_addr,
+    output wire [NB_WORD-1:0]     o_imem_b_din,
+    output wire                   o_dmem_b_en,
+    output wire [3:0]             o_dmem_b_we,
+    output wire [NB_MEM_ADDR-1:0] o_dmem_b_addr,
+    output wire [NB_WORD-1:0]     o_dmem_b_din,
+    output wire                   o_used_clr,
     // Payload de las lecturas (I-48)
     output wire [NB_LEN-1:0]   o_pl_idx,
     input  wire [NB_BYTE-1:0]  i_pl_byte
@@ -164,6 +210,8 @@ module debug_unit
     localparam [3:0] ST_TX_HDR     = 4'd9;
     localparam [3:0] ST_TX_PAYLOAD = 4'd10;
     localparam [3:0] ST_TX_CHK     = 4'd11;
+    localparam [3:0] ST_LOAD_PREP  = 4'd12;
+    localparam [3:0] ST_CLEAR      = 4'd13;
 
     // Timeout entre bytes (§5)
     localparam integer NB_TOUT = $clog2(RX_TIMEOUT_CYCLES + 1);
@@ -190,6 +238,10 @@ module debug_unit
     localparam [NB_LEN-1:0] DMEM_ARGS_LEN = 16'd6;            // addr (4 B) + count (2 B)
     localparam [33:0]      DMEM_BYTES   = 4 * DMEM_WORDS;
 
+    // Recorrido de CLEAR: max(IMEM_WORDS, DMEM_WORDS) direcciones
+    localparam integer CLR_WORDS = (IMEM_WORDS > DMEM_WORDS) ? IMEM_WORDS : DMEM_WORDS;
+    localparam [NB_MEM_ADDR-1:0] CLR_LAST = CLR_WORDS - 1;
+
     //------------------------------------------------------------------
     // Registros
     //------------------------------------------------------------------
@@ -205,6 +257,7 @@ module debug_unit
     reg [NB_LEN-1:0]   rsp_len_reg, rsp_len_next;  // LEN de la respuesta
     reg                evt_reg,     evt_next;      // la trama que sale es el EVT_HALTED
     reg [95:0]         snap_reg,    snap_next;     // bloque de estado que se envía
+    reg [NB_MEM_ADDR-1:0] addr_reg, addr_next;     // palabra de imem (LOAD) o de CLEAR
 
     //------------------------------------------------------------------
     // Bytes de entrada y salida
@@ -298,6 +351,26 @@ module debug_unit
         endcase
     end
 
+    //------------------------------------------------------------------
+    // Carga de programa (memoria.md §4.2) y CLEAR
+    //------------------------------------------------------------------
+    wire is_load  = (cmd_reg == DBG_CMD_LOAD);
+    wire is_reset = (cmd_reg == DBG_CMD_RESET);
+
+    // En RX_PAYLOAD de un LOAD, cnt_reg arranca en LEN (múltiplo de 4) y
+    // baja con cada byte: el 4.º byte de cada palabra llega con cnt ≡ 1 (mod 4).
+    // arg_reg tiene los 3 anteriores en [47:24], el primero en [31:24]
+    wire load_word = (state_reg == ST_RX_PAYLOAD) & is_load & rx_strobe &
+                     (cnt_reg[1:0] == 2'b01);
+    wire [NB_WORD-1:0] load_data = {rx_byte, arg_reg[47:24]};
+
+    // CLEAR: HALT en imem[N …] (solo LOAD, N = LEN / 4) y 0 en dmem
+    wire clearing  = (state_reg == ST_CLEAR);
+    wire [NB_LEN-2:0] n_words = len_reg[NB_LEN-1:2];
+    wire clr_imem  = clearing & is_load & ({{(NB_LEN-1-NB_MEM_ADDR){1'b0}}, addr_reg} >= n_words) &
+                     ({1'b0, addr_reg} < IMEM_WORDS);
+    wire clr_dmem  = clearing & ({1'b0, addr_reg} < DMEM_WORDS);
+
     wire src_info   = (cmd_reg == DBG_CMD_INFO);
     wire src_status = evt_reg | (cmd_reg == DBG_CMD_STATUS) | (cmd_reg == DBG_CMD_LOAD) |
                       (cmd_reg == DBG_CMD_RESET) | (cmd_reg == DBG_CMD_STEP) |
@@ -360,6 +433,7 @@ module debug_unit
         idx_reg     <= idx_next;
         rsp_len_reg <= rsp_len_next;
         snap_reg    <= snap_next;
+        addr_reg    <= addr_next;
     end
 
     //------------------------------------------------------------------
@@ -378,6 +452,7 @@ module debug_unit
         rsp_len_next = rsp_len_reg;
         evt_next     = evt_reg;
         snap_next    = snap_reg;
+        addr_next    = addr_reg;
 
         // Timeout entre bytes de una trama: se reinicia con cada byte
         if (rx_group) begin
@@ -443,6 +518,8 @@ module debug_unit
                     cnt_next   = {1'b0, len_reg} + 1'b1;   // payload y CHK
                     state_next = ST_DISCARD;
                 end
+                else if (is_load)
+                    state_next = ST_LOAD_PREP;
                 else if (len_reg == {NB_LEN{1'b0}})
                     state_next = ST_RX_CHK;
                 else begin
@@ -451,11 +528,19 @@ module debug_unit
                 end
             end
 
+            ST_LOAD_PREP: begin                        // o_load_start
+                addr_next  = {NB_MEM_ADDR{1'b0}};
+                cnt_next   = {1'b0, len_reg};           // LEN > 0, múltiplo de 4
+                state_next = ST_RX_PAYLOAD;
+            end
+
             ST_RX_PAYLOAD: begin
                 if (rx_strobe) begin
                     chk_next = chk_reg ^ rx_byte;
                     arg_next = {rx_byte, arg_reg[47:8]};    // el primero termina en [7:0]
                     cnt_next = cnt_reg - 1'b1;
+                    if (load_word)                           // palabra escrita en imem
+                        addr_next = addr_reg + 1'b1;
                     if (cnt_reg == {{NB_LEN{1'b0}}, 1'b1})
                         state_next = ST_RX_CHK;
                 end
@@ -498,7 +583,14 @@ module debug_unit
                 end
                 idx_next   = {NB_LEN{1'b0}};
                 chk_next   = 8'h00;
-                state_next = ST_TX_HDR;
+                addr_next  = {NB_MEM_ADDR{1'b0}};
+                state_next = (is_load | is_reset) ? ST_CLEAR : ST_TX_HDR;
+            end
+
+            ST_CLEAR: begin
+                addr_next = addr_reg + 1'b1;
+                if (addr_reg == CLR_LAST)
+                    state_next = ST_TX_HDR;
             end
 
             ST_TX_HDR: begin
@@ -547,6 +639,18 @@ module debug_unit
     assign o_arg_addr  = arg_addr;
     assign o_arg_count = arg_count;
     assign o_pl_idx    = idx_reg;
+
+    assign o_load_start  = (state_reg == ST_LOAD_PREP);
+    assign o_clearing    = clearing;
+    assign o_imem_b_en   = load_word | clr_imem;
+    assign o_imem_b_we   = load_word | clr_imem;
+    assign o_imem_b_addr = addr_reg;
+    assign o_imem_b_din  = clearing ? INSTR_HALT : load_data;
+    assign o_dmem_b_en   = clr_dmem;
+    assign o_dmem_b_we   = {4{clr_dmem}};
+    assign o_dmem_b_addr = addr_reg;
+    assign o_dmem_b_din  = {NB_WORD{1'b0}};
+    assign o_used_clr    = clr_dmem;
 
 endmodule
 

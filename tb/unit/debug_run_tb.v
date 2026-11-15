@@ -15,11 +15,14 @@
 //   debug_exec genera enable y core_rst; el core le devuelve halted. El
 //   reloj no se toca: es el mismo para todos.
 //
-// Mientras no estén la I-46 y la I-48 (marcados "I-46" e "I-48" abajo):
-//   - El testbench hace lo que hará la carga: después de la respuesta del
+// La carga (I-46) y las lecturas (I-48) no se usan acá (marcadas "I-46"
+// e "I-48" abajo); la carga con debug_unit y debug_exec la prueba
+// debug_load_tb:
+//   - El testbench hace lo que hace la carga: después de la respuesta del
 //     LOAD (y del RESET), con el core detenido, escribe imem (programa y el
 //     resto HALT) y pone dmem en cero por el puerto B. La trama LOAD es
-//     real: debug_unit la valida y debug_exec pasa a READY.
+//     real: debug_unit la valida y debug_exec pasa a READY. Los puertos B
+//     de debug_unit quedan sin conectar, e i_load_start e i_mem_busy en 0.
 //   - dmem_used = 0 e i_pl_byte = 0: no se mandan lecturas. Los registros
 //     se leen por el puerto de debug del banco y dmem por el puerto B.
 //
