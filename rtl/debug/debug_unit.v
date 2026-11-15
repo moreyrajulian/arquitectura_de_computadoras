@@ -6,7 +6,8 @@
 //
 // FSM de protocolo de la Debug Unit (I-45, decisiones 006 y 036,
 // docs/spec/protocolo_debug.md §2 a §5 y §7, diagrama debug_unit_fsm),
-// con la carga de programa (I-46, decisión 038, memoria.md §4).
+// con la carga de programa (I-46, decisión 038, memoria.md §4) y la
+// espera del payload de las lecturas (I-48, decisión 039).
 //
 // Función:
 //   Recibe peticiones por la interfaz de bytes de uart (decisión 035), las
@@ -44,7 +45,8 @@
 //                 (decisión 038).
 //     TX_HDR      envía 5A, CMD, STATUS, LEN_L, LEN_H.
 //     TX_PAYLOAD  envía LEN bytes: el bloque de INFO (§3.2), el bloque de
-//                 estado (§3.1) o i_pl_byte (lecturas, I-48).
+//                 estado (§3.1) o i_pl_byte (lecturas, debug_dump, I-48).
+//                 Un byte de i_pl_byte solo sale con i_pl_ready = 1.
 //     TX_CHK      envía el XOR desde CMD hasta el último byte del payload.
 //   Toda respuesta con error tiene LEN = 0. En los estados que esperan un
 //   byte de la trama, si pasan RX_TIMEOUT_CYCLES ciclos sin uno, responde
@@ -107,7 +109,7 @@
 //   o_dmem_b_addr     : puerto B de dmem: índice de palabra [NB_MEM_ADDR-1:0]
 //   o_dmem_b_din      : puerto B de dmem: palabra (siempre 0)   [NB_WORD-1:0]
 //   o_used_clr        : pulso: borrar la palabra o_dmem_b_addr del mapa de
-//                       usadas (en CLEAR, con o_dmem_b_en)
+//                       usadas (en CLEAR, con o_dmem_b_en; a debug_dump)
 //   o_pl_idx          : índice del byte de payload que se envía, contado
 //                       desde el primer byte del payload       [NB_LEN-1:0]
 //   i_pl_byte         : byte o_pl_idx de la respuesta a READ_REGS,
@@ -115,9 +117,11 @@
 //                       En READ_ALL o_pl_idx no se reinicia después del
 //                       bloque de estado: los bytes 0 a 11 los arma
 //                       debug_unit y la fuente entrega desde o_pl_idx = 12
-//                       (el 12 es x0[7:0]). Puede llegar hasta 2 ciclos
-//                       después de que cambie o_pl_idx (desde una BRAM)
-//                                                              [NB_BYTE-1:0]
+//                       (el 12 es x0[7:0])                     [NB_BYTE-1:0]
+//   i_pl_ready        : i_pl_byte es el byte de o_pl_idx (debug_dump). En
+//                       TX_PAYLOAD de una lectura, el byte espera
+//                       i_pl_ready = 1 además de i_tx_full = 0; los bytes que
+//                       arma debug_unit no lo esperan (decisión 039)
 //
 // Latencia: la respuesta empieza 3 ciclos después del CHK (RX_CHK, EXEC,
 //           TX_HDR), más max(IMEM_WORDS, DMEM_WORDS) ciclos de CLEAR en
@@ -126,7 +130,9 @@
 //           byte. Cada byte
 //           espera i_tx_full = 0, y después de o_wr, i_tx_full = 1 en el
 //           ciclo siguiente (uart, decisión 035), así que o_pl_idx cambia
-//           al menos 2 ciclos antes de que se use i_pl_byte.
+//           al menos 2 ciclos antes de que se use i_pl_byte. Los bytes de
+//           una lectura esperan además i_pl_ready: debug_dump puede tardar
+//           hasta ~1024 ciclos en encontrar una palabra usada.
 // Reset   : IDLE, sin evento en curso. Los registros de datos no se
 //           resetean: se cargan antes de usarse.
 //======================================================================
@@ -189,7 +195,8 @@ module debug_unit
     output wire                   o_used_clr,
     // Payload de las lecturas (I-48)
     output wire [NB_LEN-1:0]   o_pl_idx,
-    input  wire [NB_BYTE-1:0]  i_pl_byte
+    input  wire [NB_BYTE-1:0]  i_pl_byte,
+    input  wire                i_pl_ready
 );
 
     `include "riscv_defs.vh"
@@ -229,8 +236,8 @@ module debug_unit
 
     // LEN de las respuestas OK (§3)
     localparam [NB_LEN-1:0] LEN_INFO    = 16'd13;
-    localparam [NB_LEN-1:0] LEN_STATUS  = 16'd12;
-    localparam [NB_LEN-1:0] LEN_REGS    = 16'd128;
+    localparam [NB_LEN-1:0] LEN_STATUS  = DBG_LEN_STATUS;
+    localparam [NB_LEN-1:0] LEN_REGS    = DBG_LEN_REGS;
     localparam [NB_LEN-1:0] LEN_LATCHES = 4 * (LW_IF_ID + LW_ID_EX + LW_EX_MEM + LW_MEM_WB);
 
     // Límites de la validación
@@ -271,7 +278,7 @@ module debug_unit
 
     wire tx_group = (state_reg == ST_TX_HDR) | (state_reg == ST_TX_PAYLOAD) |
                     (state_reg == ST_TX_CHK);
-    wire tx_strobe = tx_group & ~i_tx_full;
+    // tx_strobe está después de src_info y src_status (fuente del payload)
 
     //------------------------------------------------------------------
     // Validación del encabezado (CHECK_HDR) y de READ_DMEM (EXEC)
@@ -376,6 +383,10 @@ module debug_unit
                       (cmd_reg == DBG_CMD_RESET) | (cmd_reg == DBG_CMD_STEP) |
                       (cmd_reg == DBG_CMD_STOP) |
                       ((cmd_reg == DBG_CMD_READ_ALL) & (idx_reg < LEN_STATUS));
+
+    // Un byte de una lectura (i_pl_byte) espera i_pl_ready (decisión 039)
+    wire pl_ext    = (state_reg == ST_TX_PAYLOAD) & ~src_info & ~src_status;
+    wire tx_strobe = tx_group & ~i_tx_full & (~pl_ext | i_pl_ready);
 
     //------------------------------------------------------------------
     // Bloques de información y de estado, byte 0 en los bits bajos

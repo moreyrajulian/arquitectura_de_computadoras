@@ -180,7 +180,8 @@ module debug_load_tb;
         .o_dmem_b_din      (du_dmem_b_din),
         .o_used_clr        (du_used_clr),
         .o_pl_idx          (du_pl_idx),
-        .i_pl_byte         (8'h00)                 // lecturas: I-48
+        .i_pl_byte         (8'h00),                // lecturas: debug_dump_tb
+        .i_pl_ready        (1'b1)
     );
 
     debug_exec u_exec (

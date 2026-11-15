@@ -60,6 +60,9 @@
 //   o_halted                  : HALT llegó a WB
 //   o_imem_fault, o_dmem_oob,
 //   o_dmem_misaligned         : avisos de acceso (memoria.md §6.2)
+//   o_dmem_we, o_dmem_addr    : el store que escribe dmem en este ciclo, para
+//                               el mapa de palabras usadas (memoria.md §7,
+//                               decisiones 027 y 039)
 //   o_pc                      : pc_reg, para el bloque de estado
 //   o_if_id_latch             : IF/ID agrupado, {valid, pc, instr}
 //   o_id_ex_latch             : ID/EX agrupado, en el orden de §8
@@ -93,6 +96,9 @@
 //   o_imem_fault   : aviso imem_fault, de WB
 //   o_dmem_oob     : aviso dmem_oob, de MEM
 //   o_dmem_misaligned : aviso dmem_misaligned, de MEM
+//   o_dmem_we      : en_mem_wb & ex_mem_mem_write: un store escribe dmem
+//   o_dmem_addr    : ex_mem_result[11:2], su palabra (con el alias de
+//                    memoria.md §6.1)                        [9:0]
 //   o_pc           : pc_reg                                  [NB_PC-1:0]
 //   o_if_id_latch  : IF/ID para READ_LATCHES                 [NB_PC+NB_INSTR:0]
 //   o_id_ex_latch  : ID/EX para READ_LATCHES (161 bits)
@@ -138,6 +144,8 @@ module riscv_core
     output wire                    o_imem_fault,
     output wire                    o_dmem_oob,
     output wire                    o_dmem_misaligned,
+    output wire                    o_dmem_we,
+    output wire [9:0]              o_dmem_addr,
     output wire [NB_PC-1:0]        o_pc,
     output wire [NB_PC+NB_INSTR:0] o_if_id_latch,
     // 1 + 32 + 3*32 + 3*5 + 3 + 4 + 10 = 161 bits (pipeline.md §8)
@@ -503,6 +511,8 @@ module riscv_core
     assign o_imem_fault      = imem_fault;
     assign o_dmem_oob        = dmem_oob;
     assign o_dmem_misaligned = dmem_misaligned;
+    assign o_dmem_we         = en_mem_wb & ex_mem_mem_write;   // decisión 027
+    assign o_dmem_addr       = ex_mem_result[11:2];
     assign o_pc              = if_pc;
 
 endmodule

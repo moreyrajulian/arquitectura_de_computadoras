@@ -210,7 +210,8 @@ module debug_run_tb;
         .o_arg_addr        (arg_addr),
         .o_arg_count       (arg_count),
         .o_pl_idx          (pl_idx),
-        .i_pl_byte         (8'h00)           // I-48
+        .i_pl_byte         (8'h00),          // lecturas: debug_dump_tb
+        .i_pl_ready        (1'b1)
     );
 
     debug_exec u_dut (
