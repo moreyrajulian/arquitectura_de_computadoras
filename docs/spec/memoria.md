@@ -495,6 +495,20 @@ escribe con `enable = 1` y la Debug Unit solo la recorre con el core detenido, a
 necesitan a la vez. Con el alias de §6.1 un store fuera de rango marca la palabra que realmente
 escribió.
 
+**Implementación** (decisión [039](../decisiones/039_volcado-de-estado-de-la-debug-unit.md)):
+el mapa es `rtl/debug/debug_used_map.v`, dentro de `debug_dump`.
+
+- **Búsqueda.** El recorrido es una búsqueda que avanza un bit por ciclo y se detiene en la
+  primera palabra marcada. `debug_dump` la empieza desde 0 con el `o_cmd_valid` de
+  `READ_DMEM_USED` o `READ_ALL`, y desde la palabra siguiente cuando el índice del payload pasa al
+  par siguiente. Puede tardar hasta 1024 ciclos. Mientras busca, `debug_dump` baja `i_pl_ready`
+  de `debug_unit`, que espera antes de enviar el par
+  ([`protocolo_debug.md`](protocolo_debug.md) §7). Ya encontrada la palabra, su valor sale del
+  puerto B de `dmem`.
+- **Reset.** `i_rst` pone `dmem_used` en 0, igual que cada pulso de `o_used_clr`. La LUTRAM no
+  se resetea. Después de un `i_rst` el core no escribe hasta un `LOAD` o un `RESET`, que la
+  borran entera en `CLEAR`. Hasta entonces `dmem_used = 0` y ninguna respuesta pide un par.
+
 ---
 
 ## 8. Recursos
