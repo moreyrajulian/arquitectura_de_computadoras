@@ -106,6 +106,18 @@ set log_dir [file join $reg_dir logs]
 file mkdir $log_dir
 foreach viejo [glob -nocomplain [file join $log_dir *]] { file delete -force $viejo }
 
+# Borra el simulate.log de la pasada anterior. En Windows el archivo puede seguir
+# abierto después de close_sim ("permission denied"): se reintenta hasta 10 s antes
+# de dar el error. Lo que lo suelta del todo es reset_simulation (reg_unitarios lo
+# hace antes de cada testbench); esto queda como red por si tarda en soltarlo.
+proc reg_borrar_log {sim_log} {
+    for {set i 0} {$i < 40} {incr i} {
+        if {![catch {file delete -force $sim_log}]} { return }
+        after 250
+    }
+    file delete -force $sim_log
+}
+
 # Resultado de una corrida: la última línea "TEST ..." del log, o "" si no hay
 proc reg_resultado {log} {
     set f [open $log r]
@@ -156,7 +168,7 @@ proc reg_pasada {corridas tb_list sim_dir dir} {
         -value "-testplusarg LISTA=$tb_list" -objects [get_filesets sim_1]
     set err_sim ""
     if {[catch {
-        file delete -force $sim_log
+        reg_borrar_log $sim_log
         launch_simulation
         run all
         close_sim
@@ -230,7 +242,12 @@ proc reg_unitarios {unitarios sim_dir dir} {
     foreach tb $unitarios {
         set sim_log [file join $sim_dir simulate.log]
         if {[catch {
-            file delete -force $sim_log
+            # En Windows, después de close_sim Vivado sigue teniendo abierto el
+            # simulate.log del testbench anterior y file delete falla aunque se
+            # espere; reset_simulation lo suelta y vacía el directorio. Cambiar el
+            # top ya obliga a compilar de nuevo, así que no agrega tiempo
+            catch {reset_simulation -simset sim_1 -mode behavioral}
+            reg_borrar_log $sim_log
             set_property top $tb [get_filesets sim_1]
             update_compile_order -fileset sim_1
             launch_simulation
@@ -336,7 +353,9 @@ if {[llength $unitarios] > 0} {
 }
 
 catch {reset_simulation -simset sim_1 -mode behavioral}
-update_compile_order -fileset sim_1
+# Con catch: si Vivado ya no puede lanzar procesos (en Windows, "Spawn failed"
+# después de muchas simulaciones en la GUI), igual se escribe el resumen
+catch {update_compile_order -fileset sim_1}
 
 set f [open [file join $reg_dir resumen.txt] w]
 puts $f [join $resumen "\n"]

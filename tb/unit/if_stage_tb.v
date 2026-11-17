@@ -42,6 +42,7 @@ module if_stage_tb;
     localparam integer IMEM_AW    = 10;
     localparam integer IMEM_WORDS = 1 << IMEM_AW;
     localparam integer T_CLK      = 10;     // ns, 100 MHz como la Basys 3
+    localparam integer GSR_CYCLES = 100 / T_CLK + 1;   // fin del GSR de glbl
     localparam integer N_RANDOM   = 2000;   // ciclos de estímulo aleatorio
     localparam integer MAX_CYCLES = 6000;   // watchdog
     localparam integer SEED       = 34;     // semilla fija (issue #34)
@@ -244,7 +245,10 @@ module if_stage_tb;
             mem[k] = 32'hA500_0000 | (k << 4) | (k & 15);
 
         // Carga por el puerto B con el core en reset y en = 0, como LOAD
-        @(negedge tb_clk);
+        // glbl (Xilinx) mantiene el GSR los primeros 100 ns de la simulación, y
+        // el modelo de la BRAM (primitiva RAMB36E1) ignora las escrituras
+        // mientras dura: se carga después, como LOAD en la placa
+        repeat (GSR_CYCLES) @(negedge tb_clk);
         for (k = 0; k < IMEM_WORDS; k = k + 1) begin
             tb_imem_b_en   = 1'b1;
             tb_imem_b_we   = 1'b1;

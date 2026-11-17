@@ -2,7 +2,7 @@
 
 `rvdebug` tiene dos partes:
 - **El debugger de texto** (`debugger.py`, I-52): la interfaz de
-  [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) con Textual. Cómo se usa, en la §6.
+  [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) con Textual. Cómo se usa, en la §7.
 - **El cliente del protocolo** (I-50), §1 a §3: la capa que habla el protocolo de [`protocolo_debug.md`](../../docs/spec/protocolo_debug.md)
 con la FPGA: arma y valida las tramas, maneja timeouts y reintentos, y recibe el
 `EVT_HALTED`. Es la capa `client` de [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) §1:
@@ -114,7 +114,43 @@ El `EVT_HALTED` puede llegar en medio de cualquier lectura mientras el core est�
   `wait_halted` lo suelta mientras espera, para que la interfaz pueda mandar `STOP` desde
   otro hilo.
 
-## 4. Tests
+## 4. Prueba en placa (`placa.py`)
+
+El nivel 5 de [`verificacion.md`](../../docs/spec/verificacion.md) (I-49 e I-55): carga
+programas de `sw/` en la Basys 3 y compara lo que devuelve la Debug Unit con dos oráculos
+escritos por separado, el `.exp` a mano y el modelo de referencia
+([`isasim`](../isasim/README.md), modo completo).
+
+```sh
+pip install -r tools/debugger/requirements.txt          # pyserial
+python tools/debugger/placa.py COM10                   # los 22 programas del plan
+python tools/debugger/placa.py /dev/ttyUSB1 fwd_exmem mixto_lazo
+python tools/debugger/placa.py COM10 --nops            # más las 10 variantes _nops
+python tools/debugger/placa.py COM10 --sin-paso        # solo la pasada con RUN
+```
+
+Antes: programar la FPGA con el bitstream de `riscv_basys3` y cerrar cualquier otro programa
+que tenga el puerto abierto. El nombre del puerto y los permisos en Linux están en
+[`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) §6 (*Puerto serie*).
+
+Para cada programa hace dos pasadas:
+
+| Pasada | Comandos | Contra qué compara |
+|---|---|---|
+| RUN | `LOAD`, `RUN`, `EVT_HALTED`, `READ_ALL` | El `.exp`: registros, dmem (las palabras usadas; el resto vale 0 después de `LOAD`), `halted`, `pipeline_vacio`, avisos y `ciclos`. El modelo: el bloque de estado entero (también el PC), registros, memoria usada y los latches finales |
+| STEP | `RESET` y `STEP` hasta `HALTED`, con `READ_LATCHES` después de cada paso | Cada latch contra la foto del modelo en ese ciclo, en los bits de su máscara (en una burbuja, solo `valid` y el control, [`isasim`](../isasim/README.md) §3), y el relleno de la última palabra en 0. `cycles` aumenta de a 1 y pasa a `HALTED` en el ciclo del modelo. Al final, `READ_ALL` igual al de la pasada RUN |
+
+Imprime un renglón por programa (`OK` o `FALLA`, con hasta 12 diferencias, que dicen la
+pasada, el paso, el latch y el campo) y un resumen. Termina con 0 si todos coinciden, 1 si
+alguno difiere y 2 si no pudo probar: un programa que no existe o es `indep_*` (necesitan el
+estado inicial de `sw/estado_inicial`, y `LOAD` deja el banco en cero), el puerto no abre, la
+FPGA no responde o informa otras palabras por latch que el modelo.
+
+La pasada STEP manda dos peticiones por ciclo, y cada una espera la latencia del USB (hasta
+16 ms con el *latency timer* del FT2232). Para los programas largos tarda unos segundos;
+`--sin-paso` la saltea.
+
+## 5. Tests
 
 ```sh
 pip install -r tools/debugger/requirements-dev.txt
@@ -135,12 +171,13 @@ cortar o corromper la próxima petición o respuesta, e inyectar basura en la l�
 | `test_session.py` | Cada control de `Session` contra la Debug Unit simulada (qué comandos manda y qué devuelve), la lectura de `.s`, `.hex` y `.bin`, los errores de ensamblado y las palabras rechazadas sin `LOAD`, Paso×N que corta en `HALTED`, el watchdog y la tabla de controles habilitados de `interfaz_pc.md` §3 |
 | `test_tui.py` | La app con `App.run_test()` y Pilot a 160 × 45: conectar con `--port` y F1, cargar con `--prog` y F2, la tabla de registros (ABI, `d`, `0`), los controles deshabilitados en cada estado, Paso×N, los errores de ensamblado, el watchdog y la confirmación de Cargar en `RUNNING`, y los selectores de archivo y de puerto |
 | `test_cliente.py` | Cada comando contra la Debug Unit simulada. El filtro de `classify` antes de `LOAD`. Reintentos ante respuesta perdida o rota, `ERR_CHECKSUM` y `ERR_TIMEOUT`. `STEP` y `RUN` sin repetir a ciegas. El `EVT_HALTED` en medio de otra respuesta, el watchdog y `STOP` desde otro hilo |
+| `test_placa.py` | `placa.py` contra una Debug Unit simulada cuyo core es el modelo de referencia: los 22 programas del plan (y las variantes `_nops`) pasan; un registro mal, un aviso de más, un `valid` mal en un paso y el relleno distinto de 0 se informan donde corresponde; un dato de una burbuja no se compara; los `indep_*`, una FPGA muda y otras palabras por latch terminan con 2 |
 
-## 5. Estructura
+## 6. Estructura
 
 ```
 tools/debugger/
-├── debugger.py            Punto de entrada del debugger (§6)
+├── debugger.py            Punto de entrada del debugger (§7)
 ├── requirements.txt       pyserial y textual
 ├── requirements-dev.txt   pytest y textual
 ├── rvdebug/
@@ -149,6 +186,7 @@ tools/debugger/
 │   ├── model.py           Snapshot, nombres ABI y formato de registros (sin Textual)
 │   ├── session.py         Session: la secuencia de cada control y los controles habilitados
 │   └── tui/               DebuggerApp (Textual): paneles, modales y estilo (debugger.tcss)
+├── placa.py               Prueba en placa (§4)
 ├── serial_comm.py         Script de prueba del TP2 (ALU por UART); no es parte del cliente
 └── tests/
 ```
@@ -157,7 +195,7 @@ tools/debugger/
 `tests/fake_debug_unit.py` y las tramas de ejemplo de `test_tramas.py`, en el mismo PR que el
 RTL.
 
-## 6. Debugger de texto
+## 7. Debugger de texto
 
 ```sh
 pip install -r tools/debugger/requirements.txt
