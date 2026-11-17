@@ -35,8 +35,8 @@ El proyecto se genera en `build/vivado_<diseño>/` (ignorado por git). El nombre
 
 | Pin | Uso |
 |---|---|
-| `clk` (W5) | Reloj de 100 MHz de la placa. Solo entra al Clock Wizard (`ip/clk_wiz.tcl`), que da el reloj del sistema de 65 MHz (decisión [041](../docs/decisiones/041_reloj-del-sistema-a-65-mhz.md)). `CLK_FREQ_HZ` del top (y `F_SYS` de `tb/unit/top_tb.v`) tiene que coincidir con la salida del IP: de ahí salen el divisor de la UART, `clk_khz` de `INFO` y el timeout de la Debug Unit |
-| `reset` (btnC) | Reset del sistema, sincronizado y alargado por `rtl/common/reset_sync.v` (decisión [040](../docs/decisiones/040_reset-del-sistema-en-la-placa.md)). También queda activo hasta que el MMCM engancha. Deja la Debug Unit en `NO_PROG`: después hay que volver a mandar `LOAD` |
+| `clk` (W5) | Reloj de 100 MHz de la placa. Solo entra al Clock Wizard (`ip/clk_wiz.tcl`), que da el reloj del sistema de 65 MHz (decisión [042](../docs/decisiones/042_reloj-del-sistema-a-65-mhz.md)). `CLK_FREQ_HZ` del top (y `F_SYS` de `tb/unit/top_tb.v`) tiene que coincidir con la salida del IP: de ahí salen el divisor de la UART, `clk_khz` de `INFO` y el timeout de la Debug Unit |
+| `reset` (btnC) | Reset del sistema, sincronizado y alargado por `rtl/common/reset_sync.v` (decisión [041](../docs/decisiones/041_reset-del-sistema-en-la-placa.md)). También queda activo hasta que el MMCM engancha. Deja la Debug Unit en `NO_PROG`: después hay que volver a mandar `LOAD` |
 | `rx`, `tx` (B18, A18) | UART por el USB de programación, 115200 8N1 ([`protocolo_debug.md`](../docs/spec/protocolo_debug.md) §1) |
 | `led[4:0]` (LD0 a LD4) | Estado de ejecución, uno encendido: `NO_PROG`, `READY`, `RUNNING`, `PAUSED`, `HALTED` |
 | `led[10:8]` (LD8 a LD10) | Avisos: `imem_fault`, `dmem_oob`, `dmem_misaligned` |

@@ -1,4 +1,4 @@
-# 041 - Reloj del sistema a 65 MHz con el Clock Wizard para la prueba en placa
+# 042 - Reloj del sistema a 65 MHz con el Clock Wizard para la prueba en placa
 
 - **Estado:** propuesta
 - **Fecha:** 2026-11-17
@@ -65,7 +65,7 @@ cierra con margen real, medida con las restricciones correctas.
   `clk`: reemplazarlo descarta el input jitter del IP.
 - El reset del sistema queda activo hasta que el MMCM engancha:
   `rst_req = reset | ~locked` entra a `reset_sync` (decisión
-  [040](040_reset-del-sistema-en-la-placa.md)), cuya entrada pasa a llamarse `i_rst_req`. El
+  [041](041_reset-del-sistema-en-la-placa.md)), cuya entrada pasa a llamarse `i_rst_req`. El
   contador del reset de encendido vuelve a 0 mientras `locked = 0`, y el reset dura `POR_CYCLES`
   ciclos después de que engancha.
 

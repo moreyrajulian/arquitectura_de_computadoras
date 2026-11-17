@@ -4,11 +4,11 @@
 // top_tb
 //
 // Testbench autoverificante del top de la placa (I-49: fpga/riscv_basys3/
-// top.v; docs/spec/verificacion.md §3.3, decisiones 035 a 040).
+// top.v; docs/spec/verificacion.md §3.3, decisiones 035 a 039, 041 y 042).
 //
 // Montaje: el testbench hace de placa, de PC y de botón. Solo toca los
 // pines del top (clk, reset, rx, tx, led), como en la placa: entra a
-// clk con 100 MHz, el Clock Wizard da clk_sys de 65 MHz (decisión 041) y
+// clk con 100 MHz, el Clock Wizard da clk_sys de 65 MHz (decisión 042) y
 // el testbench no maneja ningún reset propio, así que el reset de
 // encendido de reset_sync, que espera a locked, es lo único que
 // inicializa el sistema. Corre en xsim dentro del proyecto riscv_basys3

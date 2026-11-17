@@ -4,12 +4,12 @@
 //======================================================================
 // reset_sync
 //
-// Reset del sistema en la placa (I-49, decisiones 040 y 041): sincroniza
+// Reset del sistema en la placa (I-49, decisiones 041 y 042): sincroniza
 // el pedido de reset y genera el reset de encendido.
 //
 // Función:
 //   - i_rst_req es el pedido de reset: el botón (btnC de la Basys 3), que
-//     rebota, o el Clock Wizard sin enganchar (~locked, decisión 041). Es
+//     rebota, o el Clock Wizard sin enganchar (~locked, decisión 042). Es
 //     asíncrono al reloj: pasa por un sincronizador de dos flip-flops.
 //   - Un contador de POR_CYCLES ciclos mantiene o_rst = 1 al configurar la
 //     FPGA (reset de encendido) y después de que baja i_rst_req. Mientras
@@ -19,7 +19,7 @@
 //     como lo espera todo el RTL (decisión 010).
 //   No tiene reset propio: los registros arrancan del valor inicial de la
 //   declaración, que Vivado carga como INIT al configurar la FPGA
-//   (decisión 040). Por eso tampoco necesita reset asíncrono.
+//   (decisión 041). Por eso tampoco necesita reset asíncrono.
 //
 // Parámetros:
 //   POR_CYCLES : ciclos que dura el reset después del encendido y después

@@ -8,7 +8,7 @@ set_property CFGBVS VCCO        [current_design]
 set_property CONFIG_VOLTAGE 3.3 [current_design]
 
 ## ---------------- Clock 100 MHz de la placa ----------------
-## Entra al Clock Wizard (ip/clk_wiz.tcl, decisión 041), que da el reloj del
+## Entra al Clock Wizard (ip/clk_wiz.tcl, decisión 042), que da el reloj del
 ## sistema. Acá NO va create_clock: el .xdc del IP ya crea el reloj de entrada
 ## (clk, 10 ns, por PRIM_IN_FREQ) con su input jitter, y Vivado deriva el de salida
 ## del MMCM. Un create_clock propio sobre el mismo puerto lo reemplaza y descarta el
@@ -44,7 +44,7 @@ set_property -dict { PACKAGE_PIN L1  IOSTANDARD LVCMOS33 } [get_ports {led[15]}]
 
 ## ---------------- Caminos asíncronos ----------------
 ## reset, locked del MMCM y rx no tienen relación de fase con el clock: los toma un
-## sincronizador de dos flip-flops (reset_sync y uart, decisiones 040, 041 y 035).
+## sincronizador de dos flip-flops (reset_sync y uart, decisiones 041, 042 y 035).
 ## tx y los LEDs los mira un humano o el FT2232 a 115200 baud: no hay un requisito
 ## de tiempo contra el clock. Sin esto, el análisis de timing los reporta como I/O
 ## sin restricción.

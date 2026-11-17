@@ -38,7 +38,7 @@ va a cambiar cuando se aplique el Clock Wizard (ver `docs/timing/`).
 | 80 MHz | 43 | 116 279 | +0,94 % |
 | 75 MHz | 41 | 114 329 | −0,76 % |
 | 70 MHz | 38 | 115 132 | −0,06 % |
-| **65 MHz** (Clock Wizard, desde `debug-v1`, decisión [041](../decisiones/041_reloj-del-sistema-a-65-mhz.md)) | 35 | 116 071 | +0,76 % |
+| **65 MHz** (Clock Wizard, desde `debug-v1`, decisión [042](../decisiones/042_reloj-del-sistema-a-65-mhz.md)) | 35 | 116 071 | +0,76 % |
 | 50 MHz | 27 | 115 741 | +0,47 % |
 
 Un error menor al 2 % es seguro para 8N1.
@@ -482,7 +482,7 @@ decisión [039](../decisiones/039_volcado-de-estado-de-la-debug-unit.md)), con e
 palabras usadas en `rtl/debug/debug_used_map.v`. `debug_unit` se conecta a `uart` por la
 interfaz de §1, y el top (`fpga/riscv_basys3/top.v`, I-49) instancia los cuatro, con el reset
 del sistema de `rtl/common/reset_sync.v` (decisión
-[040](../decisiones/040_reset-del-sistema-en-la-placa.md)). Además de esa interfaz, `debug_unit` tiene:
+[041](../decisiones/041_reset-del-sistema-en-la-placa.md)). Además de esa interfaz, `debug_unit` tiene:
 
 | Puerto | Dirección | Uso |
 |---|---|---|

@@ -1,4 +1,4 @@
-# 040 - Reset del sistema en la placa: botón sincronizado y reset de encendido
+# 041 - Reset del sistema en la placa: botón sincronizado y reset de encendido
 
 - **Estado:** propuesta
 - **Fecha:** 2026-11-17
@@ -53,7 +53,7 @@ como excepción.
 **Opción 3**, en un módulo nuevo **`rtl/common/reset_sync.v`**:
 
 - El pedido de reset `i_rst_req` (el botón, o el MMCM sin enganchar desde la decisión
-  [041](041_reloj-del-sistema-a-65-mhz.md)) pasa por dos flip-flops con `ASYNC_REG = "TRUE"`,
+  [042](042_reloj-del-sistema-a-65-mhz.md)) pasa por dos flip-flops con `ASYNC_REG = "TRUE"`,
   para que Vivado los ubique juntos y no los optimice.
 - Un contador de `POR_CYCLES` ciclos (16 por defecto) mantiene `o_rst = 1` al configurar la FPGA
   y después de que baja `i_rst_req`. Mientras `i_rst_req = 1`, el contador vuelve a 0.
@@ -68,7 +68,7 @@ Va en `rtl/common/` y no en `fpga/riscv_basys3/`: tiene testbench propio en `tb/
 puede usar cualquier diseño.
 
 ## Consecuencias
-- El top conecta `reset | ~locked` (btnC o el MMCM sin enganchar, decisión 041) a `reset_sync`,
+- El top conecta `reset | ~locked` (btnC o el MMCM sin enganchar, decisión 042) a `reset_sync`,
   y su `o_rst` es el reset del sistema. En `basys3.xdc`, `reset` y `rx` llevan `set_false_path`,
   y también el primer flip-flop de `reset_sync`: es un sincronizador.
 - `tb/unit/reset_sync_tb.v` prueba el reset de encendido sin estímulo, el botón a destiempo del
@@ -76,7 +76,7 @@ puede usar cualquier diseño.
   flanco y nunca dura menos de `POR_CYCLES + 1` ciclos. `tb/unit/top_tb.v` arranca el sistema
   entero sin ningún reset del testbench, solo con el de encendido.
 - **Clock Wizard.** El MMCM tarda en enganchar y su salida no es confiable hasta `locked = 1`.
-  La decisión 041 lo agrega desde `debug-v1` y mantiene el reset hasta entonces con este mismo
+  La decisión 042 lo agrega desde `debug-v1` y mantiene el reset hasta entonces con este mismo
   mecanismo: `~locked` entra a `i_rst_req` junto con el botón, así que el contador vuelve a 0
   mientras el MMCM no enganchó.
 - **Qué hace el botón**: lo mismo que el reset de encendido. La Debug Unit vuelve a `IDLE` y a

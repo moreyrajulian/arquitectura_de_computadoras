@@ -4,7 +4,7 @@
 // reset_sync_tb
 //
 // Testbench autoverificante del reset del sistema en la placa (I-49,
-// decisión 040, docs/spec/verificacion.md §3.3).
+// decisión 041, docs/spec/verificacion.md §3.3).
 //
 // DUT: reset_sync con los parámetros por defecto (los del top).
 //

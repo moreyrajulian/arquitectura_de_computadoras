@@ -5,8 +5,8 @@
 // top (riscv_basys3)
 //
 // Top del trabajo final en la Basys 3 (I-49): procesador RISC-V
-// segmentado + Debug Unit + UART, con reset por botón (decisión 040) y
-// reloj de 65 MHz del Clock Wizard (decisión 041).
+// segmentado + Debug Unit + UART, con reset por botón (decisión 041) y
+// reloj de 65 MHz del Clock Wizard (decisión 042).
 //
 // Función:
 //   Conecta los bloques como lo prueban debug_dump_tb (montaje A),
@@ -24,7 +24,7 @@
 //   core_rst de debug_exec, que lo incluye (decisión 037).
 //   Un solo dominio de reloj, clk_sys, sin tocar el clock en ningún punto
 //   (decisión 018). A 100 MHz el camino de redirect no cerraba timing
-//   (docs/timing/); el MMCM baja la frecuencia (decisión 041). Hasta que
+//   (docs/timing/); el MMCM baja la frecuencia (decisión 042). Hasta que
 //   engancha (locked = 0) el sistema queda en reset.
 //   LEDs de estado, para saber en la placa si responde la FPGA aunque no
 //   responda la UART:
@@ -98,7 +98,7 @@ module top
     localparam integer NB_HB   = $clog2(HB_HALF);
 
     //------------------------------------------------------------------
-    // Reloj del sistema (decisión 041)
+    // Reloj del sistema (decisión 042)
     //------------------------------------------------------------------
     wire clk_sys;
     wire clk_locked;
@@ -110,7 +110,7 @@ module top
     );
 
     //------------------------------------------------------------------
-    // Reset del sistema (decisión 040): el botón o el MMCM sin enganchar
+    // Reset del sistema (decisión 041): el botón o el MMCM sin enganchar
     //------------------------------------------------------------------
     wire rst_req = reset | ~clk_locked;   // asíncrono: lo sincroniza reset_sync
     wire rst;

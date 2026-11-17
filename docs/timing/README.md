@@ -64,7 +64,7 @@ Además, las BRAM de IP se sintetizan fuera de contexto con un reloj de 20 ns
 (`[Timing 38-316]`, warning no crítico). No cambia nada en una BRAM sin lógica alrededor.
 
 **Qué se hizo:** reloj del sistema con el Clock Wizard (decisión
-[041](../decisiones/041_reloj-del-sistema-a-65-mhz.md)). Se probó 50, 70 y 65 MHz, y quedó **65 MHz**.
+[042](../decisiones/042_reloj-del-sistema-a-65-mhz.md)). Se probó 50, 70 y 65 MHz, y quedó **65 MHz**.
 El comparador de igualdad (medida 1 de la 012) queda para la I-56, que decide si se puede subir.
 
 ### 70 MHz, post-implementación (bitstream de las 19:19, descartado)
