@@ -1,2 +1,4 @@
 # Puerto serie real (los tests no lo necesitan)
 pyserial>=3.5
+# Interfaz de texto (decisión 008)
+textual>=8

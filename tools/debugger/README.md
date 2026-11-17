@@ -1,6 +1,9 @@
-# rvdebug: cliente del protocolo de la Debug Unit
+# rvdebug: cliente del protocolo de la Debug Unit y debugger
 
-Capa de software que habla el protocolo de [`protocolo_debug.md`](../../docs/spec/protocolo_debug.md)
+`rvdebug` tiene dos partes:
+- **El debugger de texto** (`debugger.py`, I-52): la interfaz de
+  [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) con Textual. Cómo se usa, en la §7.
+- **El cliente del protocolo** (I-50), §1 a §3: la capa que habla el protocolo de [`protocolo_debug.md`](../../docs/spec/protocolo_debug.md)
 con la FPGA: arma y valida las tramas, maneja timeouts y reintentos, y recibe el
 `EVT_HALTED`. Es la capa `client` de [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) §1:
 Python puro, sin Textual, para que la usen la interfaz (I-52), la prueba en placa (I-49) y
@@ -8,8 +11,8 @@ los tests sin levantar la TUI.
 
 | | |
 |---|---|
-| **Issue** | I-50 — Cliente del protocolo |
-| **Requisitos** | Python ≥ 3.11. `pyserial` solo para el puerto real (`requirements.txt`). Tests: `pytest`, sin FPGA. Usa `classify` del ensamblador de [`tools/assembler`](../assembler/README.md) |
+| **Issues** | I-50 — Cliente del protocolo; I-52 — Interfaz de usuario (decisión [040](../../docs/decisiones/040_interfaz-de-usuario.md)) |
+| **Requisitos** | Python ≥ 3.11. `pyserial` para el puerto real y `textual` para el debugger (`requirements.txt`). Tests: `pytest`, sin FPGA; los de la interfaz necesitan `textual` y se saltean sin él. Usa `assemble`, `classify` y `disassemble` del ensamblador de [`tools/assembler`](../assembler/README.md) |
 | **Protocolo** | Versión 1, 115200 8N1 |
 
 ## 1. Uso
@@ -154,7 +157,7 @@ pip install -r tools/debugger/requirements-dev.txt
 python -m pytest tools/debugger
 ```
 
-No hace falta la FPGA ni `pyserial`. `tests/fake_debug_unit.py` tiene un puerto simulado
+No hace falta la FPGA ni `pyserial`. Sin `textual`, `test_tui.py` se saltea. `tests/fake_debug_unit.py` tiene un puerto simulado
 con una Debug Unit detrás que sigue el protocolo a nivel de tramas: la tabla de estados
 (§3.7), los errores (§5), el descarte de bytes en reposo y el timeout entre bytes. El core
 simulado no ejecuta instrucciones, solo avanza el PC hasta el HALT. Un reloj falso hace que
@@ -164,6 +167,9 @@ cortar o corromper la próxima petición o respuesta, e inyectar basura en la l�
 | Archivo | Qué prueba |
 |---|---|
 | `test_tramas.py` | Las tramas de ejemplo de §4, byte por byte. Checksum, tramas mal formadas y los bloques de §3. El volcado `READ_ALL` del modelo de referencia, partido con el cliente, coincide con el estado del modelo |
+| `test_model.py` | Nombres ABI, hex y decimal con y sin signo, y `Snapshot` |
+| `test_session.py` | Cada control de `Session` contra la Debug Unit simulada (qué comandos manda y qué devuelve), la lectura de `.s`, `.hex` y `.bin`, los errores de ensamblado y las palabras rechazadas sin `LOAD`, Paso×N que corta en `HALTED`, el watchdog y la tabla de controles habilitados de `interfaz_pc.md` §3 |
+| `test_tui.py` | La app con `App.run_test()` y Pilot a 160 × 45: conectar con `--port` y F1, cargar con `--prog` y F2, la tabla de registros (ABI, `d`, `0`), los controles deshabilitados en cada estado, Paso×N, los errores de ensamblado, el watchdog y la confirmación de Cargar en `RUNNING`, y los selectores de archivo y de puerto |
 | `test_cliente.py` | Cada comando contra la Debug Unit simulada. El filtro de `classify` antes de `LOAD`. Reintentos ante respuesta perdida o rota, `ERR_CHECKSUM` y `ERR_TIMEOUT`. `STEP` y `RUN` sin repetir a ciegas. El `EVT_HALTED` en medio de otra respuesta, el watchdog y `STOP` desde otro hilo |
 | `test_placa.py` | `placa.py` contra una Debug Unit simulada cuyo core es el modelo de referencia: los 22 programas del plan (y las variantes `_nops`) pasan; un registro mal, un aviso de más, un `valid` mal en un paso y el relleno distinto de 0 se informan donde corresponde; un dato de una burbuja no se compara; los `indep_*`, una FPGA muda y otras palabras por latch terminan con 2 |
 
@@ -171,11 +177,15 @@ cortar o corromper la próxima petición o respuesta, e inyectar basura en la l�
 
 ```
 tools/debugger/
-├── requirements.txt       pyserial
-├── requirements-dev.txt   pytest
+├── debugger.py            Punto de entrada del debugger (§7)
+├── requirements.txt       pyserial y textual
+├── requirements-dev.txt   pytest y textual
 ├── rvdebug/
 │   ├── protocol.py        Tramas, checksum y bloques (§2 y §3), sin E/S
-│   └── client.py          DebugClient: comandos, timeouts, reintentos y EVT_HALTED (§5)
+│   ├── client.py          DebugClient: comandos, timeouts, reintentos y EVT_HALTED (§5)
+│   ├── model.py           Snapshot, nombres ABI y formato de registros (sin Textual)
+│   ├── session.py         Session: la secuencia de cada control y los controles habilitados
+│   └── tui/               DebuggerApp (Textual): paneles, modales y estilo (debugger.tcss)
 ├── placa.py               Prueba en placa (§4)
 ├── serial_comm.py         Script de prueba del TP2 (ALU por UART); no es parte del cliente
 └── tests/
@@ -184,3 +194,52 @@ tools/debugger/
 **Si cambia `protocolo_debug.md`:** se actualizan `protocol.py`, la Debug Unit simulada de
 `tests/fake_debug_unit.py` y las tramas de ejemplo de `test_tramas.py`, en el mismo PR que el
 RTL.
+
+## 7. Debugger de texto
+
+```sh
+pip install -r tools/debugger/requirements.txt
+python tools/debugger/debugger.py --port COM10 --prog sw/alu_r.s    # Windows
+python tools/debugger/debugger.py --port /dev/ttyUSB1               # Linux
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--port` | Puerto serie. Sin él, F1 lista los puertos y propone el FT2232 de la placa (VID/PID `0403:6010`) |
+| `--prog` | Programa a cargar apenas conecta (`.s`, `.hex` o `.bin`) |
+| `--baud` | Baudrate (115200 por defecto) |
+| `--watchdog` | Segundos de `RUN` sin `EVT_HALTED` antes de preguntar si se detiene (5 por defecto) |
+
+La terminal tiene que tener al menos 160 × 45. En Windows, con Windows Terminal; los
+requisitos de cada sistema y del puerto están en
+[`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) §6.
+
+| Tecla | Control | Cuándo se puede |
+|---|---|---|
+| `F1` | Conectar / desconectar (`INFO`, `STATUS`, `READ_ALL`) | Siempre |
+| `F2` | Cargar un `.s` (lo ensambla), `.hex` o `.bin`: `LOAD` + `READ_ALL`. Los errores de ensamblado y las palabras fuera de `isa.md` se muestran sin mandar nada | Conectado (en `RUNNING` pide confirmación) |
+| `F5` | Ejecutar: `RUN` hasta el `EVT_HALTED`, con `STATUS` cada 0,5 s y el aviso del watchdog | `READY`, `PAUSED` |
+| `F10` | Paso: `STEP` + `READ_ALL` | `READY`, `PAUSED` |
+| `Shift+F10` | Paso×N: N `STEP` (corta en `HALTED`) y un `READ_ALL` | `READY`, `PAUSED` |
+| `F6` | Detener: `STOP` + `READ_ALL` | `RUNNING` |
+| `F3` | Reiniciar: `RESET` + `READ_ALL` | Conectado |
+| `F8` | Reprogramar: vuelve a ensamblar el mismo archivo y lo carga | Con un programa cargado |
+| `F9` | Refrescar: `READ_ALL` | Todos menos `RUNNING` |
+| `d` / `0` | Registros: decimal con o sin signo / ocultar los que valen 0 | Siempre |
+| `t` | Mostrar u ocultar las tramas | Siempre |
+| `q` | Salir | Siempre |
+
+La pestaña «Rango» de Memoria pide dirección y cantidad (`READ_DMEM`). Los paneles Pipeline,
+Latches e Historial, las etiquetas de etapa y el resaltado de cambios llegan con la I-53;
+«Correr hasta cursor» (F4) también, y «Exportar» (`e`) con la I-54.
+
+Las capas `model` y `session` no dependen de Textual:
+
+```python
+from rvdebug import DebugClient, Session, open_serial
+s = Session(DebugClient(open_serial("COM10")))
+s.connect()
+s.load_file("sw/alu_r.s")           # LOAD + READ_ALL; AssemblerError si el .s está mal
+snap = s.step_n(10)                 # Snapshot: status, regs, latches, used
+s.run(); snap = s.wait_halted()
+```
