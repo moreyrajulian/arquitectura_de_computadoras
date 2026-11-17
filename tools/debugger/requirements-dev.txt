@@ -1,2 +1,4 @@
-# Tests del cliente: sin FPGA ni pyserial.
+# Tests del cliente y de la interfaz: sin FPGA ni pyserial. Los de la interfaz se
+# saltean si no está textual.
 pytest>=8
+textual>=8
