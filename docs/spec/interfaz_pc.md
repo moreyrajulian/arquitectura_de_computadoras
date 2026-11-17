@@ -1,7 +1,9 @@
 # Interfaz de la PC (debugger)
 
 Cómo se ve y cómo se usa el programa de la PC que carga, ejecuta y observa el procesador por
-la Debug Unit. Es el boceto previo a programarlo (I-52).
+la Debug Unit. Empezó como el boceto previo a programarlo; la I-52 lo implementa en
+`tools/debugger/` (decisión [040](../decisiones/040_interfaz-de-usuario.md)) y la I-53 completa la
+vista del pipeline.
 
 | | |
 |---|---|
@@ -31,6 +33,19 @@ flowchart LR
 
 Así el cliente se testea con las tramas de ejemplo del protocolo sin terminal, y el modelo de
 referencia (I-16) y los tests de integración lo usan sin levantar la TUI.
+
+Implementación (I-52, decisión [040](../decisiones/040_interfaz-de-usuario.md)):
+
+| Capa | Archivo | Qué tiene hoy |
+|---|---|---|
+| `client` | `rvdebug/protocol.py`, `rvdebug/client.py` | El cliente del protocolo (I-50) |
+| `model` | `rvdebug/model.py` | `Snapshot` (volcado de `READ_ALL` y el último `READ_DMEM`), nombres ABI y formato hex/decimal. `diff`, los campos de los latches y los riesgos inferidos los agrega la I-53 |
+| `session` | `rvdebug/session.py` | `Session`: un método por control, cada uno termina con `READ_ALL`; `enabled()` con la tabla de §3 |
+| `tui` | `rvdebug/tui/` | `DebuggerApp`, paneles y modales. Se arranca con `python tools/debugger/debugger.py [--port …] [--prog …]` |
+
+Cada acción que usa el puerto corre en un worker de Textual en un hilo. `RUN` es un worker aparte
+que espera el final de a 0,5 s y manda `STATUS` entre espera y espera; mientras tanto, `STOP`,
+`RESET` y `LOAD` corren en otro worker (el cliente serializa el puerto con un lock).
 
 ## 2. Pantalla principal
 
@@ -83,6 +98,10 @@ Los que no corresponden al estado actual se muestran deshabilitados en el footer
 | Refrescar | `F9` | `READ_ALL` | Todos menos `RUNNING` |
 | Exportar volcado | `e` | Guarda el `Snapshot` actual (y el historial) en JSON, con el mismo formato que el modelo de referencia (I-16) para compararlos | Siempre |
 | Salir | `q` | Cierra el puerto | Siempre |
+
+La I-52 implementa todos menos «Correr hasta cursor» (necesita el PC de WB, que sale de los
+latches: llega con la I-53) y «Exportar volcado» (llega con la I-54, que compara contra el
+modelo de referencia). También están `d` y `0` en Registros y `t` para Tramas (§2).
 
 «Correr hasta cursor» y «Paso ×N» se resuelven en la PC con `STEP` repetidos: no requieren
 comandos nuevos en la Debug Unit. Un `STEP` con su respuesta son 23 bytes (~2 ms a 115200 más
@@ -203,7 +222,10 @@ puede pasar `--port` por línea de comandos.
 
 - Los campos de cada latch se toman de [`pipeline.md`](pipeline.md) §8, con el empaquetado que
   fije `READ_LATCHES` ([`protocolo_debug.md`](protocolo_debug.md) §3.6); si cambian,
-  se actualiza solo la tabla del decodificador en `model`.
+  se actualiza solo la tabla del decodificador en `model` (I-53).
+- Paneles Pipeline, Latches e Historial, etiquetas de etapa en Programa, resaltado de cambios,
+  riesgos inferidos y «Correr hasta cursor»: I-53. Hoy son paneles vacíos (decisión
+  [040](../decisiones/040_interfaz-de-usuario.md)).
 - La salida del ensamblador (formato de errores, `.hex`) está en
   [`tools/assembler/README.md`](../../tools/assembler/README.md) §4 y §5; la API que usa la
   interfaz (`assemble`, `Program.source_map`, `AssemblerError.errors`), en §1 y en la
