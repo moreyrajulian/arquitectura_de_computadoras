@@ -1,0 +1,133 @@
+/* Distribución del boceto (docs/spec/interfaz_pc.md §2, docs/diagramas/interfaz.png) */
+
+Screen {
+    layout: vertical;
+}
+
+#header {
+    height: 1;
+    background: $panel;
+}
+
+#main {
+    height: 1fr;
+}
+
+#left {
+    width: 1fr;
+}
+
+#top {
+    height: 1fr;
+}
+
+#col-a {
+    width: 50;
+}
+
+#col-b {
+    width: 1fr;
+}
+
+#bottom {
+    height: 10;
+}
+
+#bottom > .panel {
+    height: 1fr;
+}
+
+#registers {
+    width: 40;
+}
+
+.panel {
+    border: round $primary-darken-1;
+    border-title-color: $text-muted;
+    padding: 0 1;
+}
+
+.panel.stale {
+    text-opacity: 50%;
+}
+
+#program, #pipeline {
+    height: 1fr;
+}
+
+#memory, #latches {
+    height: 1fr;
+}
+
+#history {
+    width: 1fr;
+}
+
+#frames {
+    width: 60;
+}
+
+.placeholder {
+    color: $text-muted;
+    content-align: center middle;
+}
+
+.help {
+    color: $text-muted;
+}
+
+#range-form {
+    height: auto;
+}
+
+#range-form Input {
+    width: 1fr;
+}
+
+#statusbar {
+    height: 1;
+    background: $panel;
+}
+
+/* Modales */
+
+.dialog {
+    width: 70;
+    height: auto;
+    max-height: 80%;
+    padding: 1 2;
+    border: thick $primary;
+    background: $surface;
+}
+
+.dialog.wide {
+    width: 110;
+    height: 80%;
+}
+
+.dialog .buttons {
+    height: auto;
+    margin-top: 1;
+}
+
+.dialog Button {
+    margin-right: 2;
+}
+
+.error-title {
+    color: $error;
+    text-style: bold;
+}
+
+ModalScreen {
+    align: center middle;
+}
+
+#file-tree {
+    height: 1fr;
+}
+
+#port-list {
+    height: auto;
+    max-height: 12;
+}
