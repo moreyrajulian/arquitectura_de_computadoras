@@ -148,7 +148,8 @@ module debug_cmd_fsm_tb;
         .o_arg_addr        (tb_o_arg_addr),
         .o_arg_count       (tb_o_arg_count),
         .o_pl_idx          (tb_o_pl_idx),
-        .i_pl_byte         (tb_pl_byte)
+        .i_pl_byte         (tb_pl_byte),
+        .i_pl_ready        (1'b1)                  // el modelo cumple los 2 ciclos
     );
 
     initial tb_clk = 1'b0;

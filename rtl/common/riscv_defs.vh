@@ -98,7 +98,7 @@ localparam [1:0] FWD_EX_MEM = 2'b10;            // ex_mem_result
 localparam [1:0] FWD_WB     = 2'b01;            // wb_data
 
 // Protocolo de la Debug Unit (protocolo_debug.md). Los usan la FSM de
-// protocolo (debug_unit, I-45) y la de ejecución (I-47).
+// protocolo (debug_unit, I-45), la de ejecución (I-47) y el volcado (I-48).
 // Inicio de trama (§2)
 localparam [7:0] DBG_SOF_REQ = 8'hA5;           // petición, PC -> FPGA
 localparam [7:0] DBG_SOF_RSP = 8'h5A;           // respuesta y evento, FPGA -> PC
@@ -133,3 +133,8 @@ localparam [2:0] DBG_ST_READY   = 3'd1;
 localparam [2:0] DBG_ST_RUNNING = 3'd2;
 localparam [2:0] DBG_ST_PAUSED  = 3'd3;
 localparam [2:0] DBG_ST_HALTED  = 3'd4;
+
+// Tamaños fijos del payload (§3.1, §3.6): el bloque de estado y los 32
+// registros. En READ_ALL los registros empiezan en DBG_LEN_STATUS
+localparam [15:0] DBG_LEN_STATUS = 16'd12;
+localparam [15:0] DBG_LEN_REGS   = 16'd128;

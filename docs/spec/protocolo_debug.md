@@ -6,7 +6,7 @@ cambia algo de este documento, tiene que cambiar el RTL y el cliente de la PC en
 | | |
 |---|---|
 | **Versión del protocolo** | 1 (la devuelve el comando `INFO`) |
-| **Estado** | aceptada. Punto abierto: el empaquetado de los latches en `READ_LATCHES` (§3.6) es provisorio; se fija con los campos de `pipeline.md` §8 en I-06 |
+| **Estado** | aceptada. El empaquetado de los latches en `READ_LATCHES` (§3.6) lo fija la decisión [039](../decisiones/039_volcado-de-estado-de-la-debug-unit.md) |
 | **Depende de** | [`isa.md`](isa.md) (codificación del HALT), [`memoria.md`](memoria.md) (tamaños, puertos B y avisos de acceso), `pipeline.md` (contenido de los latches) |
 | **Diagramas** | [`sistema`](../diagramas/sistema.png), secuencias `protocolo_*.png`, FSM `debug_unit_*.png` |
 
@@ -48,8 +48,8 @@ Un error menor al 2 % es seguro para 8N1.
 ### Por qué 115200 y no 19200
 
 El modo paso a paso manda un volcado completo en cada paso: estado (12 B) + 32 registros
-(128 B) + latches (~60 B) + memoria de datos usada (8 B por palabra). Con 20 palabras usadas
-son unos 360 bytes: **~31 ms a 115200** frente a **~190 ms a 19200**. A 19200 el paso a paso
+(128 B) + latches (68 B) + memoria de datos usada (8 B por palabra). Con 20 palabras usadas
+son unos 370 bytes: **~31 ms a 115200** frente a **~190 ms a 19200**. A 19200 el paso a paso
 se siente lento y cargar un programa de 1 K palabras tarda más de 2 s. El chip USB-UART de la
 Basys 3 (FT2232) soporta 115200 sin problemas. Si en la placa aparecen errores, se vuelve a
 19200 cambiando solo el parámetro `BAUD` y la configuración del cliente.
@@ -293,20 +293,24 @@ Todas requieren que el core **no esté en `RUNNING`** (si no, la foto no sería 
 
 - **`READ_REGS`**: `x0 … x31`, 4 bytes cada uno, en orden. `LEN = 128`.
 - **`READ_LATCHES`**: los cuatro registros de segmentación en orden IF/ID, ID/EX, EX/MEM,
-  MEM/WB. Cada uno se envía como una secuencia de palabras de 32 bits (campos empaquetados y
-  rellenados con ceros). El protocolo fija el orden, la granularidad y el endianness; **qué
-  campo va en cada bit lo define `pipeline.md`**, y la cantidad de palabras la informa `INFO`.
-  Propuesta inicial, para ajustar cuando se cierre `pipeline.md`:
+  MEM/WB. Cada uno es la concatenación completa de sus campos, en el orden de las tablas de
+  [`pipeline.md`](pipeline.md) §8 (el primer campo en los bits más altos), partida en
+  `ceil(bits / 32)` palabras de 32 bits: la palabra 0 lleva los bits `[31:0]`, la 1 los
+  `[63:32]`, y así. Cada palabra viaja little-endian y los bits de relleno de la última valen 0
+  (decisión [039](../decisiones/039_volcado-de-estado-de-la-debug-unit.md)). El protocolo fija
+  el orden, la granularidad y el endianness; **qué campo va en cada bit lo define
+  `pipeline.md`**, y la cantidad de palabras la informa `INFO`. Es el mismo empaquetado que la
+  traza del modelo de referencia (decisión [020](../decisiones/020_modelo-de-referencia.md)).
 
-  | Latch | Palabras | Contenido propuesto |
-  |---|---|---|
-  | IF/ID | 2 | `pc`, `instr` |
-  | ID/EX | 6 | `pc`, `rs1_data`, `rs2_data`, `imm`, `{rs1, rs2, rd, funct3, funct7[5]}`, señales de control |
-  | EX/MEM | 4 | `alu_result`, `rs2_data` (dato del store), `pc+4`, `{rd, funct3, control}` |
-  | MEM/WB | 3 | `mem_rdata`, `alu_result`/`pc+4`, `{rd, control}` |
+  | Latch | Bits | Palabras | Bytes del payload | Palabra más alta |
+  |---|---|---|---|---|
+  | IF/ID | 65 | 3 | 0 – 11 | `valid` en el bit 0 de la palabra 2, el resto en 0 |
+  | ID/EX | 161 | 6 | 12 – 35 | `valid` en el bit 0 de la palabra 5 |
+  | EX/MEM | 109 | 4 | 36 – 51 | `valid`, `pc[31:20]` y relleno |
+  | MEM/WB | 110 | 4 | 52 – 67 | `valid`, `pc[31:19]` y relleno |
 
-  Conviene que cada latch incluya un bit `valid` (burbuja o no) en su palabra de control: la
-  interfaz lo necesita para dibujar el pipeline.
+  `LEN = 68`. El bit `valid` (burbuja o no) es el más alto de cada latch: la interfaz lo
+  necesita para dibujar el pipeline.
 - **`READ_DMEM`**: payload `addr` (4 B, dirección en bytes, alineada a palabra) y `count`
   (2 B, palabras). Responde `count` palabras. Si `addr` no está alineada, `count = 0` o el
   rango se sale de la memoria (`addr + 4·count > 4·dmem_words`): `ERR_ADDR`. La Debug Unit
@@ -471,8 +475,10 @@ FSM de protocolo es `rtl/debug/debug_unit.v` (I-45). `RX_LEN` son dos estados (`
 [038](../decisiones/038_carga-de-programa-en-la-debug-unit.md)). No hay estado `STEP_PULSE`: el
 ciclo del `STEP` lo da la FSM de ejecución (decisión
 [037](../decisiones/037_fsm-de-ejecucion-de-la-debug-unit.md)). La FSM de ejecución es
-`rtl/debug/debug_exec.v` (I-47). `debug_unit` se conecta a `uart` por la interfaz de §1, y el
-top (I-49) instancia los tres. Además de esa interfaz, `debug_unit` tiene:
+`rtl/debug/debug_exec.v` (I-47). El volcado de estado es `rtl/debug/debug_dump.v` (I-48,
+decisión [039](../decisiones/039_volcado-de-estado-de-la-debug-unit.md)), con el mapa de
+palabras usadas en `rtl/debug/debug_used_map.v`. `debug_unit` se conecta a `uart` por la
+interfaz de §1, y el top (I-49) instancia los cuatro. Además de esa interfaz, `debug_unit` tiene:
 
 | Puerto | Dirección | Uso |
 |---|---|---|
@@ -480,13 +486,14 @@ top (I-49) instancia los tres. Además de esa interfaz, `debug_unit` tiene:
 | `i_prog_valid`, `i_halted`, `i_imem_fault`, `i_dmem_oob`, `i_dmem_misaligned`, `i_dmem_used[15:0]`, `i_pc[31:0]`, `i_cycles[31:0]` | → protocolo | El resto del bloque de estado (§3.1); `debug_unit` lo arma |
 | `i_evt_pending` / `o_evt_done` | ejecución ↔ protocolo | Hay un `EVT_HALTED` por enviar / pulso con su último byte; quien maneja `evt_pending` lo baja en ese flanco |
 | `o_cmd_valid`, `o_cmd[7:0]` | protocolo → resto | Pulso de un ciclo en `EXEC` con el comando aceptado sin errores. Una trama con error no lo pulsa |
-| `o_arg_addr[31:0]`, `o_arg_count[15:0]` | protocolo → I-48 | `addr` y `count` de `READ_DMEM`, ya validados |
+| `o_arg_addr[31:0]`, `o_arg_count[15:0]` | protocolo → volcado | `addr` y `count` de `READ_DMEM`, ya validados |
 | `o_load_start` | protocolo → ejecución | Pulso en `LOAD_PREP`, a `i_load_start` de `debug_exec`: baja `prog_valid` y pasa a `NO_PROG` (decisión 038) |
 | `o_clearing` | protocolo → ejecución | 1 durante `CLEAR`, a `i_mem_busy` de `debug_exec`: mantiene `core_rst` (decisión 038) |
 | `o_imem_b_en`, `o_imem_b_we`, `o_imem_b_addr[9:0]`, `o_imem_b_din[31:0]` | protocolo → BRAM | Puerto B de `imem`: cada palabra del `LOAD` y el HALT de `CLEAR` ([`memoria.md`](memoria.md) §4) |
-| `o_dmem_b_en`, `o_dmem_b_we[3:0]`, `o_dmem_b_addr[9:0]`, `o_dmem_b_din[31:0]` | protocolo → BRAM | Puerto B de `dmem`, solo en `CLEAR` (ceros con `we = 1111`). Las lecturas de la I-48 lo comparten con un multiplexor que elige `debug_unit` con `o_dmem_b_en = 1` |
-| `o_used_clr` | protocolo → I-48 | Pulso en `CLEAR`: borrar la palabra `o_dmem_b_addr` del mapa de usadas |
-| `o_pl_idx[15:0]` / `i_pl_byte[7:0]` | protocolo ↔ I-48 | Índice del byte que se va a enviar, contado desde el primer byte del payload de la respuesta / ese byte, en las lecturas. En `READ_ALL` el índice no se reinicia después del bloque de estado: los bytes 0 a 11 los arma `debug_unit`, y la fuente entrega desde `o_pl_idx = 12` (el byte 12 es `x0[7:0]`). Puede llegar hasta 2 ciclos después del índice |
+| `o_dmem_b_en`, `o_dmem_b_we[3:0]`, `o_dmem_b_addr[9:0]`, `o_dmem_b_din[31:0]` | protocolo → volcado | Puerto B de `dmem`, solo en `CLEAR` (ceros con `we = 1111`). Va a `debug_dump`, que lo comparte con las lecturas: elige `debug_unit` con `o_dmem_b_en = 1` (decisión 038) |
+| `o_used_clr` | protocolo → volcado | Pulso en `CLEAR`: borrar la palabra `o_dmem_b_addr` del mapa de usadas |
+| `o_pl_idx[15:0]` / `i_pl_byte[7:0]` | protocolo ↔ volcado | Índice del byte que se va a enviar, contado desde el primer byte del payload de la respuesta / ese byte, en las lecturas. En `READ_ALL` el índice no se reinicia después del bloque de estado: los bytes 0 a 11 los arma `debug_unit`, y la fuente entrega desde `o_pl_idx = 12` (el byte 12 es `x0[7:0]`) |
+| `i_pl_ready` | volcado → protocolo | `i_pl_byte` es el byte de `o_pl_idx`. En `TX_PAYLOAD` de una lectura, `debug_unit` solo escribe con `i_tx_full = 0` e `i_pl_ready = 1`; los bytes que arma `debug_unit` no lo esperan. En registros, latches y `READ_DMEM` llega hasta 2 ciclos después del índice; en los pares de `READ_DMEM_USED`, cuando el mapa encontró la palabra (decisión 039) |
 
 `INFO` lo arma `debug_unit` con sus parámetros (`IMEM_WORDS`, `DMEM_WORDS`, los anchos de los
 latches y `CLK_FREQ_HZ`). Las codificaciones del protocolo (`DBG_CMD_*`, `DBG_ERR_*`, `DBG_ST_*`)
@@ -508,6 +515,21 @@ están en `rtl/common/riscv_defs.vh`.
 Las transiciones y su prioridad dentro de un ciclo están en la cabecera de `debug_exec.v` y en
 §3.5.
 
+`debug_dump` arma el payload de las lecturas (§3.6) y tiene el mapa de palabras usadas
+([`memoria.md`](memoria.md) §7, decisión
+[039](../decisiones/039_volcado-de-estado-de-la-debug-unit.md)). Sus puertos:
+
+| Puerto | Dirección | Uso |
+|---|---|---|
+| `i_cmd_valid`, `i_cmd[7:0]`, `i_arg_addr[31:0]` | protocolo → volcado | `o_cmd_valid`, `o_cmd` y `o_arg_addr` de `debug_unit`. Con el `o_cmd_valid` de `READ_DMEM_USED` o `READ_ALL` empieza a buscar la primera palabra usada |
+| `i_pl_idx[15:0]` / `o_pl_byte[7:0]`, `o_pl_ready` | protocolo ↔ volcado | Con `o_pl_idx` / `i_pl_byte`, `i_pl_ready` de `debug_unit` |
+| `o_dmem_used[15:0]` | volcado → protocolo | `i_dmem_used` de `debug_unit`: palabras marcadas en el mapa |
+| `i_du_dmem_b_en`, `i_du_dmem_b_we[3:0]`, `i_du_dmem_b_addr[9:0]`, `i_du_dmem_b_din[31:0]`, `i_used_clr` | protocolo → volcado | El puerto B de `dmem` y `o_used_clr` de `debug_unit` (`CLEAR`) |
+| `o_dmem_b_en`, `o_dmem_b_we[3:0]`, `o_dmem_b_addr[9:0]`, `o_dmem_b_din[31:0]` / `i_dmem_b_dout[31:0]` | volcado ↔ core | Puerto B de `dmem`: el de `debug_unit` si `i_du_dmem_b_en = 1`, si no las lecturas (`we = 0000`) |
+| `i_dmem_we`, `i_dmem_addr[9:0]` | core → volcado | `o_dmem_we` y `o_dmem_addr` del core: marcan la palabra en el mapa |
+| `o_dbg_reg_addr[4:0]` / `i_dbg_reg_data[31:0]` | volcado ↔ core | Puerto de lectura del banco de registros |
+| `i_if_id_latch[64:0]`, `i_id_ex_latch[160:0]`, `i_ex_mem_latch[108:0]`, `i_mem_wb_latch[109:0]` | core → volcado | Los buses de latch del core, partidos en las palabras de §3.6 |
+
 Separar las dos FSM permite que el core corra mientras llega una trama nueva, y que el `halt` se atienda
 en el mismo ciclo aunque la FSM de protocolo esté ocupada: la FSM de ejecución baja `enable` y
 marca `evt_pending`, y la de protocolo manda el `EVT_HALTED` cuando vuelve a `IDLE`. Conviene
@@ -528,7 +550,7 @@ Señales hacia el core y las memorias (coinciden con el diagrama de sistema):
 | `pc[31:0]` | core → DU | Para el bloque de estado |
 | `imem_b_*` | DU → BRAM | Puerto B de la memoria de programa (escritura) |
 | `dmem_b_*` | DU ↔ BRAM | Puerto B de la memoria de datos (lectura y limpieza) |
-| `dmem_we`, `dmem_addr` (del core) | core → DU | Para marcar palabras usadas |
+| `dmem_we`, `dmem_addr[9:0]` | core → DU | Para marcar palabras usadas: `dmem_we = enable & ex_mem_mem_write` y `dmem_addr = ex_mem_result[11:2]` (decisión [027](../decisiones/027_logica-de-mem-en-dmem.md)) |
 
 ## 8. Checklist de revisión
 
@@ -536,6 +558,6 @@ Señales hacia el core y las memorias (coinciden con el diagrama de sistema):
 - [x] Formato de trama, little-endian y checksum XOR
 - [x] Lista de comandos y la tabla de estados permitidos
 - [x] Qué limpia `LOAD`/`RESET` (y llenar el resto de la memoria de programa con HALT)
-- [ ] Contenido provisorio de los latches (se cierra con `pipeline.md` §8 en I-06; punto abierto del encabezado)
+- [x] Empaquetado de los latches en `READ_LATCHES`: `pipeline.md` §8 partido en palabras (decisión 039)
 - [x] Mapa de palabras usadas para `READ_DMEM_USED`
 - [x] Timeouts (100 ms en la FPGA) y la regla de no reintentar `STEP`/`RUN` a ciegas
