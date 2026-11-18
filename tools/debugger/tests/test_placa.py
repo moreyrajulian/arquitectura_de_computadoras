@@ -1,76 +1,19 @@
 """Tests de placa.py (la prueba en placa, I-49) sin FPGA.
 
-La Debug Unit simulada (fake_debug_unit) tiene como core el modelo de referencia: es una
-placa que funciona bien, a la que cada test le puede meter una falla (un registro, un bit de
-un latch en un paso) para ver que placa.py la detecta y la informa donde corresponde.
+La Debug Unit simulada (`ModelDebugUnit` de fake_debug_unit) tiene como core el modelo de
+referencia: es una placa que funciona bien, a la que cada test le puede meter una falla (un
+registro, un bit de un latch en un paso) para ver que placa.py la detecta y la informa donde
+corresponde.
 """
 
 import io
-import struct
 
 import pytest
 
 import placa  # noqa: I001  (antes que isasim: placa.py agrega tools/isasim al path)
-from fake_debug_unit import HALT, FakeDebugUnit, FakeSerial
-from isasim import COMPLETO, LATCHES, WIDTH, simulate
-from isasim.latches import to_words
+from fake_debug_unit import AVISO_BITS, FakeDebugUnit, FakeSerial, ModelDebugUnit
+from isasim import WIDTH
 from rvdebug import DebugClient
-
-AVISO_BITS = {"imem_fault": 1 << 2, "dmem_oob": 1 << 3, "dmem_misaligned": 1 << 4}
-
-
-class ModelDebugUnit(FakeDebugUnit):
-    """FakeDebugUnit cuyo core avanza con el modelo de referencia: después de k ciclos los
-    latches son la foto k del modelo y, al llegar al HALT, el estado es el final."""
-
-    def __init__(self, **kw):
-        self.model = None
-        self.k = 0
-        self.bad_reg = None        # (i, valor): el registro i queda mal al final
-        self.bad_latch = None      # (k, latch, bit): ese bit invertido después del paso k
-        self.bad_flags = 0         # avisos invertidos al final (bits 2 a 4 de flags)
-        super().__init__(**kw)
-
-    def _cmd_load(self, payload, now):
-        words = list(struct.unpack(f"<{len(payload) // 4}I", payload))
-        imem = words + [HALT] * (self.imem_words - len(words))
-        self.model = simulate(imem, mode=COMPLETO)
-        return super()._cmd_load(payload, now)
-
-    def _clear(self):
-        super()._clear()
-        self.k = 0
-        if getattr(self, "model", None) is not None:
-            self._apply()
-
-    def _tick(self):
-        if self.halted:
-            return
-        self.k += 1
-        self._apply()
-
-    def _cycles_to_halt(self):
-        return self.model.cycles - self.k
-
-    def _apply(self):
-        r, k = self.model, self.k
-        snap = r.snapshots[k]
-        packed = {latch: snap.packed(latch) for latch in LATCHES}
-        if self.bad_latch and self.bad_latch[0] == k:
-            _, latch, bit = self.bad_latch
-            packed[latch] ^= 1 << bit
-        self.latches = [to_words(latch, packed[latch]) for latch in LATCHES]
-        self.cycles = k
-        if k == r.cycles:
-            self.halted = True
-            self.pc = r.pc
-            self.regs = list(r.regs)
-            self.dmem = list(r.dmem)
-            self.used = set(r.used)
-            self.flags_extra = sum(bit for name, bit in AVISO_BITS.items() if getattr(r, name))
-            self.flags_extra ^= self.bad_flags
-            if self.bad_reg:
-                self.regs[self.bad_reg[0]] = self.bad_reg[1]
 
 
 @pytest.fixture
