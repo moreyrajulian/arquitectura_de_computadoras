@@ -1,16 +1,20 @@
-"""Tests de la capa `session` (decisión 040) contra la Debug Unit simulada de
-fake_debug_unit.py: la secuencia de comandos de cada control y la tabla de controles
-habilitados de interfaz_pc.md §3."""
+"""Tests de la capa `session` (decisiones 040 y 043) contra la Debug Unit simulada de
+fake_debug_unit.py: la secuencia de comandos de cada control, la tabla de controles
+habilitados de interfaz_pc.md §3, el historial con lo que cambió en cada paso y «correr
+hasta cursor». Los del historial usan `ModelDebugUnit` (el core es el modelo de referencia)
+y el programa del boceto de interfaz_pc.md §2."""
 
 import struct
 from pathlib import Path
 
 import pytest
 
-from rvdebug import HaltTimeout, InvalidProgramError
+from fake_debug_unit import FakeSerial, ModelDebugUnit
+from rvdebug import DebugClient, HaltTimeout, InvalidProgramError
+from rvdebug.hazards import STALL
 from rvdebug.protocol import Cmd, State
-from rvdebug.session import (ENABLED, LOAD, REFRESH, REPROGRAM, RESET, RUN, STEP, STEP_N,
-                             STOP, ProgramFileError, Session, read_program)
+from rvdebug.session import (ENABLED, LOAD, REFRESH, REPROGRAM, RESET, RUN, RUN_TO, STEP,
+                             STEP_N, STOP, ProgramFileError, Session, read_program)
 
 from rvasm import AssemblerError
 
@@ -187,7 +191,8 @@ def test_rango_de_memoria(loaded, device):
 EXPECTED = {   # acción -> estados en que se puede
     LOAD: set(State), RESET: set(State), REPROGRAM: set(State),
     RUN: {State.READY, State.PAUSED}, STEP: {State.READY, State.PAUSED},
-    STEP_N: {State.READY, State.PAUSED}, STOP: {State.RUNNING},
+    STEP_N: {State.READY, State.PAUSED}, RUN_TO: {State.READY, State.PAUSED},
+    STOP: {State.RUNNING},
     REFRESH: set(State) - {State.RUNNING},
 }
 
@@ -221,3 +226,122 @@ def test_controles_en_cada_estado(loaded, device):
 def test_sin_conectar_no_hay_controles(connected):
     s = Session(connected)
     assert not any(s.enabled(a) for a in EXPECTED)
+
+
+# ---- historial y cambios de cada paso (interfaz_pc.md §4.2, decisión 043) ------------------
+
+SUMA_LW = """addi x1, x0, 5
+addi x2, x0, 7
+add  x3, x1, x2
+sw   x3, 0(x0)
+lw   x4, 0(x0)
+add  x5, x4, x1
+halt
+"""
+
+
+@pytest.fixture
+def board(clock):
+    return ModelDebugUnit()
+
+
+@pytest.fixture
+def suma(board, clock, tmp_path):
+    """Session sobre el modelo de referencia con el programa del boceto cargado."""
+    client = DebugClient(FakeSerial(board, clock), clock=clock, sleep=clock.sleep)
+    s = Session(client)
+    s.connect()
+    s.load_file(write(tmp_path, "suma_lw.s", SUMA_LW))
+    return s
+
+
+def test_load_empieza_el_historial(suma):
+    assert [e.action for e in suma.history] == [LOAD]
+    assert not suma.history[0].diff
+    assert suma.last is suma.history[0]
+
+
+def test_cada_paso_agrega_un_renglon_con_lo_que_cambio(suma):
+    for _ in range(7):
+        suma.step()
+    assert [e.snapshot.status.cycles for e in suma.history] == list(range(8))
+    last = suma.last
+    assert last.action == STEP
+    # El boceto: en el ciclo 7 add x3 escribió en WB y sw en MEM
+    assert last.diff.summary(last.snapshot) == "x3=12, M[0x0]=12"
+    assert last.analysis.of(STALL)
+    assert suma.written == {0: (7, True)}
+
+
+def test_paso_por_n_compara_con_el_volcado_de_antes(suma):
+    suma.step_n(7)
+    last = suma.last
+    assert last.action == STEP_N and len(suma.history) == 2
+    assert last.diff.regs == {1, 2, 3}
+    assert last.analysis.of(STALL)          # se deduce sin el volcado del ciclo anterior
+    assert suma.written == {0: (7, False)}  # se vio en el ciclo 7, pudo ser antes
+
+
+def test_run_compara_con_el_volcado_anterior_al_run(suma):
+    suma.step_n(2)
+    suma.run()
+    snap = suma.wait_halted()
+    last = suma.last
+    assert last.action == RUN and snap.status.state == State.HALTED
+    assert last.diff.regs == {1, 2, 3, 4, 5} and last.diff.mem == {0}
+    assert suma.written[0] == (snap.status.cycles, False)
+
+
+def test_reset_vacia_el_historial(suma):
+    suma.step_n(3)
+    suma.step()
+    suma.reset()
+    assert [e.action for e in suma.history] == [RESET]
+    assert suma.written == {}
+
+
+def test_refrescar_sin_cambios_no_agrega_un_renglon(suma):
+    suma.step()
+    suma.refresh()
+    assert [e.action for e in suma.history] == [LOAD, STEP]
+
+
+def test_el_analisis_sigue_la_causa_de_las_burbujas(suma):
+    for _ in range(9):
+        suma.step()
+    notes = {s.stage: s.note for s in suma.last.analysis.stages}
+    assert notes["WB"] == "burbuja (stall)"
+
+
+def test_historial_con_limite(suma, monkeypatch):
+    import rvdebug.session as session_module
+    monkeypatch.setattr(session_module, "HISTORY_MAX", 3)
+    for _ in range(5):
+        suma.step()
+    assert [e.snapshot.status.cycles for e in suma.history] == [3, 4, 5]
+
+
+# ---- correr hasta cursor (F4) ---------------------------------------------------------------
+
+def test_hasta_que_la_instruccion_llega_a_wb(suma, board):
+    before = len(board.requests)
+    snap = suma.run_to(0x14)                 # add x5: 5 + 4 ciclos y el stall
+    assert suma.run_to_result == "reached"
+    assert snap.status.cycles == 10
+    assert snap.fields["mem_wb"]["valid"] and snap.fields["mem_wb"]["pc"] == 0x14
+    assert cmds(board)[before:] == [Cmd.STEP, Cmd.READ_LATCHES] * 10 + [Cmd.READ_ALL]
+    assert suma.last.action == RUN_TO and suma.last.diff.regs == {1, 2, 3, 4}
+
+
+def test_hasta_cursor_que_no_llega_termina_en_halted(suma):
+    snap = suma.run_to(0x40)
+    assert suma.run_to_result == "halted" and snap.status.state == State.HALTED
+
+
+def test_hasta_cursor_con_limite_y_cancelado(suma, board):
+    assert suma.run_to(0x14, limit=3).status.cycles == 3
+    assert suma.run_to_result == "limit"
+    before = len(board.requests)
+    assert suma.run_to(0x14, cancel=lambda: True).status.cycles == 3
+    assert suma.run_to_result == "cancel"
+    assert cmds(board)[before:] == [Cmd.READ_ALL]
