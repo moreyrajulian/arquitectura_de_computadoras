@@ -1,21 +1,26 @@
-"""Tests de la interfaz de texto (decisión 040) con `App.run_test()` y Pilot, sobre la
-Debug Unit simulada: los controles de interfaz_pc.md §3, la tabla de registros y los
-controles deshabilitados. Se saltean si no está textual."""
+"""Tests de la interfaz de texto (decisiones 040 y 043) con `App.run_test()` y Pilot, sobre
+la Debug Unit simulada: los controles de interfaz_pc.md §3, la tabla de registros, los
+controles deshabilitados y la vista del pipeline (§4: etapas, resaltado, latches, historial
+y «correr hasta cursor»). Se saltean si no está textual."""
 
 import asyncio
+import io
 from pathlib import Path
 
 import pytest
 
 pytest.importorskip("textual")
 
-from textual.widgets import DataTable  # noqa: E402
+from rich.console import Console  # noqa: E402
+from textual.widgets import DataTable, Static  # noqa: E402
 
-from fake_debug_unit import FakeClock, FakeDebugUnit, FakeSerial, RealClock  # noqa: E402
+from fake_debug_unit import (FakeClock, FakeDebugUnit, FakeSerial, ModelDebugUnit,  # noqa: E402
+                             RealClock)
 from rvdebug import DebugClient  # noqa: E402
 from rvdebug.protocol import Cmd, State  # noqa: E402
 from rvdebug.tui import DebuggerApp  # noqa: E402
 from rvdebug.tui.screens import ConfirmScreen, ErrorsScreen  # noqa: E402
+from rvdebug.tui.widgets import CHANGED  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 SIZE = (160, 45)                     # tamaño mínimo de la terminal (interfaz_pc.md §2)
@@ -24,8 +29,8 @@ SIZE = (160, 45)                     # tamaño mínimo de la terminal (interfaz_
 class Bench:
     """La app con un conector al puerto simulado."""
 
-    def __init__(self, prog=None, port="SIM", halt_watchdog=1.0, clock=None):
-        self.device = FakeDebugUnit()
+    def __init__(self, prog=None, port="SIM", halt_watchdog=1.0, clock=None, device=None):
+        self.device = device or FakeDebugUnit()
         self.clock = clock or FakeClock()
         self.frames = []
         self.app = DebuggerApp(self.connect, port=port, prog=prog, halt_watchdog=halt_watchdog)
@@ -280,4 +285,164 @@ def test_selector_de_archivos_y_de_puerto(tmp_path, monkeypatch):
             await pilot.press("enter")
             await settle(pilot)
             assert bench.app.port_name == "/dev/ttyUSB1" and bench.app.session is not None
+    run(body())
+
+
+# ---- vista del pipeline (interfaz_pc.md §2 y §4, decisión 043) ---------------------------------
+
+SUMA_LW = "\n".join(["addi x1, x0, 5", "addi x2, x0, 7", "add  x3, x1, x2", "sw   x3, 0(x0)",
+                     "lw   x4, 0(x0)", "add  x5, x4, x1", "halt", ""])
+
+
+def plain(app, selector):
+    """Texto de un Static tal como se dibuja."""
+    console = Console(width=200, record=True, file=io.StringIO())
+    console.print(app.query_one(selector, Static).content)
+    return console.export_text()
+
+
+def stage_column(app):
+    """La columna Etapa del panel Programa: {fila: etiqueta} de las que tienen algo."""
+    table = app.query_one("#prog-table", DataTable)
+    out = {}
+    for i in range(table.row_count):
+        label = str(table.get_row_at(i)[3])
+        if label:
+            out[i] = label
+    return out
+
+
+def suma_bench(tmp_path):
+    path = tmp_path / "suma_lw.s"
+    path.write_text(SUMA_LW, encoding="utf-8")
+    return Bench(prog=path, device=ModelDebugUnit())
+
+
+async def steps(pilot, n):
+    for _ in range(n):
+        await pilot.press("f10")
+        await settle(pilot)
+
+
+def test_pipeline_del_boceto_en_el_ciclo_7(tmp_path):
+    async def body():
+        bench = suma_bench(tmp_path)
+        async with bench.app.run_test(size=SIZE) as pilot:
+            await settle(pilot)
+            await steps(pilot, 7)
+            app = bench.app
+            assert app.query_one("#pipeline").border_title == "Pipeline — ciclo 7 · PC 0x00000018"
+            boxes = plain(app, "#pipe-boxes")
+            for text in ("halt", "add x5,", "burbuja", "lw x4,", "sw x3,", "PC retenido",
+                         "(stall)", "lee M[0x0]", "sin"):
+                assert text in boxes, text
+            events = plain(app, "#pipe-events")
+            assert "STALL" in events and "lw x4, 0(x0) en MEM" in events
+            assert "inferidos" in events
+            assert stage_column(app) == {3: "WB", 4: "MEM", 5: "ID*", 6: "IF*"}
+            # Resaltado de lo que cambió en el último paso
+            assert app.query_one("#registers").border_title == "Registros (1 cambió)"
+            regs = app.query_one("#regs-table", DataTable)
+            assert regs.get_row_at(3)[0].style == CHANGED       # x3, en amarillo
+            assert regs.get_row_at(1)[0].style != CHANGED
+            used = app.query_one("#used-table", DataTable).get_row_at(0)
+            assert [str(c) for c in used] == ["0x00000000", "0x0000000C", "12", "ciclo 7"]
+            hist = app.query_one("#history-table", DataTable)
+            assert hist.row_count == 8                 # LOAD y 7 pasos
+            row = [str(c) for c in hist.get_row_at(0)]   # el más nuevo arriba
+            assert row[:3] == [">", "7", "0x018"]
+            assert "STALL" in row[4] and row[5] == "x3=12, M[0x0]=12"
+            assert "último paso: 1 reg" in plain(app, "#statusbar")
+    run(body())
+
+
+def test_latches_campo_por_campo_y_crudos(tmp_path):
+    async def body():
+        bench = suma_bench(tmp_path)
+        async with bench.app.run_test(size=SIZE) as pilot:
+            await settle(pilot)
+            await steps(pilot, 7)
+            app = bench.app
+            fields = plain(app, "#latches-body")
+            assert "IF/ID *" in fields and "ID/EX — burbuja" in fields
+            assert "0x001202B3" in fields and "add x5, x4, x1" in fields
+            assert "mem_to_reg" in fields and "rd" in fields and "x4" in fields
+            await pilot.press("c")
+            await settle(pilot)
+            raw = plain(app, "#latches-body")
+            assert "w0 0x001202B3" in raw and "w1 0x00000014" in raw and "w2 0x00000001" in raw
+            await pilot.press("c")
+            await settle(pilot)
+            assert "mem_to_reg" in plain(app, "#latches-body")
+    run(body())
+
+
+def test_historial_muestra_un_volcado_viejo_y_vuelve(tmp_path):
+    async def body():
+        bench = suma_bench(tmp_path)
+        async with bench.app.run_test(size=SIZE) as pilot:
+            await settle(pilot)
+            await steps(pilot, 3)
+            app = bench.app
+            table = app.query_one("#history-table", DataTable)
+            table.focus()
+            table.move_cursor(row=2)                   # el ciclo 1
+            await pilot.press("enter")
+            await settle(pilot)
+            assert app.viewing == 1
+            assert "HISTORIAL" in plain(app, "#header")
+            assert app.query_one("#pipeline").border_title.startswith("Pipeline — ciclo 1 ")
+            await pilot.press("escape")
+            await settle(pilot)
+            assert app.viewing is None
+            assert app.query_one("#pipeline").border_title.startswith("Pipeline — ciclo 3 ")
+            table.move_cursor(row=3)
+            await pilot.press("enter")
+            await settle(pilot)
+            await pilot.press("f10")                   # un paso vuelve al volcado vivo
+            await settle(pilot)
+            assert app.viewing is None
+            assert app.query_one("#pipeline").border_title.startswith("Pipeline — ciclo 4 ")
+    run(body())
+
+
+def test_f4_corre_hasta_que_la_linea_llega_a_wb(tmp_path):
+    async def body():
+        bench = suma_bench(tmp_path)
+        async with bench.app.run_test(size=SIZE) as pilot:
+            await settle(pilot)
+            app = bench.app
+            prog = app.query_one("#prog-table", DataTable)
+            prog.move_cursor(row=5)                    # add x5, x4, x1
+            await pilot.press("f4")
+            await settle(pilot)
+            assert app.session.run_to_result == "reached"
+            assert app.session.snapshot.status.cycles == 10
+            assert stage_column(app)[5] == "WB"
+            assert bench.cmds()[-3:] == [Cmd.STEP, Cmd.READ_LATCHES, Cmd.READ_ALL]
+    run(body())
+
+
+def test_f4_sin_programa_deshabilitado():
+    async def body():
+        bench = Bench()
+        async with bench.app.run_test(size=SIZE) as pilot:
+            await settle(pilot)
+            assert not footer_enabled(bench.app, "run_to")
+    run(body())
+
+
+def test_run_termina_con_el_pipeline_vacio_y_resalta_todo(tmp_path):
+    async def body():
+        bench = suma_bench(tmp_path)
+        async with bench.app.run_test(size=SIZE) as pilot:
+            await settle(pilot)
+            await pilot.press("f5")
+            await settle(pilot)
+            app = bench.app
+            assert app.session.state == State.HALTED
+            assert "Programa terminado en 12 ciclos, pipeline vacío" in plain(app, "#pipe-events")
+            assert "burbuja" not in plain(app, "#pipe-boxes")
+            # Compara con el volcado anterior al RUN (interfaz_pc.md §5)
+            assert app.query_one("#registers").border_title == "Registros (5 cambiaron)"
     run(body())

@@ -6,6 +6,11 @@ modelo mínimo y no ejecuta instrucciones: cada ciclo avanza el PC 4 bytes, al b
 un HALT deja de buscar y el HALT llega a WB 4 ciclos después. Registros, memoria y
 latches los fija cada test.
 
+`ModelDebugUnit` tiene como core el modelo de referencia (tools/isasim): después de k
+ciclos el volcado es la foto k del modelo (PC, registros, latches, memoria usada y
+avisos). Lo usan placa.py (I-49) y la vista del pipeline (I-53). `latches_of`,
+`snapshot_of` y `model_snapshot` arman volcados sin puerto para los tests de `model`.
+
 El tiempo lo da un reloj falso (FakeClock): leer sin datos lo adelanta `timeout`, así
 los timeouts y las esperas de los reintentos no hacen esperar al test.
 """
@@ -13,10 +18,15 @@ los timeouts y las esperas de los reintentos no hacen esperar al test.
 import struct
 import time
 
-from rvdebug.protocol import (BAUD, Cmd, Err, State, build_response, checksum)
+from rvdebug.model import Snapshot  # noqa: I001  (agrega tools/isasim al path)
+from rvdebug.protocol import (BAUD, Cmd, Err, Latches, State, Status, build_response,
+                              checksum)
+from isasim import COMPLETO, LATCHES, simulate
+from isasim.latches import bubble, pack, to_words
 
 HALT = 0x00100073
 T_BYTE = 0.1
+AVISO_BITS = {"imem_fault": 1 << 2, "dmem_oob": 1 << 3, "dmem_misaligned": 1 << 4}
 
 ALLOWED = {            # §3.7: estados en que se acepta cada comando
     Cmd.RUN: {State.READY, State.PAUSED},
@@ -351,3 +361,105 @@ class FakeSerial:
     def requests(self, cmd):
         """Peticiones de un comando que escribió el cliente (aunque no hayan llegado)."""
         return [w for w in self.written if len(w) > 1 and w[1] == cmd]
+
+
+# ---- Debug Unit con el modelo de referencia como core ----------------------------------
+
+class ModelDebugUnit(FakeDebugUnit):
+    """FakeDebugUnit cuyo core avanza con el modelo de referencia: después de k ciclos el
+    PC, los registros, los latches, la memoria usada y los avisos son los de la foto k.
+
+    Fallas inyectables (placa.py tiene que detectarlas):
+    - `bad_reg`: (i, valor), el registro i queda mal al final;
+    - `bad_latch`: (k, latch, bit), ese bit invertido después del paso k;
+    - `bad_flags`: avisos invertidos al final (bits 2 a 4 de flags).
+    """
+
+    def __init__(self, **kw):
+        self.model = None
+        self.k = 0
+        self.bad_reg = None
+        self.bad_latch = None
+        self.bad_flags = 0
+        super().__init__(**kw)
+
+    def _cmd_load(self, payload, now):
+        words = list(struct.unpack(f"<{len(payload) // 4}I", payload))
+        imem = words + [HALT] * (self.imem_words - len(words))
+        self.model = simulate(imem, mode=COMPLETO, max_cycles=5000)
+        return super()._cmd_load(payload, now)
+
+    def _clear(self):
+        super()._clear()
+        self.k = 0
+        if getattr(self, "model", None) is not None:
+            self._apply()
+
+    def _tick(self):
+        if self.halted or self.k + 1 >= len(self.model.snapshots):
+            return
+        self.k += 1
+        self._apply()
+
+    def _cycles_to_halt(self):
+        return self.model.cycles - self.k
+
+    def _cmd_stop(self, payload, now):
+        if self.state == State.RUNNING:
+            for _ in range(max(1, int((now - self._run_start) * 1000))):
+                self._tick()
+            self.state = State.HALTED if self.halted else State.PAUSED
+            self._halt_at = None
+        return self._ok(Cmd.STOP, self.status_block())
+
+    def _apply(self):
+        r, k = self.model, self.k
+        snap = r.snapshots[k]
+        packed = {latch: snap.packed(latch) for latch in LATCHES}
+        if self.bad_latch and self.bad_latch[0] == k:
+            _, latch, bit = self.bad_latch
+            packed[latch] ^= 1 << bit
+        self.latches = [to_words(latch, packed[latch]) for latch in LATCHES]
+        self.cycles = k
+        self.pc = snap.pc
+        self.regs = list(snap.regs)
+        self.dmem = [0] * self.dmem_words
+        for i, value in snap.used.items():
+            self.dmem[i] = value
+        self.used = set(snap.used)
+        self.halted = snap.halted
+        self.flags_extra = sum(AVISO_BITS[name] for name in snap.warnings)
+        if self.halted:
+            self.flags_extra ^= self.bad_flags
+            if self.bad_reg:
+                self.regs[self.bad_reg[0]] = self.bad_reg[1]
+
+
+# ---- volcados sin puerto, para los tests de model ------------------------------------------
+
+def latches_of(values=None):
+    """Latches con los campos de `values` ({latch: {campo: valor}}) y el resto en 0."""
+    words = []
+    for latch in LATCHES:
+        fields = bubble(latch)
+        fields.update((values or {}).get(latch, {}))
+        words.append(tuple(to_words(latch, pack(latch, fields))))
+    return Latches(*words)
+
+
+def snapshot_of(values=None, *, state=State.PAUSED, pc=0, cycles=0, regs=None, used=(),
+                flags=0x01):
+    """Un volcado armado a mano: latches con `values` y el resto del estado."""
+    status = Status(state, flags, len(used), pc, cycles)
+    return Snapshot(status, tuple(regs or (0,) * 32), latches_of(values), tuple(used))
+
+
+def model_snapshot(r, k):
+    """El volcado de READ_ALL después de k STEP con el modelo de referencia `r`."""
+    snap = r.snapshots[k]
+    state = State.HALTED if snap.halted else (State.READY if k == 0 else State.PAUSED)
+    flags = 0x01 | int(snap.halted) << 1 | sum(AVISO_BITS[w] for w in snap.warnings)
+    status = Status(state, flags, len(snap.used), snap.pc, k)
+    latches = Latches(*(tuple(to_words(l, snap.packed(l))) for l in LATCHES))
+    used = tuple((4 * i, v) for i, v in sorted(snap.used.items()))
+    return Snapshot(status, snap.regs, latches, used)
