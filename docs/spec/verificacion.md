@@ -16,7 +16,7 @@ comportamiento de las memorias de [`memoria.md`](memoria.md) y los comandos de
 | **2. Por etapa** | El pipeline construido hasta la etapa N, ejecutando programas de `sw/` y comparando los registros de segmentación contra la traza del modelo de referencia | `tb/integration/` | I-17 (banco incremental), una integración por etapa |
 | **3. Core completo** | El procesador ejecutando cada programa hasta el HALT, comparando el estado final con el esperado | `tb/integration/` | I-38 (sin riesgos) y I-43 (regresión completa) |
 | **4. Debug Unit** | Protocolo, carga de programa, modos de ejecución y volcado de estado, desde una trama UART | `tb/unit/` y `tb/integration/` | I-44 a I-48 |
-| **5. Placa** | Los mismos programas, cargados desde la PC con el cliente del protocolo | Basys 3, con `tools/debugger/placa.py` | I-49 e I-55 |
+| **5. Placa** | Los mismos programas, menos los `indep_*` (§6), cargados desde la PC con el cliente del protocolo | Basys 3, con `tools/debugger/placa.py` | I-49 e I-55 |
 
 Los niveles 2 y 3 comparten los programas de `sw/` (§4) y el mismo formato de estado esperado
 (§5). Eso permite correr cada programa en cada nivel y detectar en cuál empieza a fallar.
@@ -180,6 +180,9 @@ Los 22 programas necesitan el pipeline completo. Para las etapas anteriores hay 
 | `indep_alu_r`, `indep_alu_i`, `indep_cargas`, `indep_stores`, `indep_store_load`, `indep_saltos`, `indep_lui` | 2, de IF a MEM (M3 a M6), antes de que exista WB | Ninguna instrucción lee un registro que escribe otra: parten de un **estado inicial** de registros y de `dmem` (`sw/estado_inicial/`, en formato `$readmemh`) y cada resultado se ve en el registro de segmentación de su etapa |
 | `<nombre>_nops`, de los programas de riesgos y de saltos | 3 sin riesgos (I-38, M7): pipeline completo sin forwarding, stall ni flush | Llevan `nop` para que toda dependencia quede a distancia 3 y detrás de cada salto haya dos `nop`. Mismo estado final que el original y los mismos ciclos en M7 y en M8 |
 
+Los `indep_*` se corren solo en simulación (niveles 2 y 3). En la placa no, porque el protocolo no
+puede cargarles el estado inicial (§6, nivel 5). Las variantes `_nops` sí se corren en la placa.
+
 En I-38 se corren los programas sin riesgos de §4.1 y §4.2 y las variantes `_nops`; desde I-42,
 todos (I-43 suma los mutantes del resto de los mecanismos, §6). Entre medio, cada integración de M8 compara contra el modelo con los
 mecanismos que ya tiene el RTL (decisión [029](../decisiones/029_modo-del-modelo-en-m8.md)):
@@ -333,7 +336,30 @@ Cuándo se considera aprobado cada nivel:
 | 2. Por etapa | Para todos los programas de `sw/` que la etapa ya puede ejecutar, cada registro de segmentación de las etapas integradas coincide con la traza del modelo en **todos** los ciclos (campos de `pipeline.md` §8, incluidos `valid` y las señales de control), comparando los bits que marca la máscara del modelo: en una burbuja, solo `valid` y el control ([`tools/isasim`](../../tools/isasim/README.md) §3). Hasta M7 el modelo corre en modo `sin_riesgos`; en M8, en el modo con los mecanismos ya integrados (§4.3) |
 | 3. Core completo | Para los 22 programas, el estado final coincide con el `.exp` en todos los campos de §5, incluido `ciclos` |
 | 4. Debug Unit | Imprime `TEST PASSED` y cada programa da el mismo estado final con `RUN` que con `STEP` repetido |
-| 5. Placa | Para los 22 programas cargados con `LOAD`, el volcado de `READ_ALL` coincide con el `.exp`. Lo comprueba `tools/debugger/placa.py` ([README](../../tools/debugger/README.md) §4), que además compara el volcado con el estado final del modelo (también el PC), corre cada programa otra vez con `STEP`, compara los latches después de cada paso con la traza del modelo y su máscara (como el nivel 2), y comprueba que `STEP` repetido dé el mismo volcado que `RUN` (como el nivel 4). Los `indep_*` no se pueden correr en la placa: `LOAD` deja el banco en cero |
+| 5. Placa | Para los 22 programas y las 10 variantes `_nops` (32 de los 39 de `sw/`) cargados con `LOAD`, el volcado de `READ_ALL` coincide con el `.exp`. Lo comprueba `tools/debugger/placa.py` ([README](../../tools/debugger/README.md) §4), que además compara el volcado con el estado final del modelo (también el PC), corre cada programa otra vez con `STEP`, compara los latches después de cada paso con la traza del modelo y su máscara (como el nivel 2), y comprueba que `STEP` repetido dé el mismo volcado que `RUN` (como el nivel 4). Los 7 `indep_*` quedan afuera (ver abajo) |
+
+**Por qué la placa no corre los `indep_*`.** Esos programas parten de un estado inicial de
+registros y de `dmem` (`sw/estado_inicial/`, §4.3). En simulación lo carga `pipeline_tb` por
+`$readmemh`. En la placa, en cambio, el único camino es el protocolo, y ningún comando escribe el
+banco ni `dmem`. Además `LOAD` pone el core en reset, así que los registros quedan en 0
+([`memoria.md`](memoria.md) §4.1), y la limpieza que sigue pone `dmem` en cero. Corridos así, el
+estado final no sería el del `.exp`. Agregar un comando que escriba registros cambiaría el
+protocolo y el RTL de la Debug Unit solo para esta prueba. Tampoco haría falta para la cobertura:
+los `indep_*` existen para probar las etapas antes de que hubiera WB (niveles 2 y 3), y cada tipo
+de instrucción que prueban también lo prueban los programas de §4.1, que sí corren en la placa.
+`placa.py` rechaza un `indep_*` con código de salida 2.
+
+**Resultado en la placa (I-55).** Corrida con el `riscv_core` final (forwarding, stall de carga-uso
+y flush de saltos) en la Basys 3 a 65 MHz:
+
+```
+python tools/debugger/placa.py COM8                    # 22 programas: 22 OK (RUN y STEP)
+python tools/debugger/placa.py COM8 --nops             # 32 programas: 32 OK (RUN y STEP)
+python tools/debugger/placa.py COM8 --nops --sin-paso  # 32 programas: 32 OK (RUN)
+```
+
+En todos, los ciclos de `RUN` coinciden con la tabla de §8.8. En cada `STEP`, los cuatro latches
+coinciden con la traza del modelo.
 
 **Regresión.** La regresión (I-43) corre todos los testbenches y todos los programas y la
 aprobación es única: ningún `TEST FAILED` (el timeout también lo imprime). Se corre completa antes de integrar a
