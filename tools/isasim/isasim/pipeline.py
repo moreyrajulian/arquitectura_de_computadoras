@@ -231,10 +231,18 @@ class PipelineSim:
         cycle = 0
         finished = False
 
+        def photo(number, events):
+            warnings = tuple(name for name, on in (("imem_fault", imem_fault),
+                                                   ("dmem_oob", dmem_oob),
+                                                   ("dmem_misaligned", dmem_mis)) if on)
+            return Snapshot(number, copy.deepcopy(L), imm_def, events, pc=pc,
+                            regs=tuple(self.regs), used={i: self.dmem[i] for i in sorted(used)},
+                            halted=halted, warnings=warnings)
+
         while cycle < max_cycles:
             cycle += 1
             events = []
-            snapshots.append(Snapshot(cycle, copy.deepcopy(L), imm_def, events))
+            snapshots.append(photo(cycle, events))
             fi, de, em, mw = L["if_id"], L["id_ex"], L["ex_mem"], L["mem_wb"]
 
             # WB (§7): valor final
@@ -370,7 +378,7 @@ class PipelineSim:
             if finished:
                 break
 
-        snapshots.append(Snapshot(cycle + 1, copy.deepcopy(L), imm_def, ["foto final"]))
+        snapshots.append(photo(cycle + 1, ["foto final"]))
         result = RunResult(mode, cycle, halted, pc, self.regs, self.dmem, used,
                            imem_fault, dmem_oob, dmem_mis, snapshots, per_instr, self.effects)
         self._check_final(result)

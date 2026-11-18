@@ -112,3 +112,26 @@ def test_no_halt_stops_at_the_cycle_limit():
     from isasim import simulate
     r = simulate(words_of("loop: jal x0, loop"), max_cycles=50)
     assert not r.halted and r.cycles == 50
+
+
+def test_each_snapshot_has_the_state_of_its_cycle(run):
+    """Además de los latches, cada foto tiene el PC, los registros, la memoria usada y los
+    avisos al empezar ese ciclo: es el volcado de READ_ALL después de k STEP (lo usa la Debug
+    Unit simulada del debugger, I-53)."""
+    r = run("addi x1, x0, 5\n sw x1, 4(x0)\n lw x2, 4(x0)\n add x3, x2, x2\n halt")
+    first, final = r.snapshots[0], r.final
+    assert (first.pc, first.regs, first.used, first.warnings) == (0, (0,) * 32, {}, ())
+    assert final.pc == r.pc and final.regs == tuple(r.regs)
+    assert final.used == {1: 5} and final.halted
+    assert not any(s.halted for s in r.snapshots[:-1])
+    pcs = [s.pc for s in r.snapshots]
+    assert pcs[:3] == [0, 4, 8]                           # IF busca una palabra por ciclo
+    # x1 se escribe al final del ciclo en que addi está en WB: se ve en la foto siguiente
+    k = next(i for i, s in enumerate(r.snapshots) if any(e.startswith("x1 <-") for e in s.events))
+    assert r.snapshots[k].regs[1] == 0 and r.snapshots[k + 1].regs[1] == 5
+
+
+def test_snapshot_warnings_follow_the_cycle(run):
+    r = run("lw x1, 2(x0)\n halt")                        # desalineado
+    assert r.final.warnings == ("dmem_misaligned",)
+    assert r.snapshots[0].warnings == ()

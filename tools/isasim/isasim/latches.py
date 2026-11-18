@@ -17,7 +17,7 @@ Reglas (a respetar por el banco de pruebas, I-17):
   ejemplo `id_ex_rs2_data` de un `addi`): su valor está definido por el diseño.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # (nombre, ancho, es_control). Orden y anchos de pipeline.md §8.
 LAYOUT = {
@@ -100,12 +100,21 @@ def to_words(latch, number):
 
 @dataclass
 class Snapshot:
-    """Contenido de los cuatro latches durante un ciclo."""
+    """Contenido de los cuatro latches durante un ciclo y el estado del core al empezarlo.
+
+    El estado (`pc` … `warnings`) es lo que devuelve READ_ALL después de `cycle - 1` STEP:
+    la Debug Unit simulada del debugger lo usa para avanzar ciclo a ciclo (I-53).
+    """
 
     cycle: int
     values: dict                 # latch -> {campo: valor}
     imm_defined: bool            # ID/EX: si el inmediato está definido
     events: list                 # texto: stall, redirect, stop_fetch, escritura...
+    pc: int = 0                  # pc_reg (campo pc del bloque de estado)
+    regs: tuple = (0,) * 32      # banco de registros
+    used: dict = field(default_factory=dict)   # índice de palabra -> valor (memoria usada)
+    halted: bool = False         # el HALT ya llegó a WB
+    warnings: tuple = ()         # avisos de acceso encendidos: imem_fault, dmem_oob, dmem_misaligned
 
     def packed(self, latch):
         return pack(latch, self.values[latch])
