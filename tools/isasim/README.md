@@ -58,7 +58,14 @@ from isasim import simulate, load_program, COMPLETO
 r = simulate(load_program("sw/fwd_exmem.s"), mode=COMPLETO)
 r.regs, r.dmem, r.cycles, r.halted
 r.snapshots[t - 1].values["id_ex"]["rs1_data"]   # contenido de ID/EX durante el ciclo t
+r.snapshots[k].pc, r.snapshots[k].regs            # estado después de k STEP: PC, registros,
+r.snapshots[k].used, r.snapshots[k].warnings      # memoria usada {palabra: valor} y avisos
+r.snapshots[k].events                             # "stall", "redirect a 0x…", "stop_fetch", …
 ```
+
+La Debug Unit simulada del debugger (`tools/debugger/tests/fake_debug_unit.py`) avanza con
+esas fotos ciclo a ciclo, y la inferencia de riesgos de la interfaz se compara con `events`
+(decisión [043](../../docs/decisiones/043_vista-del-pipeline.md)).
 
 ## 2. Cómo funciona
 

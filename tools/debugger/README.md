@@ -160,16 +160,19 @@ python -m pytest tools/debugger
 No hace falta la FPGA ni `pyserial`. Sin `textual`, `test_tui.py` se saltea. `tests/fake_debug_unit.py` tiene un puerto simulado
 con una Debug Unit detrás que sigue el protocolo a nivel de tramas: la tabla de estados
 (§3.7), los errores (§5), el descarte de bytes en reposo y el timeout entre bytes. El core
-simulado no ejecuta instrucciones, solo avanza el PC hasta el HALT. Un reloj falso hace que
-los timeouts y las esperas de los reintentos no demoren el test. El puerto permite perder,
+de `FakeDebugUnit` no ejecuta instrucciones, solo avanza el PC hasta el HALT. El de
+`ModelDebugUnit` es el modelo de referencia: después de k ciclos el volcado (PC, registros,
+latches, memoria usada y avisos) es la foto k de `isasim`. Un reloj falso hace que los
+timeouts y las esperas de los reintentos no demoren el test. El puerto permite perder,
 cortar o corromper la próxima petición o respuesta, e inyectar basura en la línea.
 
 | Archivo | Qué prueba |
 |---|---|
 | `test_tramas.py` | Las tramas de ejemplo de §4, byte por byte. Checksum, tramas mal formadas y los bloques de §3. El volcado `READ_ALL` del modelo de referencia, partido con el cliente, coincide con el estado del modelo |
-| `test_model.py` | Nombres ABI, hex y decimal con y sin signo, y `Snapshot` |
-| `test_session.py` | Cada control de `Session` contra la Debug Unit simulada (qué comandos manda y qué devuelve), la lectura de `.s`, `.hex` y `.bin`, los errores de ensamblado y las palabras rechazadas sin `LOAD`, Paso×N que corta en `HALTED`, el watchdog y la tabla de controles habilitados de `interfaz_pc.md` §3 |
-| `test_tui.py` | La app con `App.run_test()` y Pilot a 160 × 45: conectar con `--port` y F1, cargar con `--prog` y F2, la tabla de registros (ABI, `d`, `0`), los controles deshabilitados en cada estado, Paso×N, los errores de ensamblado, el watchdog y la confirmación de Cargar en `RUNNING`, y los selectores de archivo y de puerto |
+| `test_model.py` | Nombres ABI, hex y decimal con y sin signo, `Snapshot`, los campos de cada latch (sin el relleno, y `None` con otras palabras por latch), `word_at` (resto en HALT, alias `addr[11:2]`) y `diff` (en una burbuja solo `valid` y el control) |
+| `test_hazards.py` | La inferencia de riesgos (`interfaz_pc.md` §4.3): en cada ciclo de los programas del plan y sus variantes `_nops`, el stall, el salto tomado y el HALT deducidos coinciden con los eventos del modelo, sin inconsistencias. A mano: el stall y las cajas del ciclo 7 del boceto, el forwarding (prioridad, x0, operando que no se usa, burbujas), el flush, el HALT sin stalls falsos y cada inconsistencia |
+| `test_session.py` | Cada control de `Session` contra la Debug Unit simulada (qué comandos manda y qué devuelve), la lectura de `.s`, `.hex` y `.bin`, los errores de ensamblado y las palabras rechazadas sin `LOAD`, Paso×N que corta en `HALTED`, el watchdog y la tabla de controles habilitados de `interfaz_pc.md` §3. Con `ModelDebugUnit`: el historial, contra qué volcado se compara cada acción, la columna «Escrito» y `run_to` (llega a WB, termina en `HALTED`, límite y cancelado) |
+| `test_tui.py` | La app con `App.run_test()` y Pilot a 160 × 45: conectar con `--port` y F1, cargar con `--prog` y F2, la tabla de registros (ABI, `d`, `0`), los controles deshabilitados en cada estado, Paso×N, los errores de ensamblado, el watchdog y la confirmación de Cargar en `RUNNING`, y los selectores de archivo y de puerto. La vista del pipeline en el ciclo 7 del boceto (cajas, eventos, etapas en Programa, resaltado, «Escrito», historial y barra de estado), los latches con `c`, el historial con Enter y Esc, F4 y el final de `RUN` |
 | `test_cliente.py` | Cada comando contra la Debug Unit simulada. El filtro de `classify` antes de `LOAD`. Reintentos ante respuesta perdida o rota, `ERR_CHECKSUM` y `ERR_TIMEOUT`. `STEP` y `RUN` sin repetir a ciegas. El `EVT_HALTED` en medio de otra respuesta, el watchdog y `STOP` desde otro hilo |
 | `test_placa.py` | `placa.py` contra una Debug Unit simulada cuyo core es el modelo de referencia: los 22 programas del plan (y las variantes `_nops`) pasan; un registro mal, un aviso de más, un `valid` mal en un paso y el relleno distinto de 0 se informan donde corresponde; un dato de una burbuja no se compara; los `indep_*`, una FPGA muda y otras palabras por latch terminan con 2 |
 
@@ -183,8 +186,10 @@ tools/debugger/
 ├── rvdebug/
 │   ├── protocol.py        Tramas, checksum y bloques (§2 y §3), sin E/S
 │   ├── client.py          DebugClient: comandos, timeouts, reintentos y EVT_HALTED (§5)
-│   ├── model.py           Snapshot, nombres ABI y formato de registros (sin Textual)
-│   ├── session.py         Session: la secuencia de cada control y los controles habilitados
+│   ├── model.py           Snapshot, campos de los latches, word_at, diff, nombres ABI (sin Textual)
+│   ├── hazards.py         analyze: las etapas y los riesgos inferidos de un volcado (sin Textual)
+│   ├── session.py         Session: la secuencia de cada control, los controles habilitados,
+│   │                      el historial y run_to (F4)
 │   └── tui/               DebuggerApp (Textual): paneles, modales y estilo (debugger.tcss)
 ├── placa.py               Prueba en placa (§4)
 ├── serial_comm.py         Script de prueba del TP2 (ALU por UART); no es parte del cliente
@@ -221,17 +226,32 @@ requisitos de cada sistema y del puerto están en
 | `F5` | Ejecutar: `RUN` hasta el `EVT_HALTED`, con `STATUS` cada 0,5 s y el aviso del watchdog | `READY`, `PAUSED` |
 | `F10` | Paso: `STEP` + `READ_ALL` | `READY`, `PAUSED` |
 | `Shift+F10` | Paso×N: N `STEP` (corta en `HALTED`) y un `READ_ALL` | `READY`, `PAUSED` |
+| `F4` / Enter en Programa | Hasta cursor: `STEP` + `READ_LATCHES` hasta que la línea elegida llegue a WB, `HALTED` o 2000 ciclos, y un `READ_ALL`. Esc lo cancela | `READY`, `PAUSED`, con un programa cargado |
 | `F6` | Detener: `STOP` + `READ_ALL` | `RUNNING` |
 | `F3` | Reiniciar: `RESET` + `READ_ALL` | Conectado |
 | `F8` | Reprogramar: vuelve a ensamblar el mismo archivo y lo carga | Con un programa cargado |
 | `F9` | Refrescar: `READ_ALL` | Todos menos `RUNNING` |
 | `d` / `0` | Registros: decimal con o sin signo / ocultar los que valen 0 | Siempre |
+| `c` | Latches: campo por campo o las palabras de 32 bits crudas | Siempre |
+| Enter en Historial | Muestra ese volcado (solo lectura); Esc vuelve al actual | Siempre |
 | `t` | Mostrar u ocultar las tramas | Siempre |
 | `q` | Salir | Siempre |
 
-La pestaña «Rango» de Memoria pide dirección y cantidad (`READ_DMEM`). Los paneles Pipeline,
-Latches e Historial, las etiquetas de etapa y el resaltado de cambios llegan con la I-53;
-«Correr hasta cursor» (F4) también, y «Exportar» (`e`) con la I-54.
+La pestaña «Rango» de Memoria pide dirección y cantidad (`READ_DMEM`). «Exportar» (`e`) llega
+con la I-54.
+
+**Vista del pipeline** (I-53, decisión
+[043](../../docs/decisiones/043_vista-del-pipeline.md)):
+
+- **Pipeline:** cinco cajas con la instrucción de cada etapa. La de ID sale de `IF/ID.instr`;
+  las demás, de lo que se cargó con `LOAD` en el `pc` de su latch. Debajo, los riesgos que
+  deduce la PC: stall, forwarding, salto tomado o flush, HALT en vuelo e inconsistencias
+  (`interfaz_pc.md` §4.3).
+- **Programa:** la etapa de cada instrucción (`*` = retenida por un stall).
+- **Resaltado:** en amarillo lo que cambió en Registros, Memoria y Latches. El historial
+  guarda cada volcado con sus eventos y sus cambios.
+
+Si la placa ya tenía un programa que no cargó esta PC, las etapas que no son ID muestran `?`.
 
 Las capas `model` y `session` no dependen de Textual:
 
@@ -241,5 +261,10 @@ s = Session(DebugClient(open_serial("COM10")))
 s.connect()
 s.load_file("sw/alu_r.s")           # LOAD + READ_ALL; AssemblerError si el .s está mal
 snap = s.step_n(10)                 # Snapshot: status, regs, latches, used
+snap.fields["mem_wb"]["pc"]         # los latches campo por campo (pipeline.md §8)
+entry = s.last                      # Entry: action, snapshot, diff, analysis
+entry.diff.summary(entry.snapshot)  # "x3=12, M[0x0]=12"
+[e.text for e in entry.analysis.events]   # riesgos inferidos
+s.run_to(0x14)                      # hasta que la instrucción de 0x14 llegue a WB
 s.run(); snap = s.wait_halted()
 ```
