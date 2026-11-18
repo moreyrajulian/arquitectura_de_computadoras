@@ -19,13 +19,15 @@ from textual.widgets import Footer
 from rvasm import AssemblerError
 
 from ..client import DebugClient, HaltTimeout, InvalidProgramError, open_serial
+from ..hazards import DONE
+from ..model import IMEM_WORDS, Diff
 from ..protocol import BAUD, DebugError, State
-from ..session import (CONNECT, LOAD, REFRESH, REPROGRAM, RESET, RUN, STEP, STEP_N, STOP,
-                       ProgramFileError, Session)
+from ..session import (CONNECT, LOAD, REFRESH, REPROGRAM, RESET, RUN, RUN_TO, RUN_TO_LIMIT,
+                       STEP, STEP_N, STOP, Entry, ProgramFileError, Session)
 from .screens import (ConfirmScreen, ErrorsScreen, FileScreen, PortScreen, StepsScreen,
                       WatchdogScreen)
-from .widgets import (FramesPanel, HeaderBar, MemoryPanel, Placeholder, ProgramPanel,
-                      RegistersPanel, StatusBar)
+from .widgets import (FramesPanel, HeaderBar, HistoryPanel, LatchesPanel, MemoryPanel,
+                      PipelinePanel, ProgramPanel, RegistersPanel, StatusBar)
 
 # connector(nombre del puerto, on_frame) -> DebugClient. Los tests pasan uno con el
 # puerto simulado.
@@ -34,12 +36,19 @@ Connector = Callable[[str, Callable[[str, bytes], None]], DebugClient]
 # Acción de la app -> acción de Session (para habilitar los controles)
 PORT_ACTIONS = {
     "connect": CONNECT, "load": LOAD, "run": RUN, "step": STEP, "step_n": STEP_N,
-    "stop": STOP, "reset": RESET, "reprogram": REPROGRAM, "refresh": REFRESH,
+    "run_to": RUN_TO, "stop": STOP, "reset": RESET, "reprogram": REPROGRAM,
+    "refresh": REFRESH,
 }
 # Lo que se puede hacer mientras corre RUN (interfaz_pc.md §5)
 DURING_RUN = frozenset({STOP, RESET, LOAD, REPROGRAM})
 
-I53 = "Llega con la I-53 (vista del pipeline)."
+# Por qué terminó «correr hasta cursor» (Session.run_to_result)
+RUN_TO_MESSAGE = {
+    "reached": "La instrucción de 0x{addr:X} llegó a WB en el ciclo {cycles}",
+    "halted": "El programa terminó antes de que 0x{addr:X} llegara a WB",
+    "limit": "Se cortó a los {limit} ciclos sin que 0x{addr:X} llegara a WB",
+    "cancel": "Cancelado en el ciclo {cycles}",
+}
 
 
 def serial_connector(baud: int = BAUD, halt_watchdog: float = 5.0) -> Connector:
@@ -61,13 +70,16 @@ class DebuggerApp(App):
         Binding("f5", "run", "Ejecutar"),
         Binding("f10", "step", "Paso"),
         Binding("shift+f10", "step_n", "Paso×N"),
+        Binding("f4", "run_to", "Hasta cursor"),
         Binding("f6", "stop", "Detener"),
         Binding("f3", "reset", "Reiniciar"),
         Binding("f8", "reprogram", "Reprogramar"),
         Binding("f9", "refresh", "Refrescar"),
         Binding("d", "toggle_signed", "Con/sin signo", show=False),
         Binding("0", "toggle_zero", "Ocultar ceros", show=False),
+        Binding("c", "toggle_latches", "Campos/crudo", show=False),
         Binding("t", "toggle_frames", "Tramas", show=False),
+        Binding("escape", "back", "Volver", show=False),
         Binding("q", "quit", "Salir"),
     ]
 
@@ -88,7 +100,11 @@ class DebuggerApp(App):
         self._exiting = False
         self.signed = True
         self.hide_zero = False
+        self.raw_latches = False
+        self.viewing: int | None = None     # renglón del historial que se mira (solo lectura)
+        self._cancel_run_to = False
         self._shown_program = None
+        self._done_seen: Entry | None = None
 
     # ---- pantalla --------------------------------------------------------------------
 
@@ -101,39 +117,65 @@ class DebuggerApp(App):
                         yield ProgramPanel(id="program", classes="panel")
                         yield MemoryPanel(id="memory", classes="panel")
                     with Vertical(id="col-b"):
-                        yield Placeholder(I53, id="pipeline", classes="panel placeholder")
-                        yield Placeholder(I53, id="latches", classes="panel placeholder")
+                        yield PipelinePanel(id="pipeline", classes="panel")
+                        yield LatchesPanel(id="latches", classes="panel")
                 with Horizontal(id="bottom"):
-                    yield Placeholder(I53, id="history", classes="panel placeholder")
+                    yield HistoryPanel(id="history", classes="panel")
                     yield FramesPanel(id="frames", classes="panel")
             yield RegistersPanel(id="registers", classes="panel")
         yield StatusBar(id="statusbar")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#pipeline").border_title = "Pipeline"
-        self.query_one("#latches").border_title = "Latches intermedios"
-        self.query_one("#history").border_title = "Historial de pasos"
         self.query_one("#frames").display = False
         self._show()
         if self.port_name:
             self._connect(self.port_name)
 
-    def _show(self) -> None:
-        """Redibuja todo con el estado de la sesión."""
+    def _shown_entry(self) -> Entry | None:
+        """El renglón del historial que se dibuja: el elegido o el último."""
         s = self.session
-        snapshot = s.snapshot if s else None
+        if s is None or not s.history:
+            return None
+        if self.viewing is not None and 0 <= self.viewing < len(s.history):
+            return s.history[self.viewing]
+        return s.history[-1]
+
+    def _show(self) -> None:
+        """Redibuja todo con el estado de la sesión (o con el renglón del historial elegido)."""
+        s = self.session
+        if s is None or self.viewing is not None and self.viewing >= len(s.history):
+            self.viewing = None
+        entry = self._shown_entry()
+        viewing = self.viewing is not None
+        snapshot = entry.snapshot if viewing else (s.snapshot if s else None)
+        changes = entry.diff if entry else Diff()
+        analysis = entry.analysis if entry else None
         status = s.status if s else None
         loaded = s.loaded if s else None
+        imem_words = s.info.imem_words if s and s.info else IMEM_WORDS
         self.query_one(HeaderBar).show(self.port_name if s else None, self.baud, loaded,
-                                       status)
+                                       status, entry.snapshot.status.cycles if viewing else None)
         if loaded is not self._shown_program:
             self.query_one(ProgramPanel).show(loaded)
             self._shown_program = loaded
+        self.query_one(ProgramPanel).show_stages(analysis, imem_words)
         self.query_one(RegistersPanel).show(snapshot.regs if snapshot else None,
-                                            signed=self.signed, hide_zero=self.hide_zero)
-        self.query_one(MemoryPanel).show(snapshot, signed=self.signed)
-        self.query_one(StatusBar).show(self.port_name, s.info if s else None, status)
+                                            signed=self.signed, hide_zero=self.hide_zero,
+                                            changed=changes.regs)
+        self.query_one(MemoryPanel).show(snapshot, signed=self.signed, changed=changes.mem,
+                                         written=s.written if s else None)
+        self.query_one(PipelinePanel).show(snapshot if entry else None, analysis)
+        self.query_one(LatchesPanel).show(snapshot, changes, analysis, raw=self.raw_latches)
+        self.query_one(HistoryPanel).show(s.history if s else [], self.viewing)
+        self.query_one(StatusBar).show(self.port_name, s.info if s else None, status,
+                                       changes.counts if entry else None)
+        last = s.last if s else None
+        if not viewing and last is not None and last is not self._done_seen \
+                and last.analysis.of(DONE):
+            self._done_seen = last
+            self.notify(last.analysis.of(DONE)[0].text + ". Paso y Ejecutar quedan "
+                        "deshabilitados hasta Reiniciar o Cargar.", title="HALTED")
         # En RUNNING las lecturas no se permiten: se ve el último volcado, atenuado (§5)
         stale = s is not None and s.state == State.RUNNING
         for panel in self.query(".panel"):
@@ -155,8 +197,10 @@ class DebuggerApp(App):
     # ---- trabajos con el puerto ----------------------------------------------------------
 
     def _job(self, fn: Callable, *args, done: Callable | None = None) -> None:
-        """Corre `fn(*args)` en un hilo; al terminar redibuja y llama `done(resultado)`."""
+        """Corre `fn(*args)` en un hilo; al terminar redibuja y llama `done(resultado)`.
+        Cualquier acción con el puerto vuelve del historial al volcado vivo."""
         self._jobs += 1
+        self.viewing = None
         self.refresh_bindings()
 
         def body() -> None:
@@ -266,6 +310,42 @@ class DebuggerApp(App):
         self.push_screen(StepsScreen(),
                          lambda n: self._job(self.session.step_n, n) if n else None)
 
+    def action_run_to(self) -> None:
+        """F4: corre hasta que la línea elegida en Programa llegue a WB."""
+        addr = self.query_one(ProgramPanel).cursor_addr()
+        if addr is None:
+            self.notify("Elegí una línea del programa", severity="warning")
+            return
+        self._run_to(addr)
+
+    def on_program_panel_run_to_requested(self, event: ProgramPanel.RunToRequested) -> None:
+        if self.check_action("run_to", ()):            # Enter sobre una línea
+            self._run_to(event.addr)
+
+    def _run_to(self, addr: int) -> None:
+        self._cancel_run_to = False
+
+        def done(snapshot) -> None:
+            result = self.session.run_to_result
+            self.notify(RUN_TO_MESSAGE[result].format(addr=addr, cycles=snapshot.status.cycles,
+                                                      limit=RUN_TO_LIMIT),
+                        severity="information" if result == "reached" else "warning")
+
+        self._job(self.session.run_to, addr, RUN_TO_LIMIT,
+                  lambda: self._cancel_run_to or self._exiting, done=done)
+
+    def action_back(self) -> None:
+        """Esc: cancela «hasta cursor» o vuelve del historial al volcado vivo."""
+        if self._jobs:
+            self._cancel_run_to = True
+        elif self.viewing is not None:
+            self.viewing = None
+            self._show()
+
+    def on_history_panel_selected(self, event: HistoryPanel.Selected) -> None:
+        self.viewing = event.index
+        self._show()
+
     def action_stop(self) -> None:
         if self._run_loop:
             self._job(self.session.client.stop)     # el RUN en curso hace el READ_ALL
@@ -293,6 +373,10 @@ class DebuggerApp(App):
         self.hide_zero = not self.hide_zero
         self._show()
 
+    def action_toggle_latches(self) -> None:
+        self.raw_latches = not self.raw_latches
+        self._show()
+
     def action_toggle_frames(self) -> None:
         frames = self.query_one("#frames")
         frames.display = not frames.display
@@ -305,6 +389,7 @@ class DebuggerApp(App):
 
     def action_run(self) -> None:
         self._jobs += 1
+        self.viewing = None
         self._run_loop = True
         self.refresh_bindings()
         self.run_worker(self._run_body, thread=True, group="run", exit_on_error=False)
