@@ -87,6 +87,24 @@ Textual guarda la pantalla del debugger como SVG: `Ctrl+P` > *Screenshot*. Una n
 dice dónde quedó el archivo. Para la salida de `placa.py` y `comparar.py` alcanza con la
 terminal.
 
+Para capturar el debugger y la comparación del **mismo estado**, sin soltar la placa:
+
+1. Con el debugger, llevar la placa al ciclo que interesa y sacar la captura. Va primero: al
+   desconectar, los paneles quedan vacíos.
+2. `F1` (desconectar) cierra el puerto. La placa conserva su estado: abrir o cerrar el puerto
+   no la resetea, porque la UART solo tiene `rx` y `tx`.
+3. En otra terminal, `comparar.py PUERTO programa.s --sin-cargar`, con **el mismo programa que
+   se cargó**. Con otro programa, todas las diferencias que muestra son falsas.
+4. `F1` vuelve a conectar. Es una sesión nueva: para ver de nuevo las etapas del pipeline hay
+   que volver a cargar el programa.
+
+Las capturas del informe están en [`docs/capturas/`](../../docs/capturas):
+
+| Archivo | Qué muestra |
+|---|---|
+| `debugger_alu_r_ciclo14.svg` | El debugger con `alu_r.s` en el ciclo 14 (`PAUSED`), en la placa a 65 MHz |
+| `comparar_alu_r_y_mixto_lazo.png` | `comparar.py --sin-cargar` sobre ese mismo estado («ciclo 14: coincide con el modelo») y `mixto_lazo --cada-ciclo` («83 ciclos: todos coinciden con el modelo») |
+
 ## 1. Uso
 
 ```python
