@@ -1,8 +1,13 @@
 # rvdebug: cliente del protocolo de la Debug Unit y debugger
 
-`rvdebug` tiene dos partes:
+Para empezar a usarlo con la placa, ver [*Inicio rápido*](#inicio-rápido).
+
+`rvdebug` tiene dos partes, y dos scripts que la usan para verificar la placa:
 - **El debugger de texto** (`debugger.py`, I-52): la interfaz de
   [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) con Textual. Cómo se usa, en la §7.
+- **La verificación contra el modelo de referencia:** `placa.py` (§4) corre los programas
+  del plan y los compara con su `.exp` y con el modelo; `comparar.py` (§8, I-54) compara
+  cualquier programa con el modelo en cualquier ciclo.
 - **El cliente del protocolo** (I-50), §1 a §3: la capa que habla el protocolo de [`protocolo_debug.md`](../../docs/spec/protocolo_debug.md)
 con la FPGA: arma y valida las tramas, maneja timeouts y reintentos, y recibe el
 `EVT_HALTED`. Es la capa `client` de [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) §1:
@@ -11,9 +16,76 @@ los tests sin levantar la TUI.
 
 | | |
 |---|---|
-| **Issues** | I-50 — Cliente del protocolo; I-52 — Interfaz de usuario (decisión [040](../../docs/decisiones/040_interfaz-de-usuario.md)) |
-| **Requisitos** | Python ≥ 3.11. `pyserial` para el puerto real y `textual` para el debugger (`requirements.txt`). Tests: `pytest`, sin FPGA; los de la interfaz necesitan `textual` y se saltean sin él. Usa `assemble`, `classify` y `disassemble` del ensamblador de [`tools/assembler`](../assembler/README.md) |
+| **Issues** | I-50 — Cliente del protocolo; I-52 — Interfaz de usuario (decisión [040](../../docs/decisiones/040_interfaz-de-usuario.md)); I-53 — Vista del pipeline (decisión [043](../../docs/decisiones/043_vista-del-pipeline.md)); I-54 — Verificación automática y documentación |
+| **Requisitos** | Python ≥ 3.11. `pyserial` para el puerto real y `textual` para el debugger (`requirements.txt`). Tests: `pytest`, sin FPGA; los de la interfaz necesitan `textual` y se saltean sin él. Usa `assemble`, `classify` y `disassemble` del ensamblador de [`tools/assembler`](../assembler/README.md) y el modelo de referencia de [`tools/isasim`](../isasim/README.md) |
 | **Protocolo** | Versión 1, 115200 8N1 |
+
+## Inicio rápido
+
+### Instalación
+
+Python 3.11 o más nuevo. Desde la raíz del repo, en un entorno virtual:
+
+```sh
+python -m venv .venv
+.venv\Scripts\Activate.ps1                  # Windows (PowerShell)
+source .venv/bin/activate                   # Linux
+pip install -r tools/debugger/requirements.txt          # pyserial y textual
+```
+
+El ensamblador (`tools/assembler`) y el modelo de referencia (`tools/isasim`) no tienen
+dependencias: los scripts los agregan solos al path. Para los tests, `requirements-dev.txt`
+(§5).
+
+### Programar la placa
+
+1. En Vivado, *Tools > Run Tcl Script...* con `scripts/create_project.tcl` (crea el proyecto
+   `riscv_basys3` en `build/vivado_riscv_basys3/`, [`fpga/README.md`](../../fpga/README.md)).
+2. *Generate Bitstream* y, con la Basys 3 conectada por el USB de programación, *Open
+   Hardware Manager > Program Device*.
+3. Después de programar, LD0 (`NO_PROG`) encendido y LD15 latiendo a 2 Hz. Si LD15 está quieto
+   no hay reloj o el botón de reset está apretado ([`fpga/README.md`](../../fpga/README.md)).
+
+### Conexión
+
+| | Windows | Linux |
+|---|---|---|
+| Puerto | `COMn`. En el *Administrador de dispositivos*, *Puertos (COM y LPT)* > *USB Serial Port (COMn)*. El FT2232 de la placa crea dos: la UART suele ser el de número más alto | `/dev/ttyUSBn`, la UART suele ser `ttyUSB1`. El usuario tiene que estar en el grupo `dialout` (`uucp` en Arch) |
+| Listar los puertos | `python -m serial.tools.list_ports -v`: la placa tiene VID/PID `0403:6010` | Lo mismo |
+| Otros programas | Cerrar PuTTY, el monitor serie de Vivado y cualquier otro que tenga el puerto abierto | Además, ModemManager puede tomarlo al conectar la placa |
+
+La UART va a **115200 baudios, 8N1**. Lo fija el hardware (decisión
+[003](../../docs/decisiones/003_baudrate-uart.md)): los scripts lo usan por defecto, y `--baud`
+del debugger solo cambia si cambia el bitstream. Los detalles de cada sistema (terminal y
+puerto) están en [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) §6.
+
+Un puerto lo usa un solo programa a la vez: para correr `placa.py` o `comparar.py` hay que
+cerrar el debugger, y al revés.
+
+### Comandos
+
+| Comando | Para qué |
+|---|---|
+| `python tools/debugger/debugger.py --port COM10 --prog sw/alu_r.s` | El debugger de texto: cargar, ejecutar, paso a paso y ver registros, latches, memoria y pipeline. Teclas en la §7 |
+| `python tools/debugger/comparar.py COM10 sw/alu_r.s` | Comparar un programa en la placa con el modelo de referencia, al final o en un ciclo (§8) |
+| `python tools/debugger/placa.py COM10` | La prueba en placa de todos los programas del plan, contra su `.exp` y el modelo (§4) |
+| `python tools/assembler/asm.py prog.s -o prog.lst` | El listado con direcciones, para saber qué hay en cada PC ([README](../assembler/README.md)) |
+
+### Problemas frecuentes
+
+| Síntoma | Causa probable |
+|---|---|
+| `no se pudo conectar con la FPGA` o `NoResponseError` | El puerto es la otra interfaz del FT2232 (JTAG), la placa no está programada, o otro programa tiene el puerto. Con LD15 quieto, el reset está apretado |
+| `Permission denied` al abrir el puerto (Linux) | Falta el grupo `dialout`: `sudo usermod -aG dialout $USER` y volver a iniciar sesión |
+| `la FPGA informa (…) palabras por latch y el modelo (…)` | El bitstream es de otra versión de [`pipeline.md`](../../docs/spec/pipeline.md) §8: volver a generarlo |
+| El debugger se ve cortado, con bordes `?` o sin colores | La terminal es chica (mínimo 160 × 45), no es UTF-8 (`export LANG=C.UTF-8`) o es la consola clásica de Windows en lugar de Windows Terminal |
+| `RUN` no termina y aparece el aviso del watchdog | El programa no tiene HALT o queda en un lazo: Detener (F6) y seguir paso a paso |
+
+### Capturas de pantalla
+
+Textual guarda la pantalla del debugger como SVG: `Ctrl+P` > *Screenshot*. Una notificación
+dice dónde quedó el archivo. Para la salida de `placa.py` y `comparar.py` alcanza con la
+terminal.
 
 ## 1. Uso
 
@@ -175,6 +247,7 @@ cortar o corromper la próxima petición o respuesta, e inyectar basura en la l�
 | `test_tui.py` | La app con `App.run_test()` y Pilot a 160 × 45: conectar con `--port` y F1, cargar con `--prog` y F2, la tabla de registros (ABI, `d`, `0`), los controles deshabilitados en cada estado, Paso×N, los errores de ensamblado, el watchdog y la confirmación de Cargar en `RUNNING`, y los selectores de archivo y de puerto. La vista del pipeline en el ciclo 7 del boceto (cajas, eventos, etapas en Programa, resaltado, «Escrito», historial y barra de estado), los latches con `c`, el historial con Enter y Esc, F4 y el final de `RUN` |
 | `test_cliente.py` | Cada comando contra la Debug Unit simulada. El filtro de `classify` antes de `LOAD`. Reintentos ante respuesta perdida o rota, `ERR_CHECKSUM` y `ERR_TIMEOUT`. `STEP` y `RUN` sin repetir a ciegas. El `EVT_HALTED` en medio de otra respuesta, el watchdog y `STOP` desde otro hilo |
 | `test_placa.py` | `placa.py` contra una Debug Unit simulada cuyo core es el modelo de referencia: los 22 programas del plan (y las variantes `_nops`) pasan; un registro mal, un aviso de más, un `valid` mal en un paso y el relleno distinto de 0 se informan donde corresponde; un dato de una burbuja no se compara; los `indep_*`, una FPGA muda y otras palabras por latch terminan con 2 |
+| `test_comparar.py` | `comparar.py` contra la misma Debug Unit simulada: todos los `.s` de `sw/` coinciden con `RUN` (también los `indep_*`); `--ciclos` (corta en `HALTED`), `--cada-ciclo`, `--sin-cargar`, un `.hex` y un programa sin HALT. Un registro mal, un aviso de más y un `valid` mal en un paso se informan en su ciclo, y `--cada-ciclo` corta en la primera diferencia; un dato de una burbuja no se compara; una placa que no termina se detiene con `STOP`. Terminan con 2: un programa sin HALT sin `--ciclos`, un ciclo fuera de lo que simuló el modelo, la placa en `NO_PROG` o `RUNNING` con `--sin-cargar`, opciones incompatibles, errores de ensamblado, una FPGA muda y otras palabras por latch |
 
 ## 6. Estructura
 
@@ -192,6 +265,7 @@ tools/debugger/
 │   │                      el historial y run_to (F4)
 │   └── tui/               DebuggerApp (Textual): paneles, modales y estilo (debugger.tcss)
 ├── placa.py               Prueba en placa (§4)
+├── comparar.py            Un programa en la placa contra el modelo de referencia (§8)
 ├── serial_comm.py         Script de prueba del TP2 (ALU por UART); no es parte del cliente
 └── tests/
 ```
@@ -237,8 +311,9 @@ requisitos de cada sistema y del puerto están en
 | `t` | Mostrar u ocultar las tramas | Siempre |
 | `q` | Salir | Siempre |
 
-La pestaña «Rango» de Memoria pide dirección y cantidad (`READ_DMEM`). «Exportar» (`e`) llega
-con la I-54.
+La pestaña «Rango» de Memoria pide dirección y cantidad (`READ_DMEM`). La comparación con el
+modelo de referencia no está en el debugger: la hace `comparar.py --sin-cargar` sobre el
+estado en que quedó la placa (§8).
 
 **Vista del pipeline** (I-53, decisión
 [043](../../docs/decisiones/043_vista-del-pipeline.md)):
@@ -268,3 +343,47 @@ entry.diff.summary(entry.snapshot)  # "x3=12, M[0x0]=12"
 s.run_to(0x14)                      # hasta que la instrucción de 0x14 llegue a WB
 s.run(); snap = s.wait_halted()
 ```
+
+## 8. Comparar con el modelo de referencia (`comparar.py`)
+
+La I-54: lleva un programa a un ciclo en la placa y compara el volcado de `READ_ALL` con la
+foto del modelo de referencia ([`isasim`](../isasim/README.md), modo completo) en ese mismo
+ciclo. A diferencia de `placa.py` (§4), sirve para **cualquier programa** (`.s`, `.hex` o
+`.bin`, sin `.exp` y también sin HALT) y para **cualquier ciclo**.
+
+```sh
+python tools/debugger/comparar.py COM10 sw/fwd_exmem.s           # LOAD, RUN hasta HALTED
+python tools/debugger/comparar.py COM10 fwd_exmem --ciclos 7     # LOAD y 7 STEP (un nombre de sw/)
+python tools/debugger/comparar.py COM10 mi_prog.s --cada-ciclo   # compara después de cada STEP
+python tools/debugger/comparar.py COM10 mi_prog.s --sin-cargar   # el estado actual de la placa
+```
+
+| Opción | Qué hace |
+|---|---|
+| (ninguna) | `LOAD`, `RUN`, `EVT_HALTED` y `READ_ALL`: contra la foto final del modelo. Si la placa no termina en `--timeout` segundos (5 por defecto), manda `STOP` y termina con 1 |
+| `--ciclos N` | `LOAD` y `N` `STEP` (corta en `HALTED`), y compara ahí. Hace falta para un programa sin HALT |
+| `--cada-ciclo` | `READ_ALL` y comparación después de `LOAD` y de cada `STEP`, hasta `HALTED` (o `N` con `--ciclos`). Corta en la **primera** diferencia, que es la que importa |
+| `--sin-cargar` | No manda `LOAD` ni avanza: compara el estado en que quedó la placa en su ciclo. La placa tiene que tener este programa corrido desde `LOAD` o `RESET`, con cualquier combinación de `STEP`, `RUN` y `STOP` (por ejemplo, desde el debugger, cerrándolo antes). No va con `--ciclos` ni `--cada-ciclo` |
+| `--max-ciclos N` | Ciclos que simula el modelo para un programa sin HALT (100 000 por defecto) |
+
+Qué se compara, igual que en `placa.py`: el bloque de estado (`state`, `flags` con `halted` y
+los avisos, `dmem_used`, `pc` y `cycles`), los 32 registros, la memoria usada (dirección y
+valor) y los cuatro latches en los bits de su máscara (en una burbuja, solo `valid` y el
+control; [`isasim`](../isasim/README.md) §3). Las funciones de los latches y de los flags son
+las de `placa.py`, así las dos comparan igual. Los `indep_*` sí se pueden comparar: los dos
+lados parten de todo en cero después de `LOAD`, aunque no sea el estado de su `.exp`.
+
+```
+INFO: protocolo 1, imem 1024, dmem 1024, latches 3/6/4/4 palabras, 65000 kHz
+fwd_exmem.s: 8 palabras; el modelo termina en 12 ciclos
+LOAD y 12 STEP, comparando cada ciclo
+primera diferencia en el ciclo 3:
+ciclo 3: 1 diferencia con el modelo
+    IF/ID.valid: placa 0x0, modelo 0x1
+```
+
+Termina con 0 si coincide, 1 si hay diferencias (o la placa no termina y el modelo sí) y 2 si
+no se pudo comparar: el programa no existe o no ensambla, el modelo no lo puede simular, no
+llega a HALT sin `--ciclos`, el ciclo pedido o el de la placa supera `--max-ciclos`, la placa
+está en `NO_PROG` o `RUNNING` con `--sin-cargar`, el puerto no abre, la FPGA no responde o
+informa otras palabras por latch que el modelo.
