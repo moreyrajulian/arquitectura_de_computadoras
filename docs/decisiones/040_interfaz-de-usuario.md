@@ -58,7 +58,8 @@ Falta decidir:
     con el estado y los avisos, y la barra de estado.
   - Controles: F1, F2, F3, F5, F6, F8, F9, F10, Shift+F10 (Paso×N) y `q`. F4 («hasta cursor»)
     necesita el PC de WB, que sale de los latches: llega con la I-53. `e` (exportar en el
-    formato del modelo de referencia) llega con la I-54.
+    formato del modelo de referencia) iba a llegar con la I-54, que finalmente hizo la
+    comparación como un script aparte (ver *Consecuencias*).
   - Pipeline, Latches e Historial quedan como paneles vacíos, que llena la I-53.
 - **`model`** (`rvdebug/model.py`, sin Textual): los nombres ABI, el formato hex y decimal de
   una palabra y `Snapshot`. `Snapshot` es el volcado de `READ_ALL` y, si se pidió, el último
@@ -92,6 +93,13 @@ Falta decidir:
   de latches en `model`, las etiquetas de etapa en Programa y el resaltado, y F4. `Session`
   guarda `before_run`, el volcado anterior a `RUN`, para que el resaltado después de `RUN`
   compare contra él (§5).
-- **I-54**: agrega `e` (exportar) y la comparación con `tools/isasim`, y completa el README.
+- **I-54**: la comparación con `tools/isasim` y el README. El plan era agregar `e` (exportar
+  el volcado en JSON para compararlo después con el modelo). La I-54 lo cambió por un script
+  aparte, `tools/debugger/comparar.py` (README §8): carga el programa, lo lleva a un ciclo con
+  `RUN` o `STEP` y compara el volcado con la foto del modelo en ese ciclo; con `--sin-cargar`
+  compara el estado en que quedó la placa después de usar el debugger. Tiene el volcado y el
+  modelo en memoria, así que no hace falta un formato de intercambio que mantener igual en
+  `rvdebug` y en `isasim`, y la comparación no depende de Textual. A cambio, no se compara
+  desde la TUI: hay que cerrarla, porque el puerto lo usa uno solo. La TUI no tiene `e`.
 - **Pendiente de la I-49**: el criterio «funciona contra la placa». Hasta entonces la interfaz se
   prueba contra la Debug Unit simulada.

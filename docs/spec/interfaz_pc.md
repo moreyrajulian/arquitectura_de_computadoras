@@ -98,13 +98,20 @@ Los que no corresponden al estado actual se muestran deshabilitados en el footer
 | **Reiniciar** | `F3` | `RESET` + `READ_ALL`. Vuelve a correr el mismo programa desde cero | Todos |
 | **Reprogramar** | `F8` | Igual que Cargar, pero vuelve a ensamblar el archivo ya abierto (para editar el `.s` y recargarlo sin buscarlo). `LOAD` limpia todo (decisión 004) | Todos (en `RUNNING` pide confirmación) |
 | Refrescar | `F9` | `READ_ALL` | Todos menos `RUNNING` |
-| Exportar volcado | `e` | Guarda el `Snapshot` actual (y el historial) en JSON, con el mismo formato que el modelo de referencia (I-16) para compararlos | Siempre |
 | Salir | `q` | Cierra el puerto | Siempre |
 
-La I-52 implementa todos menos «Correr hasta cursor» y «Exportar volcado»; la I-53 agrega
-«Correr hasta cursor», y «Exportar volcado» llega con la I-54, que compara contra el modelo
-de referencia. También están `d` y `0` en Registros, `t` para Tramas y `c` en Latches (§2), y
-Esc para volver del historial o cancelar «Correr hasta cursor».
+La I-52 implementa todos menos «Correr hasta cursor», que agrega la I-53. También están `d` y
+`0` en Registros, `t` para Tramas y `c` en Latches (§2), y Esc para volver del historial o
+cancelar «Correr hasta cursor». `Ctrl+P` > *Screenshot* (de Textual) guarda la pantalla en SVG.
+
+**Comparación con el modelo de referencia (I-54).** El boceto tenía un control «Exportar
+volcado» (`e`) que guardaba el `Snapshot` en JSON para compararlo después con el modelo. En
+su lugar, la comparación es un script aparte, `tools/debugger/comparar.py`
+([README](../../tools/debugger/README.md) §8): carga el programa, lo lleva a un ciclo (con
+`RUN` o `STEP`) y compara el volcado con la foto del modelo en ese ciclo. Con `--sin-cargar`
+compara el estado en que quedó la placa, por ejemplo después de usar el debugger (que se
+cierra antes, porque el puerto lo usa uno solo). Así no hace falta un formato de
+intercambio: el script tiene el volcado y el modelo en memoria.
 
 «Correr hasta cursor» y «Paso ×N» se resuelven en la PC con `STEP` repetidos: no requieren
 comandos nuevos en la Debug Unit. Un `STEP` con su respuesta son 23 bytes (~2 ms a 115200 más
@@ -269,7 +276,6 @@ puede pasar `--port` por línea de comandos.
   [decisión 017](../decisiones/017_ensamblador.md). El desensamblado del panel Programa y de
   cada etapa sale de `disassemble`, en §8 del mismo README y en la
   [decisión 034](../decisiones/034_desensamblador.md).
-- El formato del JSON exportado se acuerda con el modelo de referencia (I-16).
 
 ## 8. Checklist de revisión
 

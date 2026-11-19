@@ -11,6 +11,7 @@ Documentación del proyecto. Todo es Markdown más diagramas con su fuente edita
 | `decisiones/` | Una nota por decisión de diseño, con el porqué (plantilla: `decisiones/_plantilla.md`) | Cuando no se entiende por qué algo es como es |
 | `diagramas/` | Diagramas del sistema, camino de datos, control y riesgos, protocolo, interfaz | Para tener la vista general |
 | `timing/` | Reportes de Vivado, camino crítico, frecuencia elegida y métricas | En la etapa de integración |
+| `capturas/` | Capturas de la placa funcionando: el debugger y la comparación con el modelo de referencia | Para el informe, o para ver cómo se usan las herramientas |
 | `tps/` | Informes y material de los trabajos prácticos (TP1, TP2, ...) | Como referencia histórica |
 
 Al comienzo varias de estas carpetas están vacías (solo tienen un `.gitkeep`): se van

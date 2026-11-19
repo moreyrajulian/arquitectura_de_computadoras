@@ -29,7 +29,8 @@ from .protocol import Info, State, Status
 
 from rvasm import Program, assemble  # noqa: E402  (client agrega tools/assembler al path)
 
-# Acciones de la interfaz (interfaz_pc.md §3). `e` (exportar) llega con la I-54.
+# Acciones de la interfaz (interfaz_pc.md §3). La comparación con el modelo de referencia
+# no es una acción: es tools/debugger/comparar.py (I-54).
 CONNECT, LOAD, RUN, STEP, STEP_N, RUN_TO, STOP, RESET, REPROGRAM, REFRESH, RANGE = (
     "connect", "load", "run", "step", "step_n", "run_to", "stop", "reset", "reprogram",
     "refresh", "range")
