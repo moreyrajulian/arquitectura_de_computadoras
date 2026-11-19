@@ -279,8 +279,8 @@ class PipelineSim:
             if op is None:
                 raise ModelError(f"ciclo {cycle}: alu_ctrl {de['alu_ctrl']:04b} no definido")
             alu_out = alu_op(op, a, b)
-            zero = int(alu_out == 0)
-            taken = de["branch"] and (zero ^ (de["funct3"] & 1))
+            eq = int(rs1_val == rs2_val)       # comparador de igualdad (§5.3, decisión 044)
+            taken = de["branch"] and (eq ^ (de["funct3"] & 1))
             redirect = bool(taken or de["jal"] or de["jalr"])
             redirect_pc = (alu_out & ~1 & MASK32) if de["jalr"] else (de["pc"] + de["imm"]) & MASK32
             result = (de["pc"] + 4) & MASK32 if (de["jal"] or de["jalr"]) else alu_out
