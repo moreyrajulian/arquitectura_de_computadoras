@@ -212,12 +212,15 @@ etapas; en resumen:
 | Lo que se mueve de lugar | La instrucción se decodifica a la salida de la BRAM | La extensión de `lb`/`lh`/`lbu`/`lhu` pasa a WB |
 
 **Impacto en el camino crítico.** Sin registro de salida extra, el tiempo de *clock-to-out* de la
-BRAM (del orden de 2 ns en un Artix-7 `-1`, a confirmar en el reporte de timing) es el comienzo
-del camino crítico candidato de la decisión
-[012](../decisiones/012_resolucion-saltos.md) (dato de un load → extensión → forwarding → ALU →
-`redirect` → PC). Activar el *Primitives Output Register* acortaría ese tramo, pero sumaría un
-ciclo a cada búsqueda y a cada load: 2 stalls por load-use y 3 ciclos por salto tomado. Se
-revisa solo si el análisis de timing (I-56) muestra que la BRAM limita la frecuencia.
+BRAM (2,454 ns en el Artix-7 `-1`, medido en la I-56) es el comienzo
+del camino crítico, el de la decisión de salto de la
+[012](../decisiones/012_resolucion-saltos.md) (dato de un load → extensión → forwarding →
+comparador → `redirect` → flush y `ena` de `imem`, decisión
+[044](../decisiones/044_comparador-de-igualdad-en-saltos.md)). Activar el *Primitives Output Register* acortaría ese tramo, pero sumaría un
+ciclo a cada búsqueda y a cada load: 2 stalls por load-use y 3 ciclos por salto tomado. La I-56
+lo midió: el *clock-to-out* de `dmem_bram` es 2,454 ns (16 % del período a 65 MHz) y es el
+comienzo del camino crítico, pero el diseño cumple timing con margen y el registro de salida no
+se activa ([`docs/timing/`](../timing/README.md), sección I-56).
 
 ### 3.5 Concurrencia entre puertos
 
