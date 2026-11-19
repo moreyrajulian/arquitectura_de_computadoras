@@ -13,7 +13,8 @@
 //     SLT, SLTU     : 1 si i_a < i_b, con signo y sin signo; si no, 0
 //     XOR, OR, AND  : bit a bit
 //     SLL, SRL, SRA : desplazan i_a según i_b[4:0]; SRA replica el signo
-//   o_zero vale 1 si o_result es 0 (beq y bne comparan con SUB, §5.3).
+//   o_zero vale 1 si o_result es 0. Desde la decisión 044 no la usa nadie:
+//   beq y bne comparan con su propio comparador (§5.3).
 //   Un código de i_alu_ctrl que no está en §4.5 da 0: su resultado no
 //   está especificado (decisión 024).
 //   Los puertos no tienen signo: solo SLT y SRA lo miran, con $signed

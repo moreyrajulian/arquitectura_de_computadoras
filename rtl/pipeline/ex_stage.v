@@ -19,7 +19,7 @@
 //     - Operandos (§5.1): alu_a = alu_src_a ? 0 : rs1_val
 //                         alu_b = alu_src_b ? imm : rs2_val
 //     - alu opera con alu_ctrl (§5.2); branch_unit decide redirect y
-//       redirect_pc con zero y alu_out (§5.3).
+//       redirect_pc con rs1_val == rs2_val y alu_out (§5.3, decisión 044).
 //     - Resultado (§5.4): result = (jal | jalr) ? pc + 4 : alu_out
 //     - ex_mem_reg guarda los 109 bits de §8 con rst > en > flush (§2);
 //       store_data es rs2_val, ya con forwarding.
@@ -149,7 +149,6 @@ module ex_stage
     wire [NB_DATA-1:0] ex_alu_a = i_id_ex_alu_src_a ? {NB_DATA{1'b0}} : ex_rs1_val;
     wire [NB_DATA-1:0] ex_alu_b = i_id_ex_alu_src_b ? i_id_ex_imm     : ex_rs2_val;
     wire [NB_DATA-1:0] ex_alu_out;
-    wire               ex_zero;
 
     alu #(
         .NB_DATA     (NB_DATA),
@@ -159,7 +158,7 @@ module ex_stage
         .i_b        (ex_alu_b),
         .i_alu_ctrl (i_id_ex_alu_ctrl),
         .o_result   (ex_alu_out),
-        .o_zero     (ex_zero)
+        .o_zero     ()                  // sin uso: los saltos comparan aparte (decisión 044)
     );
 
     //------------------------------------------------------------------
@@ -176,7 +175,8 @@ module ex_stage
         .i_funct3      (i_id_ex_funct3),
         .i_pc          (i_id_ex_pc),
         .i_imm         (i_id_ex_imm),
-        .i_zero        (ex_zero),
+        .i_rs1_val     (ex_rs1_val),
+        .i_rs2_val     (ex_rs2_val),
         .i_alu_out     (ex_alu_out),
         .o_redirect    (o_redirect),
         .o_redirect_pc (o_redirect_pc)
