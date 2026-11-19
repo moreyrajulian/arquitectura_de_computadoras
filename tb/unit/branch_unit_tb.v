@@ -4,12 +4,12 @@
 // branch_unit_tb
 //
 // Testbench autoverificante de branch_unit (docs/spec/verificacion.md
-// §3.1, pipeline.md §5.3).
+// §3.1, pipeline.md §5.3, decisión 044).
 //
 // Oráculo, escrito aparte del RTL: el esperado sale de lo que hace cada
 // instrucción según isa.md, no de las ecuaciones de §5.3:
-//   - beq salta si rs1 == rs2; bne, si rs1 != rs2. El testbench arma
-//     alu_out = rs1 - rs2 y zero = (alu_out == 0), como la ALU (§5.2)
+//   - beq salta si rs1 == rs2; bne, si rs1 != rs2. rs1_val y rs2_val
+//     entran directo (operandos con forwarding, §5.1)
 //   - jal y jalr saltan siempre
 //   - destino: pc + imm (beq, bne, jal); (rs1 + imm) con el bit 0 en 0
 //     (jalr), con alu_out = rs1 + imm
@@ -24,16 +24,20 @@
 // redirect = 1 (§3.1).
 //
 // Casos:
-//   - beq y bne, tomados y no tomados, con zero en 0 y en 1
+//   - beq y bne, tomados y no tomados; operandos que difieren en un solo
+//     bit (bit 0, bit 31 y cada bit del barrido), negativos iguales
 //   - Salto hacia atrás (inmediato negativo), máximos de B y J, y pc + imm
 //     que pasa por 2^32
-//   - jal y jalr siempre redirect, con cualquier zero (jal también con
-//     cualquier funct3: en J esos bits son del inmediato)
+//   - jal y jalr siempre redirect, con operandos iguales o distintos
+//     (jal también con cualquier funct3: en J esos bits son del inmediato)
 //   - jalr con el bit 0 en 1 a la entrada; destino que no depende de
 //     pc + imm, y jal y branch que no dependen de alu_out
-//   - Sin salto -> redirect = 0, con cualquier zero y funct3
-//   - Barrido: cada instrucción × zero × los funct3 posibles, con datos
-//     al azar
+//   - beq y bne no miran alu_out: alu_out = 0 con operandos distintos y
+//     alu_out != 0 con operandos iguales (la decisión ya no sale de la ALU)
+//   - Sin salto -> redirect = 0, con operandos iguales o distintos y
+//     cualquier funct3
+//   - Barrido: cada instrucción × (iguales, distintos en un bit) × los
+//     funct3 posibles, con datos al azar
 //   - Aleatorio con semilla fija: instrucción, operandos, pc e inmediato
 //======================================================================
 
@@ -61,7 +65,8 @@ module branch_unit_tb;
     reg  [NB_FUNCT3-1:0] tb_funct3;
     reg  [NB_PC-1:0]     tb_pc;
     reg  [NB_DATA-1:0]   tb_imm;
-    reg                  tb_zero;
+    reg  [NB_DATA-1:0]   tb_rs1_val;
+    reg  [NB_DATA-1:0]   tb_rs2_val;
     reg  [NB_DATA-1:0]   tb_alu_out;
     wire                 tb_o_redirect;
     wire [NB_PC-1:0]     tb_o_redirect_pc;
@@ -93,7 +98,8 @@ module branch_unit_tb;
         .i_funct3      (tb_funct3),
         .i_pc          (tb_pc),
         .i_imm         (tb_imm),
-        .i_zero        (tb_zero),
+        .i_rs1_val     (tb_rs1_val),
+        .i_rs2_val     (tb_rs2_val),
         .i_alu_out     (tb_alu_out),
         .o_redirect    (tb_o_redirect),
         .o_redirect_pc (tb_o_redirect_pc)
@@ -101,8 +107,8 @@ module branch_unit_tb;
 
     //------------------------------------------------------------------
     // Aplica un vector y compara contra lo que hace la instrucción.
-    // zero y alu_out entran tal cual, para poder probar cada valor de
-    // zero aunque no coincida con alu_out.
+    // rs1, rs2 y alu_out entran tal cual: alu_out no tiene por qué
+    // coincidir con los operandos, para probar que beq y bne no lo miran.
     //------------------------------------------------------------------
     task vec;
         input [8*40-1:0]      name;
@@ -110,7 +116,8 @@ module branch_unit_tb;
         input [NB_FUNCT3-1:0] funct3;
         input [NB_PC-1:0]     pc_in;
         input [NB_DATA-1:0]   imm_in;
-        input                 zero;
+        input [NB_DATA-1:0]   rs1_in;
+        input [NB_DATA-1:0]   rs2_in;
         input [NB_DATA-1:0]   alu_out;
         reg                   exp_redirect;
         reg   [NB_PC-1:0]     exp_pc;
@@ -122,13 +129,14 @@ module branch_unit_tb;
             tb_funct3  = funct3;
             tb_pc      = pc_in;
             tb_imm     = imm_in;
-            tb_zero    = zero;
+            tb_rs1_val = rs1_in;
+            tb_rs2_val = rs2_in;
             tb_alu_out = alu_out;
 
             // Lo que hace la instrucción (isa.md)
             case (tipo)
-                T_BEQ:   exp_redirect = (zero == 1'b1);   // rs1 - rs2 == 0
-                T_BNE:   exp_redirect = (zero == 1'b0);
+                T_BEQ:   exp_redirect = (rs1_in === rs2_in);
+                T_BNE:   exp_redirect = (rs1_in !== rs2_in);
                 T_JAL:   exp_redirect = 1'b1;
                 T_JALR:  exp_redirect = 1'b1;
                 default: exp_redirect = 1'b0;
@@ -142,8 +150,8 @@ module branch_unit_tb;
             checks = checks + 1;
             if (tb_o_redirect !== exp_redirect) begin
                 errors = errors + 1;
-                $display("[%0t] ERROR %0s redirect | tipo=%0d funct3=%b zero=%b dut=%b esperado=%b",
-                         $time, name, tipo, funct3, zero, tb_o_redirect, exp_redirect);
+                $display("[%0t] ERROR %0s redirect | tipo=%0d funct3=%b rs1=0x%08h rs2=0x%08h dut=%b esperado=%b",
+                         $time, name, tipo, funct3, rs1_in, rs2_in, tb_o_redirect, exp_redirect);
             end
             if (exp_redirect) begin
                 checks = checks + 1;
@@ -156,7 +164,8 @@ module branch_unit_tb;
         end
     endtask
 
-    // beq / bne con los operandos de la instrucción: la ALU resta (§5.3)
+    // beq / bne con los operandos de la instrucción; la ALU resta, como
+    // en el pipeline (control_unit da ALU_SUB), aunque el salto no la mira
     task salto_cond;
         input [8*40-1:0]    name;
         input integer       tipo;
@@ -164,11 +173,9 @@ module branch_unit_tb;
         input [NB_DATA-1:0] b;
         input [NB_PC-1:0]   pc_in;
         input [NB_DATA-1:0] imm_in;
-        reg   [NB_DATA-1:0] resta;
         begin
-            resta = a - b;
             vec(name, tipo, (tipo == T_BNE) ? 3'b001 : 3'b000, pc_in, imm_in,
-                (resta == 0), resta);
+                a, b, a - b);
         end
     endtask
 
@@ -181,7 +188,7 @@ module branch_unit_tb;
         reg   [NB_DATA-1:0] suma;
         begin
             suma = a + imm_in;
-            vec(name, T_JALR, 3'b000, pc_in, imm_in, (suma == 0), suma);
+            vec(name, T_JALR, 3'b000, pc_in, imm_in, a, $random(seed), suma);
         end
     endtask
 
@@ -222,7 +229,8 @@ module branch_unit_tb;
         tb_funct3  = {NB_FUNCT3{1'b0}};
         tb_pc      = {NB_PC{1'b0}};
         tb_imm     = {NB_DATA{1'b0}};
-        tb_zero    = 1'b0;
+        tb_rs1_val = {NB_DATA{1'b0}};
+        tb_rs2_val = {NB_DATA{1'b0}};
         tb_alu_out = {NB_DATA{1'b0}};
 
         // beq y bne, tomados y no tomados
@@ -233,6 +241,9 @@ module branch_unit_tb;
         salto_cond("beq negativos iguales", T_BEQ, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'h0000_0010, 32'd4);
         salto_cond("bne x0 contra -1",      T_BNE, 32'h0000_0000, 32'hFFFF_FFFF, 32'h0000_0010, 32'd4);
         salto_cond("beq solo bit 31",       T_BEQ, 32'h8000_0000, 32'h0000_0000, 32'h0000_0010, 32'd4);
+        salto_cond("beq solo bit 0",        T_BEQ, 32'h1234_5679, 32'h1234_5678, 32'h0000_0010, 32'd4);
+        salto_cond("bne solo bit 31",       T_BNE, 32'h7FFF_FFFF, 32'hFFFF_FFFF, 32'h0000_0010, 32'd4);
+        salto_cond("bne solo bit 0",        T_BNE, 32'hFFFF_FFFE, 32'hFFFF_FFFF, 32'h0000_0010, 32'd4);
 
         // Hacia atrás, máximos de B y J y paso por 2^32
         salto_cond("bne hacia atras -16",   T_BNE, 32'd1, 32'd2, 32'h0000_0040, 32'hFFFF_FFF0);
@@ -240,32 +251,36 @@ module branch_unit_tb;
         salto_cond("beq maximo +4094",      T_BEQ, 32'd7, 32'd7, 32'h0000_0004, 32'h0000_0FFE);
         salto_cond("beq a si mismo",        T_BEQ, 32'd0, 32'd0, 32'h0000_0200, 32'h0000_0000);
         salto_cond("bne pasa por 2^32",     T_BNE, 32'd1, 32'd0, 32'hFFFF_FFFC, 32'h0000_0008);
-        vec("jal hacia adelante",   T_JAL, 3'b000, 32'h0000_0100, 32'h0000_0020, 1'b0, 32'h0000_0000);
-        vec("jal hacia atras",      T_JAL, 3'b101, 32'h0000_0100, 32'hFFFF_FF00, 1'b1, 32'h0000_0000);
-        vec("jal maximo +1048574",  T_JAL, 3'b111, 32'h0000_0000, 32'h000F_FFFE, 1'b0, 32'h0000_0000);
-        vec("jal minimo -1048576",  T_JAL, 3'b010, 32'h0010_0000, 32'hFFF0_0000, 1'b1, 32'h0000_0000);
+        vec("jal hacia adelante",   T_JAL, 3'b000, 32'h0000_0100, 32'h0000_0020, 32'd1, 32'd2, 32'h0000_0000);
+        vec("jal hacia atras",      T_JAL, 3'b101, 32'h0000_0100, 32'hFFFF_FF00, 32'd3, 32'd3, 32'h0000_0000);
+        vec("jal maximo +1048574",  T_JAL, 3'b111, 32'h0000_0000, 32'h000F_FFFE, 32'd1, 32'd2, 32'h0000_0000);
+        vec("jal minimo -1048576",  T_JAL, 3'b010, 32'h0010_0000, 32'hFFF0_0000, 32'd3, 32'd3, 32'h0000_0000);
 
-        // jal y branch no miran alu_out: alu_out distinto de pc + imm
-        vec("jal ignora alu_out",   T_JAL, 3'b000, 32'h0000_0100, 32'h0000_0010, 1'b0, 32'h0000_0FFF);
-        vec("beq ignora alu_out",   T_BEQ, 3'b000, 32'h0000_0100, 32'h0000_0010, 1'b1, 32'h0000_0FFF);
-        vec("bne ignora alu_out",   T_BNE, 3'b001, 32'h0000_0100, 32'h0000_0010, 1'b0, 32'h0000_0FFF);
+        // jal y branch no miran alu_out: alu_out distinto de pc + imm, y en
+        // beq/bne alu_out en 0 con operandos distintos (y al revés)
+        vec("jal ignora alu_out",   T_JAL, 3'b000, 32'h0000_0100, 32'h0000_0010, 32'd1, 32'd2, 32'h0000_0FFF);
+        vec("beq ignora alu_out",   T_BEQ, 3'b000, 32'h0000_0100, 32'h0000_0010, 32'd9, 32'd9, 32'h0000_0FFF);
+        vec("bne ignora alu_out",   T_BNE, 3'b001, 32'h0000_0100, 32'h0000_0010, 32'd9, 32'd8, 32'h0000_0FFF);
+        vec("beq no mira alu_out 0", T_BEQ, 3'b000, 32'h0000_0100, 32'h0000_0010, 32'd9, 32'd8, 32'h0000_0000);
+        vec("bne no mira alu_out 0", T_BNE, 3'b001, 32'h0000_0100, 32'h0000_0010, 32'd9, 32'd9, 32'h0000_0000);
 
         // jalr: rs1 + imm con el bit 0 en 0, no pc + imm
         jalr("jalr bit 0 en 1",         32'h0000_0101, 32'h0000_0040, 32'h0000_0000);
         jalr("jalr bit 0 en 1 por imm", 32'h0000_0200, 32'h0000_0040, 32'hFFFF_FFFD);
         jalr("jalr par queda igual",    32'h0000_0300, 32'h0000_0040, 32'h0000_0004);
-        jalr("jalr a 0 (zero = 1)",     32'h0000_0004, 32'h0000_0040, 32'hFFFF_FFFC);
+        jalr("jalr a 0",                32'h0000_0004, 32'h0000_0040, 32'hFFFF_FFFC);
         jalr("jalr a 1 da 0",           32'h0000_0000, 32'h0000_0040, 32'h0000_0001);
         jalr("jalr todo en 1",          32'hFFFF_FFFF, 32'h0000_0040, 32'h0000_0000);
-        vec("jalr ignora pc + imm, zero 0", T_JALR, 3'b000, 32'h0000_0100, 32'h0000_0010, 1'b0, 32'h0000_0801);
-        vec("jalr ignora pc + imm, zero 1", T_JALR, 3'b000, 32'h0000_0100, 32'h0000_0010, 1'b1, 32'h0000_0801);
+        vec("jalr ignora pc + imm, distintos", T_JALR, 3'b000, 32'h0000_0100, 32'h0000_0010, 32'd1, 32'd2, 32'h0000_0801);
+        vec("jalr ignora pc + imm, iguales",   T_JALR, 3'b000, 32'h0000_0100, 32'h0000_0010, 32'd5, 32'd5, 32'h0000_0801);
 
-        // Sin salto: redirect = 0 aunque zero y funct3 hagan saltar a un branch
-        vec("otra, zero 1, funct3 000",  T_OTRA, 3'b000, 32'h0000_0100, 32'h0000_0008, 1'b1, 32'h0000_0000);
-        vec("otra, zero 0, funct3 001",  T_OTRA, 3'b001, 32'h0000_0100, 32'h0000_0008, 1'b0, 32'h0000_0005);
-        vec("otra, alu_out impar",       T_OTRA, 3'b000, 32'h0000_0100, 32'h0000_0008, 1'b0, 32'h0000_0101);
+        // Sin salto: redirect = 0 aunque los operandos y funct3 harían saltar a un branch
+        vec("otra, iguales, funct3 000",   T_OTRA, 3'b000, 32'h0000_0100, 32'h0000_0008, 32'd7, 32'd7, 32'h0000_0000);
+        vec("otra, distintos, funct3 001", T_OTRA, 3'b001, 32'h0000_0100, 32'h0000_0008, 32'd7, 32'd6, 32'h0000_0005);
+        vec("otra, alu_out impar",         T_OTRA, 3'b000, 32'h0000_0100, 32'h0000_0008, 32'd7, 32'd6, 32'h0000_0101);
 
-        // Barrido: instrucción × zero × funct3 posibles, con datos al azar
+        // Barrido: instrucción × (z = 1 iguales, z = 0 distintos en un bit al
+        // azar) × funct3 posibles, con datos al azar
         for (t = T_OTRA; t <= T_JALR; t = t + 1) begin
             for (z = 0; z < 2; z = z + 1) begin
                 for (f = 0; f < (1 << NB_FUNCT3); f = f + 1) begin
@@ -274,10 +289,12 @@ module branch_unit_tb;
                     if (!((t == T_BEQ  && f3 != 3'b000) || (t == T_BNE && f3 != 3'b001) ||
                           (t == T_JALR && f3 != 3'b000))) begin
                         for (k = 0; k < N_BARRIDO; k = k + 1) begin
-                            pc = $random(seed);
-                            r  = $random(seed);
+                            pc  = $random(seed);
+                            r   = $random(seed);
+                            rs1 = $random(seed);
+                            rs2 = z[0] ? rs1 : rs1 ^ ({{(NB_DATA-1){1'b0}}, 1'b1} << ({$random(seed)} % NB_DATA));
                             vec("barrido", t, f3, {pc[NB_PC-1:2], 2'b00}, r,
-                                z[0], $random(seed));
+                                rs1, rs2, $random(seed));
                         end
                     end
                 end
@@ -298,12 +315,12 @@ module branch_unit_tb;
                 T_JAL: begin
                     imm = imm_j(r);
                     vec("aleatorio", T_JAL, $random(seed), pc, imm,
-                        ((rs1 + imm) == 0), rs1 + imm);
+                        rs1, rs2, rs1 + imm);
                 end
                 default: begin
                     r = $random(seed);
                     vec("aleatorio", T_OTRA, $random(seed), pc, imm_i(r),
-                        ((rs1 + rs2) == 0), rs1 + rs2);
+                        rs1, rs2, rs1 + rs2);
                 end
             endcase
         end

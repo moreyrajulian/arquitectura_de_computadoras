@@ -1,0 +1,42 @@
+Timing de riscv_basys3, medición 'base' (2026-11-18 23:15)
+Reloj clk                      período 10.000 ns
+Reloj clkfbout_clk_wiz_sys     período 50.000 ns
+Reloj clk_out1_clk_wiz_sys     período 15.385 ns
+
+== Peor camino de setup y de hold de todo el diseño ==
+setup (WNS)                slack    0.435  skew  -0.081  unc  0.132  datos  14.212  niveles  12  u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/CLKARDCLK -> u_core/u_id_stage/u_id_ex_reg/id_ex_ctrl_reg_reg[9]/R
+hold (WHS)                 slack    0.086  skew   0.016  unc         datos   0.342  niveles   0  u_uart/u_rx_fifo/wr_ptr_reg_reg[3]/C -> u_uart/u_rx_fifo/mem_reg_0_31_6_7/DP/WADR3
+
+== Setup: peor camino que termina en cada grupo ==
+IF: pc_reg                 slack    0.662  skew  -0.080  unc  0.132  datos  14.341  niveles  12  u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/CLKARDCLK -> u_core/u_if_stage/u_pc_logic/pc_reg_reg[13]/CE
+IF: imem_bram              slack    0.686  skew  -0.021  unc  0.132  datos  14.102  niveles  12  u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/CLKARDCLK -> u_core/u_if_stage/u_imem/u_imem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_init.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/ENARDEN
+IF/ID                      slack    0.907  skew  -0.063  unc  0.132  datos  14.077  niveles  12  u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/CLKARDCLK -> u_core/u_if_stage/u_if_id_reg/if_id_pc_reg_reg[1]/CE
+ID/EX                      slack    0.435  skew  -0.081  unc  0.132  datos  14.212  niveles  12  u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/CLKARDCLK -> u_core/u_id_stage/u_id_ex_reg/id_ex_ctrl_reg_reg[9]/R
+EX/MEM                     slack    3.428  skew  -0.076  unc  0.132  datos  11.777  niveles   9  u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/CLKARDCLK -> u_core/u_ex_stage/u_ex_mem_reg/ex_mem_data_reg_reg[42]/D
+MEM: dmem_bram             slack    5.647  skew  -0.001  unc  0.132  datos   9.162  niveles  10  u_debug_unit/cmd_reg_reg[7]/C -> u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/ENBWREN
+MEM/WB                     slack    8.792  skew  -0.113  unc  0.132  datos   5.919  niveles   2  u_debug_unit/state_reg_reg[0]/C -> u_core/u_mem_stage/u_mem_wb_reg/mem_wb_ctrl_reg_reg[2]/R
+WB: banco                  slack    4.241  skew  -0.114  unc  0.132  datos  10.692  niveles   2  u_core/u_wb_stage/halted_reg_reg/C -> u_core/u_id_stage/u_regfile/regs_reg[8][9]/CE
+WB: halted/imem_fault      slack    9.288  skew  -0.109  unc  0.132  datos   5.332  niveles   2  u_debug_unit/state_reg_reg[0]/C -> u_core/u_wb_stage/imem_fault_reg_reg/R
+Debug Unit                 slack    3.839  skew  -0.025  unc  0.132  datos  11.119  niveles  14  u_debug_unit/arg_reg_reg[32]/C -> u_debug_exec/state_reg_reg[0]/D
+UART                       slack    8.115  skew  -0.025  unc  0.132  datos   6.829  niveles   6  u_debug_unit/idx_reg_reg[15]/C -> u_uart/u_tx_buf/buf_reg_reg[2]/D
+reset_sync                 slack   13.014  skew  -0.022  unc  0.132  datos   2.012  niveles   1  u_reset_sync/por_cnt_reg_reg[1]/C -> u_reset_sync/por_cnt_reg_reg[0]/CE
+
+== Hold: peor camino que termina en cada grupo ==
+IF: pc_reg                 slack    0.320  skew   0.016  unc         datos   0.457  niveles   1  u_core/u_id_stage/u_id_ex_reg/id_ex_ctrl_reg_reg[5]/C -> u_core/u_if_stage/u_pc_logic/pc_reg_reg[30]/D
+IF: imem_bram              slack    0.163  skew   0.080  unc         datos   0.426  niveles   0  u_core/u_if_stage/u_pc_logic/pc_reg_reg[8]/C -> u_core/u_if_stage/u_imem/u_imem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_init.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/ADDRARDADDR[11]
+IF/ID                      slack    0.192  skew   0.015  unc         datos   0.267  niveles   0  u_core/u_if_stage/u_pc_logic/pc_reg_reg[22]/C -> u_core/u_if_stage/u_if_id_reg/if_id_pc_reg_reg[22]/D
+ID/EX                      slack    0.170  skew   0.037  unc         datos   0.270  niveles   0  u_core/u_if_stage/u_if_id_reg/if_id_pc_reg_reg[1]/C -> u_core/u_id_stage/u_id_ex_reg/id_ex_data_reg_reg[115]/D
+EX/MEM                     slack    0.191  skew   0.015  unc         datos   0.272  niveles   0  u_core/u_id_stage/u_id_ex_reg/id_ex_data_reg_reg[139]/C -> u_core/u_ex_stage/u_ex_mem_reg/ex_mem_data_reg_reg[97]/D
+MEM: dmem_bram             slack    0.186  skew   0.075  unc         datos   0.416  niveles   0  u_core/u_ex_stage/u_ex_mem_reg/ex_mem_data_reg_reg[14]/C -> u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/DIADI[6]
+MEM/WB                     slack    0.160  skew   0.000  unc         datos   0.235  niveles   0  u_core/u_ex_stage/u_ex_mem_reg/ex_mem_data_reg_reg[60]/C -> u_core/u_mem_stage/u_mem_wb_reg/mem_wb_data_reg_reg[30]/D
+WB: banco                  slack    0.367  skew   0.263  unc         datos   0.700  niveles   1  u_core/u_mem_stage/u_mem_wb_reg/mem_wb_data_reg_reg[21]/C -> u_core/u_id_stage/u_regfile/regs_reg[15][11]/D
+WB: halted/imem_fault      slack    0.323  skew   0.000  unc         datos   0.444  niveles   1  u_core/u_wb_stage/imem_fault_reg_reg/C -> u_core/u_wb_stage/imem_fault_reg_reg/D
+Debug Unit                 slack    0.118  skew   0.013  unc         datos   0.207  niveles   0  u_debug_exec/cycles_reg_reg[22]/C -> u_debug_unit/snap_reg_reg[86]/D
+UART                       slack    0.086  skew   0.016  unc         datos   0.342  niveles   0  u_uart/u_rx_fifo/wr_ptr_reg_reg[3]/C -> u_uart/u_rx_fifo/mem_reg_0_31_6_7/DP/WADR3
+reset_sync                 slack    0.155  skew   0.013  unc         datos   0.299  niveles   1  u_reset_sync/por_cnt_reg_reg[0]/C -> u_reset_sync/por_cnt_reg_reg[2]/D
+
+== Compromisos (018/037: halted -> enable -> CE; 014: clock-to-out de las BRAM) ==
+desde halted               slack    4.241  skew  -0.114  unc  0.132  datos  10.692  niveles   2  u_core/u_wb_stage/halted_reg_reg/C -> u_core/u_id_stage/u_regfile/regs_reg[8][9]/CE
+desde debug_exec           slack    4.768  skew  -0.113  unc  0.132  datos  10.167  niveles   2  u_debug_exec/state_reg_reg[0]/C -> u_core/u_id_stage/u_regfile/regs_reg[8][9]/CE
+desde dmem_bram            slack    0.435  skew  -0.081  unc  0.132  datos  14.212  niveles  12  u_core/u_mem_stage/u_dmem/u_dmem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/CLKARDCLK -> u_core/u_id_stage/u_id_ex_reg/id_ex_ctrl_reg_reg[9]/R
+desde imem_bram            slack    3.094  skew  -0.170  unc  0.132  datos  12.018  niveles   4  u_core/u_if_stage/u_imem/u_imem_bram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop[0].ram.r/prim_init.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram/CLKARDCLK -> u_core/u_id_stage/u_id_ex_reg/id_ex_data_reg_reg[60]/D

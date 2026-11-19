@@ -460,7 +460,8 @@ flowchart LR
     IDEX -- "pc" --> P4["PC + 4"]
     P4 --> RES
     IDEX -- "pc, imm" --> TGT["PC + imm"]
-    ALU -- "zero, alu_out" --> SAL["resolución<br/>de saltos"]
+    FWD -- "rs1_val, rs2_val" --> SAL["resolución<br/>de saltos"]
+    ALU -- "alu_out" --> SAL
     TGT --> SAL
     SAL -- "redirect, redirect_pc" --> IF["IF"]
     RES -- "result" --> EXMEM[["EX/MEM"]]
@@ -496,7 +497,8 @@ alu_b = alu_src_b ? imm : rs2_val
 ### 5.2 ALU
 ALU de 32 bits con las 10 operaciones de §4.5, seleccionadas por `alu_ctrl`.
 Salidas: `alu_out` (resultado) y `zero` (1 si `alu_out == 0`). En los desplazamientos
-usa solo `alu_b[4:0]`.
+usa solo `alu_b[4:0]`. `zero` queda sin conectar: los saltos comparan aparte (§5.3, decisión
+[044](../decisiones/044_comparador-de-igualdad-en-saltos.md)).
 
 - Suma y resta son módulo 2^32, sin acarreo ni desborde. `slt` y `sltu` dan 1 o 0.
 - Un código de `alu_ctrl` que no está en §4.5 da `alu_out = 0`. Ninguna palabra de
@@ -507,18 +509,24 @@ usa solo `alu_b[4:0]`.
   `rtl/common/riscv_defs.vh`.
 
 ### 5.3 Resolución de saltos
-Hay un sumador dedicado para `PC + imm`; la ALU queda libre para comparar o calcular
-`rs1 + imm`.
+Hay un sumador dedicado para `PC + imm` y un comparador de igualdad dedicado; la ALU solo
+calcula `rs1 + imm` para `jalr`.
 
 ```
-taken       = branch & (zero ^ funct3[0])        beq: salta si zero = 1
-                                                 bne: salta si zero = 0
+eq          = (rs1_val == rs2_val)               operandos con forwarding (§5.1)
+taken       = branch & (eq ^ funct3[0])          beq: salta si eq = 1
+                                                 bne: salta si eq = 0
 redirect    = taken | jal | jalr
 redirect_pc = jalr ? {alu_out[31:1], 1'b0}       (rs1 + imm, con el bit 0 en cero)
                    : pc + imm                    (branch y jal)
 ```
 
-- La ALU compara con una resta: `beq` salta si `rs1 - rs2 = 0`.
+- La comparación no pasa por la ALU: `eq` sale de `rs1_val` y `rs2_val`, antes del mux de
+  `alu_b`. Alcanza con igualdad porque solo hay `beq` y `bne`. Así el camino de la decisión no
+  pasa por el mux de `alu_b`, el desplazador ni el mux de resultado de la ALU, que eran el
+  tramo más largo del camino crítico (decisión
+  [044](../decisiones/044_comparador-de-igualdad-en-saltos.md), `docs/timing/`). La ALU sigue
+  recibiendo `ALU_SUB` en `beq`/`bne` (§4.4), pero su resultado no se usa.
 - No hay predicción: mientras el salto llega a EX, IF sigue buscando `PC + 4`.
 - Cuando `redirect = 1`, IF y ID contienen instrucciones que se buscaron siguiendo
   `PC + 4` y no deben ejecutarse: se hace flush de IF/ID y de ID/EX (§10.5).
@@ -526,7 +534,8 @@ redirect_pc = jalr ? {alu_out[31:1], 1'b0}       (rs1 + imm, con el bit 0 en cer
   uno no tomado, **0** (tabla completa en §10.5).
 - Por qué en EX y no en ID ni con predicción: decisión [012](../decisiones/012_resolucion-saltos.md).
 - **Módulo** `rtl/pipeline/branch_unit.v`, combinacional: `i_branch`, `i_jal`, `i_jalr`,
-  `i_funct3`, `i_pc` e `i_imm` (de ID/EX), `i_zero` e `i_alu_out` (de la ALU, §5.2) →
+  `i_funct3`, `i_pc` e `i_imm` (de ID/EX), `i_rs1_val` e `i_rs2_val` (de los muxes de
+  forwarding, §5.1) e `i_alu_out` (de la ALU, §5.2) →
   `o_redirect`, `o_redirect_pc`. No mira `valid`: una burbuja trae `branch`, `jal` y `jalr`
   en 0 (§2). La dirección de retorno (`PC + 4`) no sale de acá: es el mux de resultado
   (§5.4). Sus salidas llegan a IF desde I-36, y desde I-42 `redirect` entra también a
@@ -555,21 +564,22 @@ memoria.
 | `ex_mem_halt` | 1 | HALT en vuelo. |
 | **Total** | **109** | |
 
-> **Hipótesis de camino crítico** (decisión [012](../decisiones/012_resolucion-saltos.md), a verificar en la integración con el
-> reporte de timing de Vivado). El camino más largo sería el de la decisión de salto, que
-> termina en `pc_reg`:
+> **Camino crítico** (hipótesis de la decisión [012](../decisiones/012_resolucion-saltos.md),
+> verificada en la I-56 con el reporte de timing, [`docs/timing/`](../timing/README.md)). El camino
+> más largo es el de la decisión de salto con el dato de un load reenviado desde WB:
 >
 > ```
 > BRAM de datos (load en WB) → extensión del load → mux de WB → mux de forwarding (01)
->   → ALU (resta) → zero → taken → redirect → mux de próximo PC → pc_reg
+>   → comparador rs1_val == rs2_val → taken → redirect → hazard_unit → flush de ID/EX, ena de imem
 > ```
 >
-> `redirect` además maneja el flush de IF/ID e ID/EX; para acotar su fanout, el flush solo
-> pone en 0 `valid` y los campos de control (los datos de una burbuja no importan, §2). Si el
-> reporte confirma que este camino limita la frecuencia, las medidas en orden de costo son:
-> comparar con un comparador de igualdad en lugar de la resta y `zero` (solo hay `beq` y
-> `bne`), registrar `redirect` y aplicarlo desde MEM (3 ciclos de penalización), o bajar la
-> frecuencia.
+> Hasta la decisión [044](../decisiones/044_comparador-de-igualdad-en-saltos.md) la comparación
+> pasaba por el mux de `alu_b`, la ALU y `zero`, y el tramo largo era el desplazador de la ALU. El
+> comparador es la primera de las medidas de la 012; las otras dos (registrar `redirect` y aplicarlo
+> desde MEM, con 3 ciclos de penalización, o bajar la frecuencia) no se aplicaron o ya están
+> (Clock Wizard a 65 MHz, decisión [042](../decisiones/042_reloj-del-sistema-a-65-mhz.md)).
+> `redirect` además maneja el flush de IF/ID e ID/EX; para acotar su fanout, el flush solo pone en
+> 0 `valid` y los campos de control (los datos de una burbuja no importan, §2).
 
 ### 5.6 Módulo `ex_stage`
 `rtl/pipeline/ex_stage.v` es la etapa completa: los muxes de forwarding y de operandos (§5.1),

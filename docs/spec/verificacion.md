@@ -16,7 +16,7 @@ comportamiento de las memorias de [`memoria.md`](memoria.md) y los comandos de
 | **2. Por etapa** | El pipeline construido hasta la etapa N, ejecutando programas de `sw/` y comparando los registros de segmentación contra la traza del modelo de referencia | `tb/integration/` | I-17 (banco incremental), una integración por etapa |
 | **3. Core completo** | El procesador ejecutando cada programa hasta el HALT, comparando el estado final con el esperado | `tb/integration/` | I-38 (sin riesgos) y I-43 (regresión completa) |
 | **4. Debug Unit** | Protocolo, carga de programa, modos de ejecución y volcado de estado, desde una trama UART | `tb/unit/` y `tb/integration/` | I-44 a I-48 |
-| **5. Placa** | Los mismos programas, cargados desde la PC con el cliente del protocolo | Basys 3, con `tools/debugger/placa.py` (y `comparar.py` para un programa o ciclo cualquiera) | I-49, I-54 e I-55 |
+| **5. Placa** | Los mismos programas, menos los `indep_*` (§6), cargados desde la PC con el cliente del protocolo | Basys 3, con `tools/debugger/placa.py` (y `comparar.py` para un programa o ciclo cualquiera) | I-49, I-54 e I-55 |
 
 Los niveles 2 y 3 comparten los programas de `sw/` (§4) y el mismo formato de estado esperado
 (§5). Eso permite correr cada programa en cada nivel y detectar en cuál empieza a fallar.
@@ -78,7 +78,7 @@ agregar más, no quitar.
 | Registro ID/EX | I-26 | `id_ex_reg_tb.v` | Igual que IF/ID; además, los 161 bits se conservan intactos con `en = 1` |
 | Etapa ID (`id_stage`) | I-27 | `id_stage_tb.v` | El cableado entre los módulos de ID, sobre todo lo que la traza no ve en M4: una palabra del ensamblador por fila de la tabla de verdad de `pipeline.md` §4.4, con los 20 campos de ID/EX; `id_is_halt` solo con HALT y `valid = 1`; escritura de WB con bypass en `rs1` y en `rs2`, `rd = 0` y `enable = 0` sin escritura, `enable` y `en_id_ex` independientes; puerto de debug sin bypass y `x0` leído como 0; `en = 0` conserva los 161 bits también con `flush = 1`; `flush` deja burbuja; reset con el core detenido; el bus `o_id_ex_latch` igual a los campos; aleatorio con semilla fija contra un modelo de §2 y §4.2 |
 | ALU (`alu`) | I-28 | `alu_tb.v` | Las 10 operaciones; `zero` en 1 y en 0, mirando los 32 bits; `slt` contra `sltu` con operandos negativos; desplazamientos con `shamt` 0, 1 y 31 y usando solo los 5 bits bajos de `rs2`. El control de la ALU no es un módulo aparte (decisión [026](../decisiones/026_control-de-alu-en-id.md)): sus casos (`{instr[30], funct3}` en R; en I aritmética el bit 30 solo cuenta con `funct3 = 101`, así que un `addi` con inmediato negativo **no** es una resta) los cubre `control_unit_tb.v` (I-24) |
-| Lógica de saltos (`branch_unit`) | I-29 | `branch_unit_tb.v` | `taken = branch & (zero ^ funct3[0])` para `beq` y `bne` con `zero` en 0 y en 1; `jal` y `jalr` siempre `redirect`; destino `pc + imm` y `(rs1 + imm) & ~1` (con bit 0 en 1 a la entrada); no salto → `redirect = 0` |
+| Lógica de saltos (`branch_unit`) | I-29 | `branch_unit_tb.v` | `taken = branch & ((rs1_val == rs2_val) ^ funct3[0])` (decisión [044](../decisiones/044_comparador-de-igualdad-en-saltos.md)) para `beq` y `bne` con operandos iguales y distintos en un solo bit (bit 0, bit 31 y cada bit del barrido); `beq`/`bne` no miran `alu_out`; `jal` y `jalr` siempre `redirect`; destino `pc + imm` y `(rs1 + imm) & ~1` (con bit 0 en 1 a la entrada); no salto → `redirect = 0` |
 | Registro EX/MEM | I-30 | `ex_mem_reg_tb.v` | Igual que ID/EX (109 bits) |
 | Memoria de datos (`dmem`) | I-32 | `dmem_tb.v` | `sb`, `sh`, `sw` con sus *byte enables* en cada alineación válida; little-endian; los bytes no escritos no cambian; accesos desalineados y fuera de rango con el comportamiento y los avisos `dmem_oob` y `dmem_misaligned` de `memoria.md` §6.1 y §6.2 (persisten, una burbuja o `enable = 0` no los levantan, el reset los borra); `READ_FIRST` en el ciclo de un store (`memoria.md` §3.2); un load entrega la palabra completa, porque la extensión es de I-35; `ena = 0` no lee ni escribe; carga y volcado por el puerto B; latencia de lectura de un ciclo en los dos puertos. El mapa de palabras usadas es de la Debug Unit: lo arma la I-48 y lo borra el `CLEAR` de la I-46 (decisiones [027](../decisiones/027_logica-de-mem-en-dmem.md) y [038](../decisiones/038_carga-de-programa-en-la-debug-unit.md)) |
 | Etapa EX (`ex_stage`) | I-31 | `ex_stage_tb.v` | El cableado entre los módulos de EX, sobre todo lo que la traza no ve en M5: las 10 operaciones con operandos de registro, `addi` con inmediato negativo, `lui` (`alu_a = 0`), dirección de `lw` y `sw` con `store_data = rs2_val`; `beq` y `bne` tomados y no tomados, `jal` y `jalr` con `result = pc + 4`, y `redirect` / `redirect_pc` en todos los casos (no son campos de EX/MEM); forwarding `10` y `01` en A, en B, en los dos a la vez, en `store_data`, en el operando que el control descarta y en los saltos, y `11` como `00` (`pipeline.md` §5.6); `en = 0` conserva los 109 bits también con `flush = 1`; `flush` deja burbuja; reset con el core detenido; el bus `o_ex_mem_latch` igual a los campos; aleatorio con semilla fija contra un modelo de §5 y §2, con filas de la tabla de §4.4 |
@@ -336,7 +336,31 @@ Cuándo se considera aprobado cada nivel:
 | 2. Por etapa | Para todos los programas de `sw/` que la etapa ya puede ejecutar, cada registro de segmentación de las etapas integradas coincide con la traza del modelo en **todos** los ciclos (campos de `pipeline.md` §8, incluidos `valid` y las señales de control), comparando los bits que marca la máscara del modelo: en una burbuja, solo `valid` y el control ([`tools/isasim`](../../tools/isasim/README.md) §3). Hasta M7 el modelo corre en modo `sin_riesgos`; en M8, en el modo con los mecanismos ya integrados (§4.3) |
 | 3. Core completo | Para los 22 programas, el estado final coincide con el `.exp` en todos los campos de §5, incluido `ciclos` |
 | 4. Debug Unit | Imprime `TEST PASSED` y cada programa da el mismo estado final con `RUN` que con `STEP` repetido |
-| 5. Placa | Para los 22 programas cargados con `LOAD`, el volcado de `READ_ALL` coincide con el `.exp`. Lo comprueba `tools/debugger/placa.py` ([README](../../tools/debugger/README.md) §4), que además compara el volcado con el estado final del modelo (también el PC), corre cada programa otra vez con `STEP`, compara los latches después de cada paso con la traza del modelo y su máscara (como el nivel 2), y comprueba que `STEP` repetido dé el mismo volcado que `RUN` (como el nivel 4). Los `indep_*` no se pueden correr en la placa contra su `.exp`: `LOAD` deja el banco en cero. Para un programa cualquiera (sin `.exp`) o un ciclo cualquiera, `tools/debugger/comparar.py` (I-54, [README](../../tools/debugger/README.md) §8) compara el volcado de la placa con la foto del modelo en ese ciclo, con las mismas reglas |
+| 5. Placa | Para los 22 programas y las 10 variantes `_nops` (32 de los 39 de `sw/`) cargados con `LOAD`, el volcado de `READ_ALL` coincide con el `.exp`. Lo comprueba `tools/debugger/placa.py` ([README](../../tools/debugger/README.md) §4), que además compara el volcado con el estado final del modelo (también el PC), corre cada programa otra vez con `STEP`, compara los latches después de cada paso con la traza del modelo y su máscara (como el nivel 2), y comprueba que `STEP` repetido dé el mismo volcado que `RUN` (como el nivel 4). Los 7 `indep_*` quedan afuera (ver abajo). Para un programa cualquiera (sin `.exp`) o un ciclo cualquiera, `tools/debugger/comparar.py` (I-54, [README](../../tools/debugger/README.md) §8) compara el volcado de la placa con la foto del modelo en ese ciclo, con las mismas reglas |
+
+**Por qué la placa no corre los `indep_*`.** Esos programas parten de un estado inicial de
+registros y de `dmem` (`sw/estado_inicial/`, §4.3). En simulación lo carga `pipeline_tb` por
+`$readmemh`. En la placa, en cambio, el único camino es el protocolo, y ningún comando escribe el
+banco ni `dmem`. Además `LOAD` pone el core en reset, así que los registros quedan en 0
+([`memoria.md`](memoria.md) §4.1), y la limpieza que sigue pone `dmem` en cero. Corridos así, el
+estado final no sería el del `.exp`. Agregar un comando que escriba registros cambiaría el
+protocolo y el RTL de la Debug Unit solo para esta prueba. Tampoco haría falta para la cobertura:
+los `indep_*` existen para probar las etapas antes de que hubiera WB (niveles 2 y 3), y cada tipo
+de instrucción que prueban también lo prueban los programas de §4.1, que sí corren en la placa.
+`placa.py` rechaza un `indep_*` con código de salida 2. `comparar.py` (I-54) sí los corre, pero contra
+el modelo partiendo de todo en cero después de `LOAD`, no contra su `.exp`.
+
+**Resultado en la placa (I-55).** Corrida con el `riscv_core` final (forwarding, stall de carga-uso
+y flush de saltos) en la Basys 3 a 65 MHz:
+
+```
+python tools/debugger/placa.py COM8                    # 22 programas: 22 OK (RUN y STEP)
+python tools/debugger/placa.py COM8 --nops             # 32 programas: 32 OK (RUN y STEP)
+python tools/debugger/placa.py COM8 --nops --sin-paso  # 32 programas: 32 OK (RUN)
+```
+
+En todos, los ciclos de `RUN` coinciden con la tabla de §8.8. En cada `STEP`, los cuatro latches
+coinciden con la traza del modelo.
 
 **Regresión.** La regresión (I-43) corre todos los testbenches y todos los programas y la
 aprobación es única: ningún `TEST FAILED` (el timeout también lo imprime). Se corre completa antes de integrar a
