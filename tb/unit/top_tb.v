@@ -8,7 +8,7 @@
 //
 // Montaje: el testbench hace de placa, de PC y de botón. Solo toca los
 // pines del top (clk, reset, rx, tx, led), como en la placa: entra a
-// clk con 100 MHz, el Clock Wizard da clk_sys de 65 MHz (decisión 042) y
+// clk con 100 MHz, el Clock Wizard da clk_sys de 92 MHz (decisiones 042 y 045) y
 // el testbench no maneja ningún reset propio, así que el reset de
 // encendido de reset_sync, que espera a locked, es lo único que
 // inicializa el sistema. Corre en xsim dentro del proyecto riscv_basys3
@@ -36,7 +36,7 @@
 // UART: el top queda con su CLK_FREQ_HZ, la frecuencia real del MMCM, y el
 // testbench le pone BAUD = CLK_FREQ_HZ / 32 (DVSR = 2, un byte serie = 320
 // ciclos de clk_sys) para simular rápido. BLINK_HZ = 15625: el latido cambia
-// cada F_SYS / 31250 ciclos (2080 a 65 MHz).
+// cada F_SYS / 31250 ciclos (2944 a 92 MHz).
 //
 // F_SYS tiene que ser el CLK_FREQ_HZ del top (y la salida de ip/clk_wiz.tcl):
 // un testbench no puede leer el parámetro de una instancia como constante.
@@ -70,11 +70,11 @@ module top_tb;
     `include "riscv_defs.vh"
 
     localparam integer T_CLK     = 10;            // ns, reloj de la placa (100 MHz)
-    localparam integer F_SYS     = 65_000_000;    // = CLK_FREQ_HZ del top y ip/clk_wiz.tcl
+    localparam integer F_SYS     = 92_000_000;    // = CLK_FREQ_HZ del top y ip/clk_wiz.tcl
     localparam real    T_SYS_NS  = 1.0e9 / F_SYS; // período de clk_sys
     localparam integer BAUD      = F_SYS / 32;    // DVSR = 2
     localparam integer BLINK_HZ  = 15625;
-    localparam integer HB_HALF   = F_SYS / (2 * BLINK_HZ);   // 2080 ciclos a 65 MHz
+    localparam integer HB_HALF   = F_SYS / (2 * BLINK_HZ);   // 2944 ciclos a 92 MHz
     localparam integer BYTE_CYC  = 320;           // ciclos de clk_sys por byte serie
     localparam real    BIT_NS    = 32.0 * T_SYS_NS;   // 16 ticks × 2 ciclos
     localparam integer LOCK_MAX  = 1_000_000;     // ns hasta que engancha el MMCM
