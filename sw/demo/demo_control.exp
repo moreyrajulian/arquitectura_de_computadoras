@@ -1,0 +1,19 @@
+# demo_control: estado final esperado, calculado a mano desde isa.md
+regs:
+  x1  = 0x00000005
+  x2  = 0x00000008
+  x3  = 0x00000110
+  x4  = 0x00000110
+  x5  = 0x00000008
+  x6  = 0x00000008
+dmem:
+  0x100 = 0x00000002
+  0x104 = 0x00000003
+  0x108 = 0x00000005
+  0x10C = 0x00000008
+halted = 1
+pipeline_vacio = 1
+avisos = ninguno
+# Ejecutadas: 4 + 4 vueltas de 6 + lw + beq + halt = 31
+# Stalls: 1 (lw x6 -> beq). Saltos tomados: 3 bne + beq = 4
+ciclos = 44          # n = 31, + 4 de llenado, + 1 stall, + 2 * 4 saltos tomados
