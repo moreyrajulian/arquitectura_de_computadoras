@@ -32,3 +32,7 @@ sw/*.hex
 sw/*.bin
 sw/*.coe
 sw/*.lst
+sw/demo/*.hex
+sw/demo/*.bin
+sw/demo/*.coe
+sw/demo/*.lst

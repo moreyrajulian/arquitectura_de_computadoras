@@ -22,6 +22,7 @@ convenciones está en la [decisión 019](../docs/decisiones/019_programas-de-pru
 | `<nombre>.hex`, `.bin`, `.coe`, `.lst` | Salida del ensamblador | **No**: se regenera desde el `.s` |
 | `programas.py` | Listas de programas: el plan, los `indep_*`, los que tienen variante `_nops` y los que corren en M7 | Sí |
 | `test_programas.py` | Chequeos de las convenciones de este README | Sí |
+| `demo/` | Programas de demostración para la presentación (I-58), fuera de la regresión ([`demo/README.md`](demo/README.md)) | Sí |
 
 Todo programa tiene su `.exp`: **un programa sin `.exp` no es una prueba**. El `.exp` se
 escribe a mano, nunca copiando la salida del modelo de referencia ni del RTL
