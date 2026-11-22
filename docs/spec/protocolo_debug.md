@@ -29,16 +29,17 @@ Configuración abreviada: **115200 8N1**. En pyserial:
 
 `DVSR = round(f_clk / (16 × BAUD))`. Lo calcula el módulo `uart` a partir de los parámetros
 `CLK_FREQ_HZ` y `BAUD` que le pasa el top (decisión
-[035](../decisiones/035_uart-de-la-debug-unit.md)); no se escribe a mano, porque la frecuencia
-va a cambiar cuando se aplique el Clock Wizard (ver `docs/timing/`).
+[035](../decisiones/035_uart-de-la-debug-unit.md)); no se escribe a mano, porque depende de la
+frecuencia del Clock Wizard (ver `docs/timing/`).
 
 | `f_clk` | `DVSR` | Baudrate real | Error |
 |---|---|---|---|
 | 100 MHz (Basys 3 sin Clock Wizard) | 54 | 115 741 | +0,47 % |
+| **92 MHz** (Clock Wizard, frecuencia final, decisión [045](../decisiones/045_reloj-del-sistema-a-92-mhz.md)) | 50 | 115 000 | −0,17 % |
 | 80 MHz | 43 | 116 279 | +0,94 % |
 | 75 MHz | 41 | 114 329 | −0,76 % |
 | 70 MHz | 38 | 115 132 | −0,06 % |
-| **65 MHz** (Clock Wizard, desde `debug-v1`, decisión [042](../decisiones/042_reloj-del-sistema-a-65-mhz.md)) | 35 | 116 071 | +0,76 % |
+| 65 MHz (Clock Wizard de `debug-v1` a la I-56, decisión [042](../decisiones/042_reloj-del-sistema-a-65-mhz.md)) | 35 | 116 071 | +0,76 % |
 | 50 MHz | 27 | 115 741 | +0,47 % |
 
 Un error menor al 2 % es seguro para 8N1.
