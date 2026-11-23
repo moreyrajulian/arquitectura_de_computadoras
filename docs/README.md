@@ -8,7 +8,7 @@ Documentación del proyecto. Todo es Markdown más diagramas con su fuente edita
 | Carpeta | Contenido | Cuándo leerla |
 |---|---|---|
 | `spec/` | Especificación previa al código: ISA, arquitectura del pipeline, protocolo de debug, mapa de memoria, plan de verificación | Antes de escribir o revisar un módulo |
-| `decisiones/` | Una nota por decisión de diseño, con el porqué (plantilla: `decisiones/_plantilla.md`) | Cuando no se entiende por qué algo es como es |
+| `decisiones/` | Una nota por decisión de diseño, con el porqué (plantilla: `decisiones/_plantilla.md`), y las respuestas a las preguntas de la consigna en `decisiones/preguntas_consigna.md` | Cuando no se entiende por qué algo es como es |
 | `diagramas/` | Diagramas del sistema, camino de datos, control y riesgos, protocolo, interfaz | Para tener la vista general |
 | `timing/` | Reportes de Vivado, camino crítico, frecuencia elegida y métricas | En la etapa de integración |
 | `capturas/` | Capturas de la placa funcionando: el debugger y la comparación con el modelo de referencia | Para el informe, o para ver cómo se usan las herramientas |
