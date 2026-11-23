@@ -577,7 +577,8 @@ memoria.
 > pasaba por el mux de `alu_b`, la ALU y `zero`, y el tramo largo era el desplazador de la ALU. El
 > comparador es la primera de las medidas de la 012; las otras dos (registrar `redirect` y aplicarlo
 > desde MEM, con 3 ciclos de penalización, o bajar la frecuencia) no se aplicaron o ya están
-> (Clock Wizard a 65 MHz, decisión [042](../decisiones/042_reloj-del-sistema-a-65-mhz.md)).
+> (Clock Wizard, decisión [042](../decisiones/042_reloj-del-sistema-a-65-mhz.md), a 92 MHz desde la
+> [045](../decisiones/045_reloj-del-sistema-a-92-mhz.md)).
 > `redirect` además maneja el flush de IF/ID e ID/EX; para acotar su fanout, el flush solo pone en
 > 0 `valid` y los campos de control (los datos de una burbuja no importan, §2).
 

@@ -3,8 +3,8 @@
 Resultados de síntesis e implementación del diseño `riscv_basys3` en la Basys 3
 (`xc7a35tcpg236-1`): timing, utilización y warnings. Cada vez que se mide se agrega una sección
 con el tag o el commit. Las secciones de la I-49 son el punto de partida; el análisis del camino
-crítico y del skew, con y sin el comparador de saltos, está en [I-56](#i-56-camino-crítico-y-skew-a-65-mhz).
-El Clock Wizard y la frecuencia final son de la I-57.
+crítico y del skew, con y sin el comparador de saltos, está en [I-56](#i-56-camino-crítico-y-skew-a-65-mhz),
+y el barrido de frecuencias y el reloj final de **92 MHz** en [I-57](#i-57-barrido-de-frecuencias-y-reloj-final-a-92-mhz).
 
 ## Cómo se mide
 
@@ -34,7 +34,20 @@ vivado -mode batch -source scripts/timing.tcl -tclargs <etiqueta>   # o desde la
 Escribe en `build/timing/<etiqueta>/` el `report_timing_summary` (con el peor camino de setup y de
 hold detallados), los 30 peores caminos de setup (como en la I-49), los 10 peores de hold, el peor
 camino que termina en cada etapa, los caminos que piden revisar las decisiones 018/037 y 014, la
-red de reloj y un `resumen.txt` con una línea por grupo. De cada medición de la I-56 se versionan
+red de reloj y un `resumen.txt` con una línea por grupo. Implementa con el proyecto regenerado,
+para que el reloj sea el de `ip/clk_wiz.tcl` del working tree (los IP se configuran solo al crear
+el proyecto).
+
+Desde la I-57, `scripts/barrido.tcl` implementa el diseño a una lista de frecuencias y deja una
+línea por frecuencia en `build/timing/barrido/barrido.csv` (el detalle en su cabecera):
+
+```sh
+vivado -mode batch -source scripts/barrido.tcl -tclargs 65 70 74 80 92
+```
+
+Para cada una cambia la salida del Clock Wizard y el `CLK_FREQ_HZ` del top solo en el proyecto,
+no en los archivos versionados, que regenera desde cero (conviene correrlo en una copia del
+repo). De cada medición de la I-56 se versionan
 `timing_summary.rpt` y `resumen.txt` en `docs/timing/i56_<etiqueta>/`; en el encabezado del `.rpt`
 se reemplazaron el nombre del equipo y la ruta absoluta de salida. Los warnings críticos se buscan en *Messages* (síntesis e implementación). En
 `riscv_basys3` no tiene que haber latches inferidos ni nets con más de un driver (checklist del
@@ -145,7 +158,7 @@ salen del mismo flujo para que se puedan comparar.
 | Frecuencia estimada, 1 / (15,385 ns − WNS) | ~66,9 MHz | **~71,6 MHz** |
 
 La frecuencia estimada es una cota: al implementar con otro reloj cambian la colocación y el
-ruteo. Elegir la frecuencia, con un barrido, es de la I-57.
+ruteo. La I-57 eligió la frecuencia con un barrido (ver [I-57](#i-57-barrido-de-frecuencias-y-reloj-final-a-92-mhz)).
 
 ### Camino crítico, base
 
@@ -296,5 +309,137 @@ BRAM de datos → extensión → mux de WB → forwarding → ALU (resta) → ze
 La 012 proponía tres medidas en orden de costo. Se aplicó la primera, el comparador de igualdad
 (decisión 044): +0,983 ns de WNS sin cambiar ciclos, modelo ni `.exp`. La segunda (registrar
 `redirect`, 3 ciclos por salto tomado) no se aplica, por la misma razón que el registro de salida
-de la BRAM. La tercera, bajar el reloj, ya la hizo la 042 a 65 MHz; elegir la frecuencia final es
-de la I-57.
+de la BRAM. La tercera, bajar el reloj, ya la hizo la 042 a 65 MHz; la frecuencia final la eligió la
+I-57: 92 MHz (decisión [045](../decisiones/045_reloj-del-sistema-a-92-mhz.md)).
+
+## I-57: barrido de frecuencias y reloj final a 92 MHz
+
+El diseño de la I-56, con el comparador (decisión
+[044](../decisiones/044_comparador-de-igualdad-en-saltos.md)), implementado a 16 frecuencias con
+`scripts/barrido.tcl` en Vivado 2024.2, post-implementación y con la estrategia por defecto
+(2026-11-20 a 22). La frecuencia elegida es **92 MHz**, la máxima que cumple timing (decisión
+[045](../decisiones/045_reloj-del-sistema-a-92-mhz.md)).
+
+### Barrido
+
+Todas las columnas, con los divisores del MMCM, la utilización, el consumo y el divisor de la UART,
+están en [`i57_barrido/barrido.csv`](i57_barrido/barrido.csv).
+
+| MHz | MMCM (D, M, O) | WNS (ns) | TNS (ns) | Endpoints que fallan | WHS (ns) | Incertidumbre (ns) | Datos del peor camino (ns) | LUT | UART |
+|---|---|---|---|---|---|---|---|---|---|
+| 65 | 5, 50,375, 15,5 | +1,418 | 0 | 0 | +0,066 | 0,132 | 13,151 | 2813 | +0,76 % |
+| 68 | 5, 51, 15 | +1,077 | 0 | 0 | +0,095 | 0,130 | 12,802 | 2805 | −0,29 % |
+| 70 | 5, 49,875, 14,25 | +1,111 | 0 | 0 | +0,037 | 0,132 | 12,991 | 2815 | −0,06 % |
+| 72 | 5, 49,5, 13,75 | +1,118 | 0 | 0 | +0,094 | 0,133 | 12,361 | 2822 | +0,16 % |
+| 74 | 5, 50,875, 13,75 | +1,078 | 0 | 0 | +0,037 | 0,128 | 11,498 | 2819 | +0,37 % |
+| 76 | 5, 49,875, 13,125 | +0,229 | 0 | 0 | +0,045 | 0,130 | 12,438 | 2806 | +0,57 % |
+| 78 | 1, 9,75, 12,5 | +0,274 | 0 | 0 | +0,104 | 0,077 | 12,481 | 2818 | +0,76 % |
+| 80 | 1, 10, 12,5 | +0,412 | 0 | 0 | +0,046 | 0,077 | 11,711 | 2818 | +0,94 % |
+| 82 | 1, 10,25, 12,5 | +0,486 | 0 | 0 | +0,046 | 0,076 | 11,381 | 2828 | +1,11 % |
+| 84 | 5, 49,875, 11,875 | +0,359 | 0 | 0 | +0,055 | 0,128 | 11,172 | 2867 | −0,93 % |
+| 86 | 5, 48,375, 11,25 | +0,409 | 0 | 0 | +0,051 | 0,132 | 11,031 | 2898 | −0,73 % |
+| 88 | 5, 49,5, 11,25 | +0,381 | 0 | 0 | +0,024 | 0,129 | 10,846 | 2912 | −0,54 % |
+| 90 | 5, 49,5, 11 | +0,288 | 0 | 0 | +0,098 | 0,129 | 10,650 | 2910 | −0,35 % |
+| **92** | **5, 48,875, 10,625** | **+0,026** | 0 | 0 | +0,037 | 0,129 | 10,117 | 2907 | −0,17 % |
+| 95 | 5, 49,875, 10,5 | **−0,449** | −5,893 | 42 | +0,037 | 0,126 | 10,720 | 2927 | −0,88 % |
+| 100 | 1, 10, 10 | **−0,714** | −30,251 | 122 | +0,075 | 0,074 | 10,598 | 2938 | +0,47 % |
+
+En todas: 1883 ± 1 FF, 2 RAMB36, 1 MMCM y 0,18 a 0,20 W estimados. La columna UART es el error
+del baudrate con `DVSR = round(f / (16 × 115200))` ([`protocolo_debug.md`](../spec/protocolo_debug.md) §1).
+
+Qué muestra:
+- **La cota de ~71,6 MHz de la I-56 era pesimista.** Suponía el mismo ruteo con otro reloj. Con un
+  reloj más exigente, la colocación y el ruteo guiados por timing acortan el camino: el retardo de
+  datos del peor camino baja de 13,15 ns a 65 MHz a 10,12 ns a 92 MHz.
+- **El margen no baja parejo.** Hasta 74 MHz queda en ~1,1 ns (8 % del período); a 76 MHz cae a
+  +0,23 ns y el crítico pasa a la Debug Unit (`cmd_reg` → `u_debug_dump/u_used_map/ptr_reg`,
+  15 niveles). De 76 a 90 MHz el WNS sube y baja entre +0,23 y +0,49 ns: el resultado no es
+  monótono con la frecuencia.
+- **El wizard no siempre elige igual.** A 78, 80, 82 y 100 MHz usa D = 1 y la incertidumbre del
+  reloj baja de ~0,13 a ~0,077 ns, por el menor jitter. Por eso 80 MHz cierra con más margen que
+  76 MHz.
+- **El flujo es determinista.** 82 a 90 MHz se midió dos veces con números idénticos, y 92 MHz tres
+  veces (barrido, `scripts/timing.tcl` y la GUI) con el mismo +0,026 ns.
+- **La frecuencia real** de la segunda columna del `.csv` sale del período que redondea Vivado
+  (10,870 ns a 92 MHz); el MMCM da 100 × 48,875 / (5 × 10,625) = 92,000 MHz exactos.
+
+### Antes y después
+
+| | Antes: 65 MHz (042, comparador de la 044) | Después: **92 MHz** (045) |
+|---|---|---|
+| Período | 15,385 ns | 10,870 ns |
+| MMCM | D = 5, M = 50,375, O = 15,5 (VCO 1007,5 MHz) | D = 5, M = 48,875, O = 10,625 (VCO 977,5 MHz); jitter 248,4 ps pico a pico |
+| WNS / TNS (setup) | +1,418 ns / 0 | **+0,026 ns** / 0 |
+| WHS / THS (hold) | +0,066 ns / 0 | +0,037 ns / 0 |
+| Endpoints que fallan | 0 de 5357 | 0 de 5360 |
+| Peor camino | `dmem_bram` → … → `ena` de `imem_bram`, 13,151 ns, 11 niveles | `dmem_bram` → … → `R` de `id_ex_ctrl` (flush de ID/EX), 10,117 ns, 9 niveles |
+| LUT / LUTRAM / FF | 2813 / 22 / 1882 | 2907 (14 %) / 22 / 1884 (5 %) |
+| BRAM / MMCM / IO | 2 RAMB36 / 1 / 20 | 2 RAMB36 (4 %) / 1 (20 %) / 20 (19 %) |
+| Consumo estimado | 0,200 W (0,128 dinámico + 0,072 estático) | 0,200 W (0,128 dinámico + 0,072 estático) |
+| UART | `DVSR = 35`, 116 071 baud (+0,76 %) | `DVSR = 50`, 115 000 baud (−0,17 %) |
+| Regresión en simulación | 39 de 39 y 27 de 27 | 39 de 39 y 27 de 27 |
+| Placa | 22 de 22 y 32 de 32 (I-55) | **22 de 22 y 32 de 32** |
+
+El antes es la medición `comparador` de la I-56 ([`i56_comparador/`](i56_comparador/)), que el
+barrido repite al milésimo. Los recursos del antes salen de la fila de 65 MHz del barrido.
+
+**El consumo no cambia con la frecuencia** porque lo domina el MMCM: de los 0,128 W dinámicos,
+0,120 W (94 %) son del MMCM, y relojes, señales, lógica y BRAM suman unos 7 mW. Es la estimación de
+`report_power` sin vectores de simulación (*vectorless*, confianza *Medium*), sobre la red
+implementada.
+
+### 92 MHz, post-implementación
+
+Reportes de `scripts/timing.tcl` en [`i57_92mhz/`](i57_92mhz/) (`timing_summary.rpt` y
+`resumen.txt`, sin el nombre del equipo ni la ruta absoluta, como en la I-56).
+
+| Grupo de destino | Slack de setup | Peor camino |
+|---|---|---|
+| ID/EX | **+0,026 ns** | `dmem_bram` → WB → forwarding → comparador → `redirect` → flush de ID/EX (9 niveles) |
+| EX/MEM | +0,114 ns | `dmem_bram` → forwarding → ALU → `ex_mem_data` (11 niveles) |
+| IF: `pc_reg` | +0,171 ns | `dmem_bram` → … → `redirect` → PC |
+| IF: `imem_bram` | +0,428 ns | `dmem_bram` → … → `ena` de `imem` |
+| Debug Unit | +0,541 ns | `cmd_reg` → `u_used_map/ptr_reg` (14 niveles) |
+| IF/ID | +0,636 ns | `dmem_bram` → … → enable de IF/ID |
+| WB: banco | +1,875 ns | `halted` → `enable` → CE del banco (decisiones 018/037) |
+| UART, MEM/WB, `reset_sync` | +3,3 a +8,1 ns | |
+
+A 92 MHz varias etapas quedan en el límite y empiezan todas en el *clock-to-out* de `dmem_bram`:
+no hay un único camino que, acortado, permita subir mucho más. Por eso 95 MHz falla con
+42 endpoints y destinos distintos. El hold más ajustado es +0,037 ns, dentro de la FIFO de
+recepción de la UART.
+
+**Síntesis contra implementación.** La estimación post-síntesis da WNS = −0,465 ns (21 endpoints,
+[`vivado_timing_sintesis.png`](i57_92mhz/vivado_timing_sintesis.png)). Sin colocación ni ruteo,
+Vivado estima el retardo de los cables, que son el 60 a 70 % del camino crítico. Vale el resultado
+post-route (`Design State : Routed`).
+
+**DRC.** La implementación tiene 2 warnings, PDRC-132 y PDRC-134, en `SLICE_X53Y10`
+([`vivado_drc.png`](i57_92mhz/vivado_drc.png)): las dos mitades de una LUT6 (A6/A5 y B6/B5) se
+usan con funciones distintas sin la entrada A6 atada a 1. No son críticos y el bitstream se genera. En *Messages* hay 0 warnings críticos y 0 errores en
+síntesis e implementación, y la utilización da `Register as Latch = 0`.
+
+Capturas de Vivado de la implementación que generó el bitstream:
+
+| Captura | Qué muestra |
+|---|---|
+| [`vivado_clk_wiz_salidas.png`](i57_92mhz/vivado_clk_wiz_salidas.png) | Clocking Wizard: `clk_out1` pedida 92,000 MHz, real 92,00000 MHz |
+| [`vivado_clk_wiz_mmcm.png`](i57_92mhz/vivado_clk_wiz_mmcm.png) | MMCM: D = 5, M = 48,875, O = 10,625; jitter y error de fase |
+| [`vivado_relojes.png`](i57_92mhz/vivado_relojes.png) | *Clock Summary*: `clk_out1_clk_wiz_sys`, 10,870 ns, 92,000 MHz |
+| [`vivado_timing.png`](i57_92mhz/vivado_timing.png) | *Design Timing Summary* post-implementación: "All user specified timing constraints are met" |
+| [`vivado_timing_sintesis.png`](i57_92mhz/vivado_timing_sintesis.png) | La estimación post-síntesis, para comparar |
+| [`vivado_utilizacion.png`](i57_92mhz/vivado_utilizacion.png) | Utilización post-implementación |
+| [`vivado_consumo.png`](i57_92mhz/vivado_consumo.png) | Consumo estimado, con el MMCM como 94 % del dinámico |
+| [`vivado_drc.png`](i57_92mhz/vivado_drc.png) | Los 2 warnings de DRC |
+
+### Prueba en placa a 92 MHz
+
+Con el bitstream de esa implementación, 2026-11-22:
+
+| | Resultado |
+|---|---|
+| `python tools/debugger/placa.py COM8` (22 programas, RUN y STEP) | **22 de 22 OK**; `INFO` informa 92000 kHz ([`placa.txt`](i57_92mhz/placa.txt)) |
+| `python tools/debugger/placa.py COM8 --nops --sin-paso` | **32 de 32 OK** ([`placa_nops.txt`](i57_92mhz/placa_nops.txt)) |
+
+Los ciclos de `RUN` son los mismos que a 65 MHz: el reloj cambia el tiempo de cada ciclo, no
+cuántos ciclos tarda cada programa.

@@ -6,7 +6,7 @@ constraints (`basys3.xdc`). Los bloques reutilizables no están acá: viven en `
 
 | Diseño | Estado | Qué es |
 |---|---|---|
-| `riscv_basys3/` | **vigente** | Trabajo final: procesador RISC-V segmentado + Debug Unit + UART + Clock Wizard (65 MHz), con reset por botón y LEDs de estado (I-49) |
+| `riscv_basys3/` | **vigente** | Trabajo final: procesador RISC-V segmentado + Debug Unit + UART + Clock Wizard (92 MHz), con reset por botón y LEDs de estado (I-49) |
 | `tp2_uart/` | histórico | TP2: ALU operada a través de UART (`top.v` + `alu_top.v`) |
 | `tp1_alu/` | histórico | TP1: ALU con entradas por switches/botones y antirrebote |
 
@@ -35,7 +35,7 @@ El proyecto se genera en `build/vivado_<diseño>/` (ignorado por git). El nombre
 
 | Pin | Uso |
 |---|---|
-| `clk` (W5) | Reloj de 100 MHz de la placa. Solo entra al Clock Wizard (`ip/clk_wiz.tcl`), que da el reloj del sistema de 65 MHz (decisión [042](../docs/decisiones/042_reloj-del-sistema-a-65-mhz.md)). `CLK_FREQ_HZ` del top (y `F_SYS` de `tb/unit/top_tb.v`) tiene que coincidir con la salida del IP: de ahí salen el divisor de la UART, `clk_khz` de `INFO` y el timeout de la Debug Unit |
+| `clk` (W5) | Reloj de 100 MHz de la placa. Solo entra al Clock Wizard (`ip/clk_wiz.tcl`), que da el reloj del sistema de 92 MHz (decisiones [042](../docs/decisiones/042_reloj-del-sistema-a-65-mhz.md) y [045](../docs/decisiones/045_reloj-del-sistema-a-92-mhz.md)). Si cambia el RTL, hay que volver a medir el timing antes de generar el bitstream: a 92 MHz el margen es de +0,026 ns ([`docs/timing/`](../docs/timing/README.md), sección I-57). `CLK_FREQ_HZ` del top (y `F_SYS` de `tb/unit/top_tb.v`) tiene que coincidir con la salida del IP: de ahí salen el divisor de la UART, `clk_khz` de `INFO` y el timeout de la Debug Unit |
 | `reset` (btnC) | Reset del sistema, sincronizado y alargado por `rtl/common/reset_sync.v` (decisión [041](../docs/decisiones/041_reset-del-sistema-en-la-placa.md)). También queda activo hasta que el MMCM engancha. Deja la Debug Unit en `NO_PROG`: después hay que volver a mandar `LOAD` |
 | `rx`, `tx` (B18, A18) | UART por el USB de programación, 115200 8N1 ([`protocolo_debug.md`](../docs/spec/protocolo_debug.md) §1) |
 | `led[4:0]` (LD0 a LD4) | Estado de ejecución, uno encendido: `NO_PROG`, `READY`, `RUNNING`, `PAUSED`, `HALTED` |

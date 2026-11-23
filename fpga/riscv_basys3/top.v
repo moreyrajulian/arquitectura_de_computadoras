@@ -6,13 +6,13 @@
 //
 // Top del trabajo final en la Basys 3 (I-49): procesador RISC-V
 // segmentado + Debug Unit + UART, con reset por botón (decisión 041) y
-// reloj de 65 MHz del Clock Wizard (decisión 042).
+// reloj de 92 MHz del Clock Wizard (decisiones 042 y 045).
 //
 // Función:
 //   Conecta los bloques como lo prueban debug_dump_tb (montaje A),
 //   debug_load_tb y debug_run_tb, y como lo dicen las decisiones 035 a
 //   039:
-//     clk (100 MHz) --> clk_wiz_sys --> clk_sys (65 MHz), el único reloj
+//     clk (100 MHz) --> clk_wiz_sys --> clk_sys (92 MHz), el único reloj
 //     reset (btnC) | ~locked --> reset_sync --> rst del sistema (uart y
 //                                               Debug Unit)
 //     PC --rx/tx--> uart <--bytes--> debug_unit <--> debug_exec
@@ -64,7 +64,7 @@
 
 module top
 #(
-    parameter integer CLK_FREQ_HZ = 65_000_000,
+    parameter integer CLK_FREQ_HZ = 92_000_000,
     parameter integer BAUD        = 115_200,
     parameter integer BLINK_HZ    = 2
 )

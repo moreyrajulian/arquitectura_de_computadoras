@@ -8,10 +8,12 @@
 #   o en batch:
 #       vivado -mode batch -source scripts/timing.tcl -tclargs [etiqueta] [0|1]
 #
-# Usa el proyecto abierto o, si no hay ninguno, abre o crea
-# build/vivado_riscv_basys3 con create_project.tcl. Con TIMING_IMPL = 1 (por
-# defecto) vuelve a sintetizar e implementar desde cero, para que la medición
-# corresponda al working tree. Después abre impl_1 y escribe en
+# Usa el proyecto abierto tal como está. Si no hay ninguno, con TIMING_IMPL = 1
+# (por defecto) regenera build/vivado_riscv_basys3 con create_project.tcl y
+# vuelve a sintetizar e implementar desde cero, para que la medición corresponda
+# al working tree: los IP se configuran solo al crear el proyecto, así que
+# reabrir uno viejo mediría el reloj de ip/clk_wiz.tcl de cuando se creó (I-57).
+# Con TIMING_IMPL = 0 abre el proyecto que haya. Después abre impl_1 y escribe en
 # build/timing/<etiqueta>/:
 #
 #   timing_summary.rpt    report_timing_summary con el peor camino de setup y de
@@ -42,10 +44,10 @@ if {![info exists TIMING_IMPL]} { set TIMING_IMPL 1 }
 set tim_dir [file join $tim_root build timing $TIMING_TAG]
 file mkdir $tim_dir
 
-# Proyecto: el abierto, o el de build/, o uno nuevo
+# Proyecto: el abierto; si no, uno nuevo (o el de build/ con TIMING_IMPL = 0)
 if {[catch {current_project}]} {
     set xpr [file join $tim_root build vivado_riscv_basys3 riscv_basys3.xpr]
-    if {[file exists $xpr]} {
+    if {!$TIMING_IMPL && [file exists $xpr]} {
         open_project $xpr
     } else {
         set DESIGN riscv_basys3

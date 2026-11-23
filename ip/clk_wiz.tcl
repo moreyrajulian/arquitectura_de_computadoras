@@ -1,11 +1,11 @@
 # ---------------------------------------------------------------------------
-# clk_wiz_sys: reloj del sistema (decisión 042).
+# clk_wiz_sys: reloj del sistema (decisiones 042 y 045).
 #
 # Clocking Wizard con un MMCM: entra el reloj de la Basys 3 (100 MHz, pin W5) y
-# sale clk_out1 a 65 MHz, que es el único reloj del procesador, la Debug Unit y
+# sale clk_out1 a 92 MHz, que es el único reloj del procesador, la Debug Unit y
 # la UART (un solo dominio, sin clock gating: decisión 018).
 #   clk_in1  : reloj de la placa, desde el puerto clk del top
-#   clk_out1 : reloj del sistema, 65 MHz, por un BUFG
+#   clk_out1 : reloj del sistema, 92 MHz, por un BUFG
 #   locked   : el MMCM enganchó. Mientras vale 0, el top mantiene el reset del
 #              sistema (reset_sync, decisión 041)
 # Sin entrada de reset: el MMCM arranca solo al configurar la FPGA.
@@ -23,7 +23,7 @@ set_property -dict [list \
     CONFIG.PRIMITIVE {MMCM} \
     CONFIG.PRIM_SOURCE {Single_ended_clock_capable_pin} \
     CONFIG.PRIM_IN_FREQ {100.000} \
-    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {65.000} \
+    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {92.000} \
     CONFIG.CLK_OUT1_PORT {clk_out1} \
     CONFIG.USE_LOCKED {true} \
     CONFIG.USE_RESET {false} \
