@@ -1,0 +1,146 @@
+% ===========================================================================
+\section{Riesgos y su control}
+\label{sec:riesgos}
+
+\diagrama{control_riesgos.png}{Control y riesgos}{La unidad de control, la unidad de forwarding
+y la unidad de detección de riesgos sobre el pipeline, con los recursos compartidos. Fuente
+editable: \repo{docs/diagramas/control_riesgos.drawio}.}{fig:control_riesgos}
+
+\begin{center}
+\footnotesize
+\begin{tabular}{@{}p{2.6cm} p{4.4cm} p{1.9cm} p{3.6cm} p{1.4cm}@{}}
+  \toprule
+  \textbf{Riesgo} & \textbf{Ejemplo} & \textbf{Se detecta en} & \textbf{Se resuelve con} & \textbf{Costo} \\
+  \midrule
+  Datos, distancia 1 o 2 & \texttt{add x1} y luego \texttt{sub \ldots, x1} & EX & forwarding & 0 \\
+  Datos, distancia 3     & \texttt{add x1} y tres después \texttt{or \ldots, x1} & ID & bypass del banco & 0 \\
+  Carga-uso              & \texttt{lw x1} y luego \texttt{add \ldots, x1} & ID & 1 stall + forwarding & 1 ciclo \\
+  Control                & \texttt{beq}/\texttt{bne} tomado, \texttt{jal}, \texttt{jalr} & EX & flush de IF/ID e ID/EX & 2 ciclos \\
+  Estructural            & \textemdash & \textemdash & no hay ninguno que obligue a frenar & 0 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Las dependencias WAR y WAW no son riesgos: las instrucciones avanzan en orden, leen sus
+registros en ID (o los reciben por forwarding en EX) y escriben solo en WB. Tampoco hay riesgos
+por la memoria de datos: un \texttt{sw} seguido de un \texttt{lw} a la misma dirección acceden en
+MEM en el orden del programa.
+
+\subsection{Forwarding}
+\label{sec:forwarding}
+
+La unidad de forwarding (\repo{rtl/control/forwarding_unit.v}) es combinacional y genera los
+selectores de los muxes de los dos operandos de EX:
+
+\begin{lstlisting}[style=verilog,numbers=none]
+fwd_a = (ex_mem_reg_write && ex_mem_rd != 0 && ex_mem_rd == id_ex_rs1) ? FWD_EX_MEM :
+        (mem_wb_reg_write && mem_wb_rd != 0 && mem_wb_rd == id_ex_rs1) ? FWD_WB     :
+                                                                         FWD_ID_EX;
+// fwd_b: idem con id_ex_rs2
+\end{lstlisting}
+
+\begin{itemize}[nosep]
+  \item Si las dos instrucciones anteriores escriben el mismo registro, gana EX/MEM, que tiene el
+        valor más reciente.
+  \item \texttt{x0} nunca se reenvía, y una burbuja tampoco (tiene \texttt{reg\_write = 0}).
+  \item Los operandos ya reenviados alimentan también el comparador del salto y el dato de un
+        store, así que un salto que depende de una instrucción aritmética anterior no pierde
+        ciclos.
+\end{itemize}
+
+\diagrama{riesgo_forwarding.png}{Forwarding}{Las tres distancias de una dependencia de datos: desde
+EX/MEM, desde MEM/WB y por el bypass del banco de registros.}{fig:riesgo_fwd}
+
+\subsection{Carga-uso}
+
+El dato de un load sale de la BRAM recién al final de MEM. Si la instrucción siguiente lo
+necesita en EX, ese dato todavía no existe y hay que frenarla un ciclo. La detección se hace en ID
+mirando la instrucción que está en EX (\repo{rtl/control/hazard_unit.v}):
+
+\begin{lstlisting}[style=verilog,numbers=none]
+load_use = id_ex_mem_read && id_ex_rd != 0 && if_id_valid &&
+           (id_ex_rd == if_id_rs1 || id_ex_rd == if_id_rs2);
+\end{lstlisting}
+
+La comparación es \textbf{conservadora} (\decision{011}): usa los bits de \texttt{rs1} y
+\texttt{rs2} de la palabra sin mirar si la instrucción los usa. Puede frenar de más
+(\texttt{lui}, \texttt{jal} o el HALT, cuyos bits en esas posiciones son parte del inmediato),
+nunca de menos. En los 22 programas del plan hubo un solo falso positivo en 14 stalls, el de
+\repo{halt_stall.s}, que existe para provocarlo. Después del stall el load está en WB y el dato
+llega a EX por forwarding desde MEM/WB.
+
+\diagrama{riesgo_carga_uso.png}{Carga-uso}{Un ciclo de stall: PC e IF/ID retienen, ID/EX recibe
+una burbuja y el dato llega por forwarding desde MEM/WB.}{fig:riesgo_cu}
+
+\subsection{Saltos}
+
+Los saltos se resuelven en EX, sin predicción (\decision{012}): es equivalente a predecir siempre
+``no tomado''. Cuando \texttt{redirect = 1}, las dos instrucciones que entraron detrás del salto
+(en ID y en IF) siguieron el camino $PC + 4$; en el mismo flanco el PC toma
+\texttt{redirect\_pc} y las dos se convierten en burbujas. Ninguna llegó a escribir nada, porque
+los efectos ocurren en MEM y WB.
+
+\begin{center}
+\small
+\begin{tabular}{@{}l c@{}}
+  \toprule
+  \textbf{Caso} & \textbf{Ciclos perdidos} \\
+  \midrule
+  \texttt{beq}/\texttt{bne} no tomado & 0 \\
+  \texttt{beq}/\texttt{bne} tomado, \texttt{jal}, \texttt{jalr} & 2 \\
+  Salto que depende de una instrucción aritmética anterior & $+0$ (forwarding al comparador) \\
+  Salto que depende de un load inmediatamente anterior & $+1$ (stall de carga-uso) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Resolver en ID ahorraría un ciclo en cada salto tomado, pero agregaría un stall cuando el salto
+depende de la instrucción anterior, que es el caso más común en un lazo. La \decision{012} compara
+las opciones con la suma de un arreglo: con los saltos en EX, el lazo de \repo{mixto_lazo.s}
+(\texttt{lw}, \texttt{add}, \texttt{addi}, \texttt{addi}, \texttt{bne}) tarda 8 ciclos por vuelta.
+
+\diagrama{riesgo_salto.png}{Salto tomado}{El \texttt{beq} se resuelve en EX en el ciclo 3: el PC
+toma el destino y las dos instrucciones del camino equivocado se anulan.}{fig:riesgo_salto}
+
+\subsection{Enables y flush}
+
+La unidad de riesgos combina la carga-uso, la redirección, la parada por HALT y el
+\texttt{enable} de la Debug Unit en los \emph{enables} y \emph{flush} de cada registro:
+
+\begin{lstlisting}[style=verilog,numbers=none]
+stall        = load_use & ~redirect;
+en_pc        = enable & ~stall;
+en_if_id     = enable & ~stall;      // tambien es el enable de la memoria de programa
+en_id_ex     = enable;
+en_ex_mem    = enable;
+en_mem_wb    = enable;               // tambien es el enable de la memoria de datos
+flush_if_id  = redirect | stop_fetch;
+flush_id_ex  = redirect | stall;
+\end{lstlisting}
+
+\begin{center}
+\small
+\begin{tabular}{@{}l l l l l@{}}
+  \toprule
+  \textbf{Situación} & \textbf{PC} & \textbf{IF/ID} & \textbf{ID/EX} & \textbf{EX/MEM, MEM/WB} \\
+  \midrule
+  Normal                      & avanza & carga & carga & cargan \\
+  Stall por carga-uso         & retiene & retiene & burbuja & cargan \\
+  Salto tomado                & destino & burbuja & burbuja & cargan \\
+  HALT en vuelo               & retiene & burbuja & carga & cargan \\
+  Core detenido (\texttt{enable = 0}) & retiene & retiene & retiene & retienen \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Con \texttt{enable = 0} nada con estado cambia, y al volver a 1 las señales combinacionales se
+recalculan igual: un stall continúa donde quedó, así que se puede avanzar ciclo a ciclo con
+\texttt{STEP} en medio de un stall sin perder instrucciones.
+
+\subsection{Riesgos estructurales}
+
+Ningún recurso compartido obliga a frenar. Las memorias de programa y de datos están separadas
+(Harvard); el banco tiene dos puertos de lectura y uno de escritura, y el conflicto entre ID y WB
+se resuelve con el bypass interno; \texttt{PC+4} y \texttt{PC+imm} tienen sumadores propios; no
+hay etapas multiciclo; y la Debug Unit usa puertos propios (el puerto~B de las BRAM y el tercer
+puerto del banco), con el core detenido o en reset.

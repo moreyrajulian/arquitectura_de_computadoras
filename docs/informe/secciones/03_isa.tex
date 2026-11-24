@@ -1,0 +1,67 @@
+% ===========================================================================
+\section{Conjunto de instrucciones}
+\label{sec:isa}
+
+El procesador implementa el subset de RV32I que pide la consigna más una instrucción de parada
+(\repo{docs/spec/isa.md}):
+
+\begin{center}
+\small
+\begin{tabular}{@{}l l l@{}}
+  \toprule
+  \textbf{Tipo} & \textbf{Formato} & \textbf{Instrucciones} \\
+  \midrule
+  Aritméticas y lógicas    & R & \texttt{add sub sll srl sra and or xor slt sltu} \\
+  Con inmediato            & I & \texttt{addi andi ori xori slti sltiu slli srli srai} \\
+  Cargas                   & I & \texttt{lb lh lw lbu lhu} \\
+  Almacenamientos          & S & \texttt{sb sh sw} \\
+  Saltos condicionales     & B & \texttt{beq bne} \\
+  Saltos incondicionales   & J, I & \texttt{jal jalr} \\
+  Inmediato superior       & U & \texttt{lui} \\
+  Parada                   & I & \texttt{halt} (= \texttt{ebreak}, \texttt{0x00100073}) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\diagrama{formatos.png}{Formatos de instrucción}{Los seis formatos de RISC-V y, para cada uno con
+inmediato, de qué bits de la instrucción sale cada bit del inmediato de 32 bits. Los colores
+identifican el bit de origen y son los mismos en todos los formatos.}{fig:formatos}
+
+\subsection{La instrucción de parada}
+\label{sec:halt}
+
+La consigna pide una instrucción que detenga el procesador con el pipeline vacío. Se codificó como
+\texttt{ebreak} (\texttt{0x00100073}) porque no choca con ninguna instrucción implementada, el
+ensamblador estándar la genera y no exige herramientas propias (\decision{001}).
+
+Viaja por el pipeline como una instrucción sin efectos que solo lleva su bit \texttt{halt}.
+Mientras haya un HALT en cualquier etapa, IF deja de buscar:
+
+\begin{lstlisting}[style=verilog,numbers=none]
+stop_fetch  = id_is_halt | id_ex_halt | ex_mem_halt | mem_wb_halt | halted;
+flush_if_id = redirect | stop_fetch;
+\end{lstlisting}
+
+\texttt{stop\_fetch} congela el PC y además convierte en burbuja lo que entra a IF/ID. Hacen falta
+las dos cosas: cuando el HALT está en ID, la BRAM ya está leyendo la dirección siguiente y esa
+palabra aparecería en IF/ID en el flanco siguiente. La parada mira las cuatro etapas porque el HALT
+está en ID un solo ciclo. Cuando llega a WB se levanta \texttt{halted} y el pipeline queda vacío
+(los cuatro \texttt{valid} en 0).
+
+Hay dos casos borde que la verificación cubre con programas propios:
+\begin{itemize}[nosep]
+  \item \textbf{HALT en el camino equivocado}: si un salto anterior se toma, el \emph{flush}
+        convierte al HALT en burbuja, su bit desaparece y \texttt{stop\_fetch} se apaga solo
+        (\repo{sw/halt_camino_equivocado.s}).
+  \item \textbf{HALT retenido por un stall}: \texttt{0x00100073} tiene un 1 en el campo
+        \texttt{rs2}, así que un \texttt{lw x1} justo antes dispara la detección de carga-uso.
+        Como el \emph{enable} tiene prioridad sobre el \emph{flush}, IF/ID conserva el HALT
+        (\repo{sw/halt_stall.s}).
+\end{itemize}
+
+\subsection{Instrucciones fuera del subset}
+
+La unidad de control decodifica por \emph{opcode} y compara la palabra completa solo para el HALT
+(\decision{024}). Un opcode desconocido se comporta como NOP. El ensamblador y el debugger
+rechazan cualquier palabra que no esté en \repo{isa.md} antes de cargarla (\decision{025}), así
+que esos casos no llegan a la placa desde las herramientas del proyecto.

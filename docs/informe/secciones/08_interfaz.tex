@@ -1,0 +1,94 @@
+% ===========================================================================
+\section{Interfaz de la PC y herramientas}
+\label{sec:interfaz}
+
+\subsection{Debugger}
+
+El debugger es una aplicación de texto para la terminal hecha con Textual, en Python
+(\repo{tools/debugger/}, decisiones 008 y 040). Se eligió una TUI porque corre igual en Windows y
+Linux, no necesita un entorno gráfico y permite mostrar mucha información a la vez. Está dividido
+en cuatro capas, de las que solo la última depende de Textual (\repo{docs/spec/interfaz_pc.md}):
+
+\begin{center}
+\small
+\begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{Capa} & \textbf{Responsabilidad} \\
+  \midrule
+  \texttt{client}  & Arma y valida tramas, timeouts y reintentos; un método por comando; recibe \texttt{EVT\_HALTED} \\
+  \texttt{model}   & Volcado de un instante, latches campo por campo, qué cambió y riesgos inferidos \\
+  \texttt{session} & Secuencias de comandos (un paso es \texttt{STEP} + \texttt{READ\_ALL}), historial, controles habilitados \\
+  \texttt{tui}     & Paneles, colores y teclas \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Así el cliente se prueba con las tramas de ejemplo del protocolo sin terminal, y los scripts de
+prueba en placa lo usan sin levantar la interfaz.
+
+\captura[0.45\textheight]{debugger_demo_datos_ciclo08.png}{Debugger en la placa}{Ciclo 8 de
+\repo{demo_datos.s}: stall por carga-uso. El pipeline muestra la burbuja en EX y el PC e IF/ID
+retenidos; \texttt{sub x4} está en WB escribiendo \texttt{x4} mientras \texttt{add x6} lo lee en
+ID.}{fig:debugger}
+
+La pantalla (figura~\ref{fig:debugger}) tiene:
+\begin{itemize}[nosep]
+  \item \textbf{Programa}: el código desensamblado con la etapa en que está cada instrucción.
+  \item \textbf{Pipeline}: las cinco etapas con el PC y la instrucción de cada una, las burbujas
+        con su causa y los riesgos del ciclo.
+  \item \textbf{Latches}: los cuatro registros de segmentación campo por campo, con los nombres de
+        la especificación.
+  \item \textbf{Registros} y \textbf{memoria de datos usada}, con lo que cambió en el último paso
+        resaltado.
+  \item \textbf{Historial}: un renglón por paso con los eventos y los cambios; cualquier paso
+        anterior se puede volver a ver.
+\end{itemize}
+
+\paragraph{Riesgos inferidos.} La Debug Unit no informa stalls ni forwarding: la PC los deduce de
+los campos de los latches con las mismas ecuaciones del hardware y los marca como ``inferidos''
+(\decision{043}). Si dos volcados son de ciclos seguidos, además compara lo previsto con lo
+observado y marca cualquier diferencia como inconsistencia. Las reglas se prueban contra el modelo
+de referencia en cada ciclo de todos los programas de \repo{sw/}.
+
+\begin{center}
+\small
+\begin{tabular}{@{}l l l@{}}
+  \toprule
+  \textbf{Tecla} & \textbf{Control} & \textbf{Comandos} \\
+  \midrule
+  F1          & Conectar               & \texttt{INFO}, \texttt{STATUS}, \texttt{READ\_ALL} \\
+  F2 / F8     & Cargar / reprogramar   & ensambla el \texttt{.s} y manda \texttt{LOAD} \\
+  F5          & Ejecutar               & \texttt{RUN} y espera \texttt{EVT\_HALTED} \\
+  F10         & Paso                   & \texttt{STEP} + \texttt{READ\_ALL} \\
+  Shift+F10   & $N$ pasos              & $N$ veces \texttt{STEP} y un \texttt{READ\_ALL} \\
+  F4          & Correr hasta el cursor & \texttt{STEP} hasta que la instrucción elegida llega a WB \\
+  F6          & Detener                & \texttt{STOP} \\
+  F3          & Reiniciar              & \texttt{RESET} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Ensamblador}
+
+\repo{tools/assembler} (\texttt{rvasm}) es un ensamblador propio en Python, sin dependencias
+(\decision{017}). Acepta el subset de \repo{isa.md}, etiquetas y los nombres ABI de los registros,
+y genera \texttt{.hex}, \texttt{.bin}, \texttt{.coe} y un listado con direcciones. Rechaza con
+número de línea cualquier instrucción fuera del subset o inmediato fuera de rango. Lo usan el
+debugger, el modelo de referencia y los scripts de verificación. Sus salidas se comparan palabra por
+palabra con las de un ensamblador estándar (GNU o LLVM, \repo{validate_reference.py}).
+
+\subsection{Modelo de referencia}
+
+\repo{tools/isasim} es un simulador en Python escrito aparte del RTL (\decision{020}), en dos capas:
+
+\begin{itemize}[nosep]
+  \item \textbf{ISA}: el efecto de cada instrucción, decodificada por su cuenta desde
+        \repo{isa.md}, sin usar las tablas del ensamblador.
+  \item \textbf{Pipeline}: en qué etapa está cada instrucción en cada ciclo, con las reglas de
+        \repo{pipeline.md} (forwarding, stall, flush y parada por HALT), y qué tiene cada
+        registro de segmentación.
+\end{itemize}
+
+Produce el estado final, la cantidad de ciclos y la traza de los cuatro latches empaquetados en
+cada ciclo. Esa traza es la que compara el banco de pruebas del RTL y también la que compara
+\repo{comparar.py} con la placa (sección~\ref{sec:verif}).

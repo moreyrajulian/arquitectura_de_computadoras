@@ -1,0 +1,126 @@
+% ===========================================================================
+\section{Pipeline y camino de datos}
+\label{sec:pipeline}
+
+\diagrama{datapath.png}{Camino de datos}{Las cinco etapas con sus bloques, los cuatro registros
+de segmentación, las señales de control y los caminos de forwarding y de redirección. Es el
+diseño final, con el comparador de igualdad para los saltos (\decision{044}). Fuente editable:
+\repo{docs/diagramas/datapath.drawio}.}{fig:datapath}
+
+El procesador es un RV32I clásico de cinco etapas, con datos y direcciones de 32~bits
+(\repo{docs/spec/pipeline.md}). La figura~\ref{fig:datapath} muestra el camino de datos completo.
+El módulo superior es \repo{rtl/pipeline/riscv_core.v}, que instancia una etapa por módulo
+(\repo{if_stage}, \repo{id_stage}, \repo{ex_stage}, \repo{mem_stage}, \repo{wb_stage}), los
+cuatro registros de segmentación y las unidades de forwarding y de riesgos.
+
+\begin{center}
+\small
+\begin{tabular}{@{}l p{6.2cm} p{5.6cm}@{}}
+  \toprule
+  \textbf{Etapa} & \textbf{Qué hace} & \textbf{Bloques} \\
+  \midrule
+  IF  & Mantiene el PC y lee la instrucción & \texttt{pc\_reg}, sumador $+4$, mux de próximo PC, memoria de programa \\
+  ID  & Decodifica, lee registros, arma el inmediato y el control; detecta la carga-uso & banco de registros, generador de inmediatos, unidad de control \\
+  EX  & Opera, calcula direcciones y decide los saltos & muxes de forwarding, ALU, sumador $PC+imm$, comparador de igualdad \\
+  MEM & Lee o escribe la memoria de datos & memoria de datos con \emph{byte write enable} \\
+  WB  & Extiende el dato de un load y escribe \texttt{rd} & extensión, mux de write-back \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Registros de segmentación}
+
+Cada registro de segmentación guarda todo lo que una instrucción necesita en las etapas
+siguientes. Todos tienen las mismas tres entradas de control, con prioridad
+\texttt{rst} $>$ \texttt{en} $>$ \texttt{flush}:
+
+\begin{center}
+\small
+\begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{Entrada} & \textbf{Efecto} \\
+  \midrule
+  \texttt{rst}   & Carga una burbuja \\
+  \texttt{en}    & En 0 conserva el contenido (stall o core detenido por la Debug Unit) \\
+  \texttt{flush} & En 1 carga una burbuja en lugar de la instrucción entrante \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Una \textbf{burbuja} es un registro con \texttt{valid = 0} y todas las señales de control con
+efectos en 0 (escritura de registro y de memoria, salto y halt). Sus campos de datos no se
+limpian, porque no importan. Que \texttt{en} gane sobre \texttt{flush} garantiza que un stall o el
+core detenido nunca pierden la instrucción retenida.
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r l@{}}
+  \toprule
+  \textbf{Registro} & \textbf{Bits} & \textbf{Campos} \\
+  \midrule
+  IF/ID  &  65 & \texttt{valid}, \texttt{pc}, \texttt{instr} \\
+  ID/EX  & 161 & \texttt{valid}, \texttt{pc}, \texttt{rs1\_data}, \texttt{rs2\_data}, \texttt{imm}, \texttt{rs1}, \texttt{rs2}, \texttt{rd}, \texttt{funct3} y 14 bits de control \\
+  EX/MEM & 109 & \texttt{valid}, \texttt{pc}, \texttt{result}, \texttt{store\_data}, \texttt{rd}, \texttt{funct3} y 4 bits de control \\
+  MEM/WB & 110 & \texttt{valid}, \texttt{pc}, \texttt{result}, \texttt{read\_data}, \texttt{rd}, \texttt{funct3}, \texttt{offset} y 3 bits de control \\
+  \midrule
+  \textbf{Total} & \textbf{445} & 381 en flip-flops y 64 en los registros de salida de las BRAM \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Los campos se llaman igual en la especificación, en el RTL (\texttt{id\_ex\_alu\_ctrl},
+\texttt{ex\_mem\_reg\_write}, \ldots), en el modelo de referencia y en el banco de pruebas, que los
+lee por jerarquía. El orden de los campos define también cómo se empaquetan en la traza del
+modelo y en el volcado que la Debug Unit manda a la PC (decisiones 020 y 023): los tres
+coinciden bit a bit.
+
+\subsection{Etapas}
+
+\paragraph{IF.} El próximo PC se elige con esta prioridad:
+\begin{lstlisting}[style=verilog,numbers=none]
+pc_next = redirect   ? redirect_pc :   // salto tomado en EX
+          stop_fetch ? pc_reg      :   // HALT en vuelo (seccion 3.1)
+                       pc_reg + 4;
+\end{lstlisting}
+La memoria de programa es una BRAM de lectura sincrónica: la dirección entra en un flanco y la
+instrucción sale en el siguiente, ya registrada. Por eso el registro de salida de la BRAM
+\emph{es} el campo \texttt{instr} de IF/ID, y su \emph{enable} es el mismo \texttt{en\_if\_id}
+(\decision{009}).
+
+\paragraph{ID.} El banco de registros tiene 32 registros en flip-flops, dos puertos de lectura
+asíncronos y uno de escritura manejado por WB (\decision{007}). Si WB escribe el registro que ID
+está leyendo en el mismo ciclo, la lectura entrega el dato nuevo (\emph{bypass} interno): resuelve
+la dependencia a distancia~3 sin forwarding. Un tercer puerto de lectura, sin bypass, es para el
+volcado de la Debug Unit. La unidad de control decodifica por opcode y decide también la operación
+de la ALU, así que a EX solo viajan 4~bits de \texttt{alu\_ctrl} (\decision{026}).
+
+\paragraph{EX.} Los operandos pasan por los muxes de forwarding (sección~\ref{sec:forwarding}).
+Los saltos se resuelven acá (\decision{012}), con un sumador propio para $PC + imm$ y un
+comparador de igualdad que no pasa por la ALU (\decision{044}):
+\begin{lstlisting}[style=verilog,numbers=none]
+eq          = (rs1_val == rs2_val);              // operandos con forwarding
+taken       = branch & (eq ^ funct3[0]);         // beq: eq = 1, bne: eq = 0
+redirect    = taken | jal | jalr;
+redirect_pc = jalr ? {alu_out[31:1], 1'b0} : pc + imm;
+\end{lstlisting}
+Alcanza con igualdad porque el subset solo tiene \texttt{beq} y \texttt{bne}. El comparador sacó
+del camino crítico el mux del operando~B, el desplazador y el mux de resultado de la ALU
+(sección~\ref{sec:timing}).
+
+\paragraph{MEM.} La memoria de datos es otra BRAM con \emph{byte write enable}: \texttt{sb} y
+\texttt{sh} escriben solo los bytes que corresponden, sin leer y reescribir la palabra
+(\decision{016}). El dato leído sale registrado al final del ciclo y es el campo
+\texttt{read\_data} de MEM/WB.
+
+\paragraph{WB.} Extiende el dato del load según \texttt{funct3} y el desplazamiento dentro de la
+palabra (\texttt{lb}, \texttt{lh}, \texttt{lbu}, \texttt{lhu}), elige entre el resultado de EX y
+el dato de memoria y escribe \texttt{rd}. También actualiza \texttt{halted} cuando llega un HALT
+válido.
+
+\subsection{Convenciones del RTL}
+
+Todo el RTL sigue las convenciones de la \decision{010}: cabecera con función, puertos, latencia y
+valor de reset; prefijos \texttt{i\_}/\texttt{o\_}, \texttt{\_reg}/\texttt{\_next} y \texttt{u\_};
+reset sincrónico y activo en alto solo en control, \texttt{valid} y PC; un solo dominio de reloj;
+codificaciones solo en \repo{rtl/common/riscv_defs.vh}. Ningún diseño infiere latches
+(\texttt{Register as Latch = 0} en la utilización).

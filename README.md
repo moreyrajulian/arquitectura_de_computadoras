@@ -23,7 +23,7 @@ El trabajo final está implementado y probado en la placa:
   RTL, y en la placa 22 de 22 programas contra el resultado esperado y el modelo de
   referencia ([`docs/spec/verificacion.md`](docs/spec/verificacion.md)).
 
-El informe final está en [`docs/informe/`](docs/informe/README.md).
+El informe final está en [`docs/informe/informe_final.pdf`](docs/informe/informe_final.pdf) (fuente en LaTeX en [`docs/informe/`](docs/informe/README.md)).
 
 ## Integrantes
 
@@ -119,4 +119,4 @@ los programas de demostración y su guion, en [`sw/demo/`](sw/demo/README.md).
 7. [x] Memoria de programa por UART + Debug Unit
 8. [x] Interfaz de debug en la PC
 9. [x] Integración, análisis de camino crítico y Clock Wizard
-10. [ ] Informe final y presentación
+10. [x] Informe final y presentación

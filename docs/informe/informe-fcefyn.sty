@@ -1,0 +1,377 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  informe-fcefyn.sty
+%  Plantilla de informes - FCEFyN - UNC
+%  Adaptada para laboratorios de Procesamiento Digital de Senales con
+%  microcontroladores NXP MCX (FRDM-MCXN947, MCUXpresso IDE / Config Tools).
+%
+%  Uso:  \usepackage{informe-fcefyn}
+%
+%  Novedades respecto de v1.0 (VHDL):
+%   - Estilo de codigo C embebido (tipos CMSIS/SDK, q15_t, macros del SDK).
+%   - \codigo{} ahora es C por defecto y no rompe si falta el archivo.
+%   - \captura{} para pantallas de MCUXpresso Config Tools.
+%   - \frecuenciatimer{} + \filafs{} -> tabla de velocidades de muestreo
+%     calculada automaticamente (valor de match, fs real y error).
+%   - \led{R}{G}{B} dibuja el color del LED RGB asignado a cada velocidad.
+%   - Estilos TikZ para diagramas de bloques, estados y flujo.
+%   - \completar{} marca en rojo lo que falta llenar antes de entregar.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{informe-fcefyn}[2026/09/26 v1.2 Plantilla de informes FCEFyN-UNC (DSP / MCX)]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 1. PAQUETES BASE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\RequirePackage[utf8]{inputenc}
+
+% Codificacion T1 + Latin Modern. Si lmodern no esta instalado se usa OT1,
+% porque T1 sin las fuentes EC produce glifos incorrectos en los listados.
+\IfFileExists{lmodern.sty}{%
+  \RequirePackage[T1]{fontenc}%
+  \RequirePackage{lmodern}%
+}{%
+  \RequirePackage[OT1]{fontenc}%
+  \PackageWarningNoLine{informe-fcefyn}{%
+    No se encontro lmodern. Instalar el paquete 'lm' para mejor tipografia}%
+}
+
+% es-noshorthands evita que babel se apropie de < y > (operadores de C).
+% Si falta babel-spanish (spanish.ldf) se usa la descripcion .ini del
+% castellano que trae el propio babel, asi los titulos siguen en castellano.
+\IfFileExists{spanish.ldf}{%
+  \RequirePackage[spanish,es-noshorthands,es-tabla]{babel}%
+}{%
+  \RequirePackage{babel}%
+  \babelprovide[import,main]{spanish}%
+  \setlocalecaption{spanish}{table}{Tabla}%
+  \setlocalecaption{spanish}{listtable}{Índice de tablas}%
+  \PackageWarningNoLine{informe-fcefyn}{%
+    No se encontro babel-spanish; se usa el locale .ini de babel}%
+}
+
+\RequirePackage[a4paper,margin=2.5cm,headheight=15pt]{geometry}
+
+\RequirePackage{graphicx}
+\RequirePackage{xcolor}
+
+% --- Paleta de colores (debe definirse antes de hyperref) ---
+\definecolor{azulunc}{HTML}{003366}   % azul institucional
+\definecolor{grisclaro}{HTML}{F2F2F2}
+\definecolor{grismedio}{HTML}{999999}
+\definecolor{verdecodigo}{HTML}{2E7D32}
+\definecolor{violetacodigo}{HTML}{6A1B9A}
+\definecolor{naranjacodigo}{HTML}{B45309}  % directivas del preprocesador
+\definecolor{rojoaviso}{HTML}{C62828}      % marcas \completar{}
+% Colores de los bloques de los diagramas
+\definecolor{bloquehw}{HTML}{DCE8F5}       % hardware / perifericos
+\definecolor{bloquesw}{HTML}{FFF4D6}       % software / firmware
+\definecolor{bloquemem}{HTML}{E4F2E4}      % memoria / buffers
+
+\RequirePackage{amsmath,amssymb}
+\RequirePackage{booktabs}
+\RequirePackage{multirow}
+\RequirePackage{array}
+\RequirePackage{longtable}
+\RequirePackage{float}
+\RequirePackage{caption}
+\RequirePackage{subcaption}
+\RequirePackage{enumitem}
+\RequirePackage{fancyhdr}
+\RequirePackage{titlesec}
+\RequirePackage{listings}
+\RequirePackage{siunitx}
+\RequirePackage{xfp}                  % \fpeval para la tabla de muestreo
+\RequirePackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,%
+                calc,fit,backgrounds}
+\RequirePackage[most]{tcolorbox}
+\RequirePackage{etoolbox}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 2. UNIDADES Y FORMATO NUMERICO
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\sisetup{
+  output-decimal-marker = {,},
+  group-separator       = {\,},
+  group-minimum-digits  = 4,
+  list-final-separator  = {\text{ y }},
+  list-pair-separator   = {\text{ y }},
+  range-phrase          = {\text{ a }},
+  per-mode              = symbol,
+}
+\DeclareSIUnit{\sps}{S/s}      % muestras por segundo: \qty{8}{\kilo\sps}
+\DeclareSIUnit{\bit}{bit}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 3. DATOS DE LA CARATULA
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand*{\@materia}{}      \newcommand{\materia}[1]{\renewcommand*{\@materia}{#1}}
+\newcommand*{\@carrera}{}      \newcommand{\carrera}[1]{\renewcommand*{\@carrera}{#1}}
+\newcommand*{\@subtitulo}{}    \newcommand{\subtitulo}[1]{\renewcommand*{\@subtitulo}{#1}}
+\newcommand*{\@tema}{}         \newcommand{\tema}[1]{\renewcommand*{\@tema}{#1}}
+\newcommand*{\@plataforma}{}   \newcommand{\plataforma}[1]{\renewcommand*{\@plataforma}{#1}}
+\newcommand*{\@docentes}{}     \newcommand{\docentes}[1]{\renewcommand*{\@docentes}{#1}}
+\newcommand*{\@fechaentrega}{\today}
+\newcommand{\fechaentrega}[1]{\renewcommand*{\@fechaentrega}{#1}}
+\newcommand*{\@logoizq}{}      \newcommand{\logoizquierdo}[1]{\renewcommand*{\@logoizq}{#1}}
+\newcommand*{\@logoder}{}      \newcommand{\logoderecho}[1]{\renewcommand*{\@logoder}{#1}}
+
+% \autor{Apellido, Nombre}{Matricula}{correo}: se acumulan en una tabla.
+% Un campo vacio se muestra como marca \completar{}.
+\newcommand*{\@autores}{}
+\newcommand{\@campoautor}[2]{\ifblank{#1}{\completar{#2}}{#1}}
+\newcommand{\autor}[3]{%
+  \g@addto@macro\@autores{#1 & \@campoautor{#2}{matrícula} &
+                          \texttt{\small\@campoautor{#3}{correo}}\\}}
+
+\newcommand{\@logo}[1]{%
+  \IfFileExists{#1}{\includegraphics[height=2.6cm,width=4.2cm,keepaspectratio]{#1}}%
+                   {\fbox{\parbox[c][2.2cm][c]{3cm}{\centering\scriptsize logo\\\texttt{\detokenize{#1}}}}}}
+
+\newcommand{\caratula}{%
+  \begin{titlepage}
+    \thispagestyle{empty}
+    \noindent
+    \begin{minipage}[c]{0.3\textwidth}\raggedright \@logo{\@logoizq}\end{minipage}%
+    \begin{minipage}[c]{0.4\textwidth}\centering
+      \small\textsc{Universidad Nacional de Córdoba}\\[2pt]
+      \footnotesize Facultad de Ciencias Exactas, Físicas y Naturales
+    \end{minipage}%
+    \begin{minipage}[c]{0.3\textwidth}\raggedleft \@logo{\@logoder}\end{minipage}
+
+    \vspace{0.8cm}
+    {\color{azulunc}\rule{\linewidth}{1.2pt}}
+    \vspace{1.6cm}
+
+    \begin{center}
+      {\Large\color{azulunc}\@materia\par}
+      \vspace{0.25cm}
+      {\normalsize\@carrera\par}
+      \vspace{1.6cm}
+      {\Huge\bfseries\@subtitulo\par}
+      \vspace{0.45cm}
+      {\LARGE\@tema\par}
+      \vspace{0.6cm}
+      {\small\color{grismedio}\@plataforma\par}
+    \end{center}
+
+    \vfill
+    \begin{center}
+      \renewcommand{\arraystretch}{1.25}
+      \begin{tabular}{@{}l l l@{}}
+        \toprule
+        \textbf{Integrante} & \textbf{Matrícula} & \textbf{Correo}\\
+        \midrule
+        \@autores
+        \bottomrule
+      \end{tabular}
+
+      \vspace{0.9cm}
+      {\small\textbf{Docentes:} \@docentes\par}
+      \vspace{0.3cm}
+      {\small\textbf{Fecha de entrega:} \@fechaentrega\par}
+    \end{center}
+    \vspace{0.4cm}
+    {\color{azulunc}\rule{\linewidth}{1.2pt}}
+  \end{titlepage}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 4. MARCAS DE CONTENIDO PENDIENTE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% \completar{texto} marca en rojo lo que falta. Con \entregafinal activo,
+% al terminar de compilar se avisa en el log cuantas marcas quedaron.
+\newif\if@entregafinal \@entregafinalfalse
+\newcommand{\entregafinal}{\@entregafinaltrue}
+\newcounter{pendientes}
+\newcommand{\completar}[1]{%
+  \stepcounter{pendientes}%
+  {\color{rojoaviso}\sffamily\small[#1]}}
+\AtEndDocument{%
+  \if@entregafinal
+    \ifnum\value{pendientes}>0
+      \PackageWarningNoLine{informe-fcefyn}{%
+        Quedan \arabic{pendientes} marcas \string\completar\space sin resolver}%
+    \fi
+  \fi}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 5. TITULOS, ENCABEZADOS Y ENTORNOS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\titleformat{\section}{\Large\bfseries\color{azulunc}}{\thesection}{0.6em}{}
+  [{\color{azulunc}\titlerule[0.6pt]}]
+\titleformat{\subsection}{\large\bfseries\color{azulunc}}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.6ex plus .4ex}{1.2ex}
+
+% \ejercicio{Titulo}: seccion principal del informe
+\newcommand{\ejercicio}[1]{\clearpage\section{#1}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{grismedio}\@materia}
+\fancyhead[R]{\small\color{grismedio}\@subtitulo\ \textemdash\ \@tema}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\captionsetup{font=small,labelfont={bf,color=azulunc},margin=0.5cm}
+
+% Consigna de la catedra
+\newtcolorbox{consigna}[1][Consigna]{%
+  enhanced, breakable, colback=grisclaro, colframe=azulunc,
+  fonttitle=\bfseries, title={#1}, boxrule=0.6pt, arc=2pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt}
+
+% Nota / aclaracion
+\newtcolorbox{nota}[1][Nota]{%
+  enhanced, breakable, colback=bloquesw!60, colframe=naranjacodigo,
+  fonttitle=\bfseries\small, title={#1}, boxrule=0.5pt, arc=2pt,
+  fontupper=\small, left=6pt, right=6pt, top=3pt, bottom=3pt}
+
+% Nombres de pines, perifericos y archivos
+\newcommand{\pin}[1]{\texttt{#1}}
+\newcommand{\periferico}[1]{\textbf{\textsf{#1}}}
+\newcommand{\archivo}[1]{\texttt{\detokenize{#1}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 6. CAPTURAS DE PANTALLA Y CODIGO
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% \captura[alto]{archivo}{herramienta}{descripcion}{etiqueta}
+% Si el archivo no existe dibuja un recuadro indicando que captura falta.
+\newcommand{\captura}[5][0.42\textheight]{%
+  \begin{figure}[H]
+    \centering
+    \IfFileExists{#2}{%
+      \includegraphics[width=0.95\linewidth,height=#1,keepaspectratio]{#2}%
+    }{%
+      \stepcounter{pendientes}%
+      \begin{tikzpicture}
+        \node[draw=rojoaviso,dashed,thick,rounded corners=3pt,fill=rojoaviso!4,
+              minimum width=0.9\linewidth,minimum height=3.2cm,align=center,
+              font=\sffamily\small,text=rojoaviso]
+          {Captura pendiente: \textbf{#3}\\[3pt]
+           guardar como \texttt{\detokenize{#2}}};
+      \end{tikzpicture}%
+    }
+    \caption{\textbf{#3.} #4}
+    \label{#5}
+  \end{figure}}
+
+% --- Estilo de codigo C para Cortex-M / SDK MCUXpresso ---
+\lstdefinestyle{cmcx}{
+  language=C,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{azulunc}\bfseries,
+  keywordstyle=[2]\color{violetacodigo},
+  keywordstyle=[3]\color{naranjacodigo},
+  morekeywords=[2]{uint8_t,uint16_t,uint32_t,uint64_t,int8_t,int16_t,int32_t,
+    int64_t,bool,q7_t,q15_t,q31_t,float32_t,lpadc_conv_result_t,
+    lpadc_config_t,lpadc_conv_command_config_t,lpadc_conv_trigger_config_t,
+    ctimer_config_t,ctimer_match_config_t,dac_config_t,vref_config_t,
+    pll_setup_t,true,false},
+  morekeywords=[3]{\#include,\#define,\#if,\#ifdef,\#ifndef,\#endif,\#else,
+    defined},
+  commentstyle=\color{verdecodigo}\itshape,
+  stringstyle=\color{naranjacodigo},
+  numbers=left, numberstyle=\tiny\color{grismedio}, numbersep=6pt,
+  frame=tb, framerule=0.4pt, rulecolor=\color{grismedio},
+  backgroundcolor=\color{grisclaro},
+  xleftmargin=1.6em, framexleftmargin=1.4em,
+  breaklines=true, breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{grismedio}{$\hookrightarrow$}\space},
+  showstringspaces=false, tabsize=4, columns=fullflexible, keepspaces=true,
+  captionpos=t, aboveskip=0.8em, belowskip=0.6em,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+           {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+           {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {°}{{\textdegree}}1,
+}
+\lstset{style=cmcx}
+\renewcommand{\lstlistingname}{Código}
+\renewcommand{\lstlistlistingname}{Índice de código}
+
+% \codigo[opciones de listings]{archivo}{titulo}
+\newcommand{\codigo}[3][]{%
+  \IfFileExists{#2}{%
+    \lstinputlisting[caption={#3},#1]{#2}%
+  }{%
+    \par\completar{Falta el archivo \texttt{\detokenize{#2}} (#3)}\par}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 7. TABLA DE VELOCIDADES DE MUESTREO Y LED RGB
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% \frecuenciatimer{Hz}: reloj de entrada del CTIMER.
+% \divisordisparo{k}: cantidad de matches por disparo del ADC. Con la salida
+%   del match en modo toggle el ADC se dispara en un flanco de cada dos, k=2.
+\newcommand*{\@ftimer}{150000000}
+\newcommand{\frecuenciatimer}[1]{\renewcommand*{\@ftimer}{#1}}
+\newcommand*{\@kdisparo}{1}
+\newcommand{\divisordisparo}[1]{\renewcommand*{\@kdisparo}{#1}}
+\newcommand{\ftimer}{\qty{\fpeval{\@ftimer/1000000}}{\mega\hertz}}
+
+% \led{R}{G}{B}: circulo con el color resultante (1 = segmento encendido)
+\newcommand{\led}[3]{%
+  \tikz[baseline=-0.6ex]{\definecolor{ledtmp}{rgb}{#1,#2,#3}%
+    \fill[ledtmp,draw=black!70,line width=0.4pt] (0,0) circle (0.9ex);}}
+
+% Entorno de la tabla. Cada \filafs agrega una fila y numera el estado.
+\newcounter{estadofs}
+\newenvironment{tablamuestreo}{%
+  \setcounter{estadofs}{0}%
+  \begin{tabular}{@{}c r r r r l@{}}
+  \toprule
+  \textbf{Estado} & \textbf{$f_s$ nominal} & \textbf{MR} &
+  \textbf{$f_s$ real} & \textbf{Error} & \textbf{LED}\\
+  \midrule}{%
+  \bottomrule
+  \end{tabular}}
+
+% \filafs{fs nominal [Hz]}{valor de match MR}{nombre del color}{R}{G}{B}
+%   fs real = ftimer / (k * (MR + 1))
+\newcommand{\filafs}[6]{%
+  \xdef\@fsreal{\fpeval{round(\@ftimer/(\@kdisparo*(#2+1)),2)}}%
+  \xdef\@fserr{\fpeval{round(100*(\@ftimer/(\@kdisparo*(#2+1))-(#1))/(#1),3)}}%
+  E\arabic{estadofs}\stepcounter{estadofs} &
+  \qty{#1}{\hertz} & \num{#2} &
+  \qty[round-mode=places,round-precision=2]{\@fsreal}{\hertz} &
+  \qty[round-mode=places,round-precision=3]{\@fserr}{\percent} &
+  \led{#4}{#5}{#6}~#3\\}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 8. ESTILOS TIKZ
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\tikzset{
+  bloque/.style   = {draw=azulunc, rounded corners=2pt, align=center,
+                     minimum height=1.1cm, minimum width=2.2cm,
+                     inner sep=4pt, font=\footnotesize, line width=0.6pt},
+  hw/.style       = {bloque, fill=bloquehw},
+  sw/.style       = {bloque, fill=bloquesw},
+  mem/.style      = {bloque, fill=bloquemem},
+  externo/.style  = {bloque, draw=grismedio, dashed, fill=white},
+  senal/.style    = {-{Stealth[length=2.2mm]}, line width=1.1pt, draw=azulunc},
+  flecha/.style   = {-{Stealth[length=2mm]}, line width=0.6pt},
+  control/.style  = {-{Stealth[length=2mm]}, line width=0.6pt, dashed},
+  etiqueta/.style = {font=\scriptsize, inner sep=1.5pt, align=center},
+  estado/.style   = {circle, draw=azulunc, fill=bloquehw, align=center,
+                     minimum size=1.55cm, inner sep=1pt, line width=0.6pt,
+                     font=\small},
+  % Diagramas de flujo
+  inicio/.style   = {rounded rectangle, draw=azulunc, fill=grisclaro,
+                     align=center, font=\footnotesize, minimum height=0.8cm,
+                     inner xsep=8pt},
+  proceso/.style  = {rectangle, draw=azulunc, fill=bloquesw, align=center,
+                     font=\footnotesize, minimum height=0.8cm,
+                     minimum width=3.4cm, inner sep=4pt},
+  decision/.style = {diamond, aspect=2.4, draw=azulunc, fill=bloquehw,
+                     align=center, font=\footnotesize, inner sep=1pt},
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 9. HIPERVINCULOS (al final)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\RequirePackage[hidelinks]{hyperref}
+\AtBeginDocument{\hypersetup{pdftitle={\@subtitulo: \@tema},
+                             pdfsubject={\@materia}}}
+
+\endinput

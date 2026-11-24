@@ -1,0 +1,116 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  Trabajo final de Arquitectura de Computadoras (I-60)
+%  RISC-V RV32I segmentado de 5 etapas con Debug Unit por UART, en una Basys 3
+%
+%  Estructura:
+%     main.tex                carátula, preámbulo y orden de las secciones
+%     informe-fcefyn.sty      plantilla de informes de la FCEFyN
+%     secciones/*.tex         una sección por archivo
+%     img/                    logos
+%  Las figuras se toman de ../diagramas, ../capturas y ../timing sin copiarlas
+%  (\graphicspath): el informe usa los mismos PNG que el resto de docs/.
+%
+%  Compilar desde la raíz del repo (la salida va a build/, que no se versiona):
+%     latexmk -pdf -outdir=build/informe -cd docs/informe/main.tex
+%  En Overleaf: subir la carpeta docs/ entera y elegir informe/main.tex como
+%  documento principal (ver docs/informe/README.md).
+%
+%  Lo que aparece entre corchetes rojos (\completar{...}) falta llenarlo.
+%  Para la entrega, descomentar \entregafinal.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[11pt,a4paper]{article}
+% Compilando desde docs/ (Overleaf con informe/main.tex como documento principal)
+% los archivos del informe se buscan también en informe/.
+\makeatletter
+\IfFileExists{secciones/01_introduccion.tex}{}{\def\input@path{{informe/}}}
+\makeatother
+\usepackage{informe-fcefyn}
+
+\entregafinal
+
+% ------------------------- Datos de la carátula ------------------------------
+\materia{Arquitectura de Computadoras}
+\carrera{Ingeniería en Computación}
+\subtitulo{Trabajo Final}
+\tema{Procesador RISC-V segmentado con Debug Unit}
+\plataforma{Basys 3 (Artix-7 \texttt{xc7a35tcpg236-1}) \textperiodcentered{} Verilog \textperiodcentered{} Vivado 2024.2 \textperiodcentered{} Python}
+\autor{Costamagna, Matías}{44.512.437}{matias.costamagna@mi.unc.edu.ar}
+\autor{Moreyra, Julián}{45.214.537}{julian.moreyra@mi.unc.edu.ar}
+\docentes{Martín Alonso, Martín Pereyra}
+\fechaentrega{27 de noviembre de 2026}
+\logoizquierdo{img/unc_logo.png}
+\logoderecho{img/fcefyn_logo.jpg}
+
+% Las figuras salen de las carpetas de docs/. Las dos variantes de cada ruta
+% cubren compilar con -cd (desde docs/informe) y compilar desde docs/ (Overleaf
+% con la carpeta docs/ como proyecto).
+\graphicspath{{img/}{../diagramas/}{../capturas/}{../timing/}%
+              {informe/}{informe/img/}{diagramas/}{capturas/}{timing/}}
+
+\newcommand{\Repo}{https://github.com/moreyrajulian/arquitectura_de_computadoras}
+
+% ---------------------------- Estilo de Verilog -------------------------------
+% La plantilla trae el estilo de C (cmcx); el RTL del trabajo es Verilog.
+\lstdefinestyle{verilog}{
+  style=cmcx, language=Verilog,
+  morekeywords=[2]{wire,reg,input,output,localparam,parameter},
+}
+
+% Figura con un diagrama de docs/diagramas a todo el ancho
+% \diagrama[ancho]{archivo}{título}{descripción}{etiqueta}
+\newcommand{\diagrama}[5][\linewidth]{%
+  \begin{figure}[H]
+    \centering
+    \IfFileExists{../diagramas/#2}{\includegraphics[width=#1,height=0.72\textheight,keepaspectratio]{#2}}{%
+      \IfFileExists{diagramas/#2}{\includegraphics[width=#1,height=0.72\textheight,keepaspectratio]{#2}}{%
+        \completar{Falta \texttt{docs/diagramas/\detokenize{#2}}}}}
+    \caption{\textbf{#3.} #4}
+    \label{#5}
+  \end{figure}}
+
+% \captura de la plantilla busca el archivo solo en la carpeta actual (no usa
+% \graphicspath) y las capturas están en docs/capturas: se redefine igual que
+% \diagrama, con un recuadro rojo si el archivo no existe.
+% \captura[alto]{archivo}{título}{descripción}{etiqueta}
+\renewcommand{\captura}[5][0.42\textheight]{%
+  \begin{figure}[H]
+    \centering
+    \IfFileExists{../capturas/#2}{\includegraphics[width=0.95\linewidth,height=#1,keepaspectratio]{#2}}{%
+      \IfFileExists{capturas/#2}{\includegraphics[width=0.95\linewidth,height=#1,keepaspectratio]{#2}}{%
+        \completar{Falta \texttt{docs/capturas/\detokenize{#2}}}}}
+    \caption{\textbf{#3.} #4}
+    \label{#5}
+  \end{figure}}
+
+% Referencia a un archivo del repositorio
+% Rutas y nombres largos: se pueden cortar en / _ . -
+\makeatletter\g@addto@macro\UrlBreaks{\do\_\do\-}\makeatother
+\newcommand{\repo}[1]{\nolinkurl{#1}}
+% Decisión de diseño: \decision{012}
+\newcommand{\decision}[1]{decisión~#1}
+
+\begin{document}
+
+\caratula
+\setcounter{tocdepth}{2}
+\tableofcontents
+\newpage
+
+\input{secciones/01_introduccion}
+\input{secciones/02_sistema}
+\input{secciones/03_isa}
+\input{secciones/04_pipeline}
+\input{secciones/05_riesgos}
+\input{secciones/06_memorias}
+\input{secciones/07_debug_unit}
+\input{secciones/08_interfaz}
+\input{secciones/09_verificacion}
+\input{secciones/10_timing}
+\input{secciones/11_preguntas}
+\input{secciones/12_uso}
+\input{secciones/13_conclusiones}
+
+\appendix
+\input{secciones/a_decisiones}
+
+\end{document}
