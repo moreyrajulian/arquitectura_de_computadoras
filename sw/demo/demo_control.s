@@ -9,7 +9,8 @@
 #   x6 desde MEM/WB (pipeline.md 10.3);
 # - un HALT en el camino equivocado: cuando el beq se resuelve en EX, el HALT de
 #   0x30 esta en ID; el flush lo anula y el procesador no se detiene. Si se
-#   detuviera, o si el flush fallara, x15 quedaria en -1.
+#   detuviera, el programa terminaria en 42 ciclos en vez de 44, con x15 = 0
+#   igual: el HALT en ID frena el fetch y el addi x15 de 0x34 no llega a WB.
 #
 # Para cambiar la cantidad de vueltas se cambia el fin del arreglo en x4
 # (0x100 + 4 * vueltas): ciclos = 12 + 8 * vueltas.

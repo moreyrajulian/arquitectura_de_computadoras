@@ -73,3 +73,38 @@ La memoria queda con 2, 3, 5 y 8 en `0x100`–`0x10C`.
 llega a WB, y eso pasa en la primera vuelta. Con otra cantidad de vueltas V (el fin del
 arreglo en `x4` es `0x100 + 4 · V`), el programa tarda `12 + 8 · V` ciclos y el
 `Shift+F10` del paso 2 es N = `8 · V − 9`.
+
+## Prueba en placa
+
+Con el bitstream de `master` a 92 MHz (decisión
+[045](../../docs/decisiones/045_reloj-del-sistema-a-92-mhz.md)), los dos coinciden con el modelo
+en todos los ciclos:
+
+```
+> python tools\debugger\comparar.py COM8 sw\demo\demo_datos.s --cada-ciclo
+INFO: protocolo 1, imem 1024, dmem 1024, latches 3/6/4/4 palabras, 92000 kHz
+demo_datos.s: 10 palabras; el modelo termina en 15 ciclos
+LOAD y 15 STEP, comparando cada ciclo
+15 ciclos: todos coinciden con el modelo
+
+> python tools\debugger\comparar.py COM8 sw\demo\demo_control.s --cada-ciclo
+INFO: protocolo 1, imem 1024, dmem 1024, latches 3/6/4/4 palabras, 92000 kHz
+demo_control.s: 15 palabras; el modelo termina en 44 ciclos
+LOAD y 44 STEP, comparando cada ciclo
+44 ciclos: todos coinciden con el modelo
+```
+
+Ensayo del guion con el debugger, en los ciclos clave:
+
+| Captura | Qué muestra |
+|---|---|
+| [`debugger_demo_datos_ciclo08.png`](../../docs/capturas/debugger_demo_datos_ciclo08.png) | Stall: burbuja en EX, PC e IF/ID retenidos; `sub x4` en WB escribe x4 = 3 mientras `add x6` lo lee en ID |
+| [`debugger_demo_datos_ciclo09.png`](../../docs/capturas/debugger_demo_datos_ciclo09.png) | `add x6` en EX: x5 = 8 por forwarding desde MEM/WB y `rs2_data = 3` en ID/EX, que entró por el bypass del banco |
+| [`debugger_demo_datos_halted.png`](../../docs/capturas/debugger_demo_datos_halted.png) | Estado final: 15 ciclos, pipeline vacío, registros y memoria del `.exp` |
+| [`debugger_demo_control_ciclo38.png`](../../docs/capturas/debugger_demo_control_ciclo38.png) | `beq` en EX recibe x6 = 8 desde MEM/WB y se toma; el HALT de `0x30` está en ID y frena el fetch |
+| [`debugger_demo_control_ciclo39.png`](../../docs/capturas/debugger_demo_control_ciclo39.png) | Flush: IF/ID e ID/EX en burbuja, el HALT del camino equivocado se anula y el core sigue (`PAUSED`, no `HALTED`) |
+| [`debugger_demo_control_halted.png`](../../docs/capturas/debugger_demo_control_halted.png) | Estado final: 44 ciclos, pipeline vacío, Fibonacci 2, 3, 5, 8 en memoria y x15 = 0 |
+
+En el ciclo 8 el panel de registros todavía muestra x4 = 0: muestra el banco después del flanco,
+y la escritura de WB aparece en el ciclo 9. Lo que prueba el bypass es que en el ciclo 9 ID/EX ya
+tiene el 3.
