@@ -220,7 +220,8 @@ Qué hace, en orden:
    - **Incorrecto o timeout:** queda `prog_valid = 0`, estado `NO_PROG` con el core en reset,
      y responde `ERR_CHECKSUM` o `ERR_TIMEOUT`. La PC tiene que repetir el `LOAD` completo.
 
-Cómo responde esto a las preguntas de la consigna:
+Cómo responde esto a las preguntas de la consigna (las respuestas completas, con lo que las
+prueba, están en [`preguntas_consigna.md`](../decisiones/preguntas_consigna.md)):
 
 | Pregunta | Qué hace `LOAD` | Por qué |
 |---|---|---|
@@ -229,10 +230,10 @@ Cómo responde esto a las preguntas de la consigna:
 | ¿Vaciar el pipeline? | Sí (reset/flush) | Las instrucciones del programa viejo que estaban en vuelo se completarían y escribirían registros o memoria |
 | ¿Y la memoria de programa? | Se sobrescribe; el resto se llena con HALT | Sin eso, si el programa nuevo es más corto, al terminar ejecutaría la cola del programa viejo |
 
-> **Decisión a revisar:** llenar el resto con HALT cambia la respuesta a "¿qué pasa si no hay
-> instrucción de parada?" de la nota del HALT: el core ya no puede salirse del programa, pero
-> un bucle infinito sigue sin terminar nunca y para eso está `STOP`. Si se acepta, actualizar
-> la nota de decisión del HALT.
+Llenar el resto con HALT cambia la respuesta a "¿qué pasa si no hay instrucción de parada?" de
+la decisión 001: el core ya no puede salirse del programa, pero un bucle infinito sigue sin
+terminar nunca y para eso está `STOP`. La respuesta vigente está en
+[`preguntas_consigna.md`](../decisiones/preguntas_consigna.md) §2 (I-59).
 
 Llenar y limpiar las memorias recorre cada BRAM una vez por el puerto B (un ciclo por palabra):
 con 1 K palabras son ~10 µs, despreciable frente a la UART.
