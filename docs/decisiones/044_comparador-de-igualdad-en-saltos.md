@@ -1,6 +1,6 @@
 # 044 - Comparador de igualdad para decidir los saltos
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-18
 - **Autores:** Moreyra, Julián
 

@@ -1,0 +1,140 @@
+% ===========================================================================
+\section{Debug Unit}
+\label{sec:debug}
+
+La Debug Unit es el único maestro del core y de la memoria de programa. Recibe comandos de la PC
+por la UART, carga programas, controla la ejecución con \texttt{enable} y \texttt{core\_rst} y
+devuelve el estado del core (\repo{docs/spec/protocolo_debug.md}).
+
+\subsection{Protocolo}
+
+La UART va a \textbf{115200 baudios, 8N1}, sin control de flujo (\decision{003}). El divisor del
+generador de baudios sale de la frecuencia del reloj: a \qty{92}{\mega\hertz},
+$\mathrm{DVSR} = \mathrm{round}(92\,\mathrm{MHz} / (16 \times 115200)) = 50$, con un error de
+\qty{-0,17}{\percent}.
+
+Toda comunicación va en \textbf{tramas} con un byte de inicio distinto en cada sentido, para que una
+captura se lea sin ambigüedad (\decision{002}):
+
+\begin{center}
+\small
+\begin{tabular}{@{}l c c c c c@{}}
+  \toprule
+  & \textbf{SOF} & \textbf{CMD} & \textbf{STATUS} & \textbf{LEN} & \textbf{Payload} \quad \textbf{CHK} \\
+  \midrule
+  Petición (PC $\to$ FPGA)  & \texttt{0xA5} & 1~B & \textemdash & 2~B (LE) & LEN bytes \quad 1~B \\
+  Respuesta (FPGA $\to$ PC) & \texttt{0x5A} & 1~B & 1~B & 2~B (LE) & LEN bytes \quad 1~B \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\texttt{CHK} es el XOR de todos los bytes desde \texttt{CMD} hasta el último del payload. Si pasan
+más de 100~ms entre dos bytes de una trama, la FPGA la descarta y responde
+\texttt{ERR\_TIMEOUT}, así una trama cortada no deja a la Debug Unit esperando para siempre.
+
+\begin{center}
+\small
+\begin{tabular}{@{}l l p{3.6cm} p{6.4cm}@{}}
+  \toprule
+  \textbf{Código} & \textbf{Comando} & \textbf{Payload de la petición} & \textbf{Respuesta} \\
+  \midrule
+  \texttt{0x01} & \texttt{INFO}           & \textemdash & versión, tamaños de memoria, palabras por latch, frecuencia \\
+  \texttt{0x02} & \texttt{STATUS}         & \textemdash & bloque de estado (12~B) \\
+  \texttt{0x10} & \texttt{LOAD}           & $N$ palabras ($4N$~B) & bloque de estado \\
+  \texttt{0x11} & \texttt{RESET}          & \textemdash & bloque de estado \\
+  \texttt{0x20} & \texttt{RUN}            & \textemdash & confirmación; al terminar, \texttt{EVT\_HALTED} \\
+  \texttt{0x21} & \texttt{STEP}           & \textemdash & bloque de estado \\
+  \texttt{0x22} & \texttt{STOP}           & \textemdash & bloque de estado \\
+  \texttt{0x30} & \texttt{READ\_REGS}      & \textemdash & 32 registros (128~B) \\
+  \texttt{0x31} & \texttt{READ\_LATCHES}   & \textemdash & IF/ID, ID/EX, EX/MEM, MEM/WB (68~B) \\
+  \texttt{0x32} & \texttt{READ\_DMEM}      & dirección y cantidad & palabras de la memoria de datos \\
+  \texttt{0x33} & \texttt{READ\_DMEM\_USED} & \textemdash & pares (dirección, valor) de la memoria usada \\
+  \texttt{0x34} & \texttt{READ\_ALL}       & \textemdash & estado + registros + latches + memoria usada \\
+  \texttt{0xE0} & \texttt{EVT\_HALTED}     & \textit{(solo FPGA $\to$ PC)} & bloque de estado \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+El \textbf{bloque de estado} (12~B) tiene el estado de ejecución, los \emph{flags}
+(\texttt{prog\_valid}, \texttt{halted} y los tres avisos de acceso), la cantidad de palabras de
+memoria usadas, el PC y los ciclos ejecutados desde el último \texttt{LOAD} o \texttt{RESET}. Los
+latches viajan con el mismo empaquetado que la traza del modelo de referencia, partidos en palabras
+de 32~bits (\decision{039}). \texttt{READ\_ALL} es lo que usa la PC después de cada paso: todo el
+estado en un solo ida y vuelta.
+
+\diagrama[0.85\linewidth]{protocolo_paso.png}{Paso a paso}{Cada \texttt{STEP} avanza exactamente
+un ciclo del core; después la PC pide \texttt{READ\_ALL} para actualizar la vista. Si se pierde la
+respuesta, \texttt{cycles} del bloque de estado dice si el paso ya se hizo.}{fig:proto_paso}
+
+\subsection{Estados de ejecución}
+
+\diagrama{debug_unit_estados_core.png}{Estados de ejecución}{La FSM de ejecución genera
+\texttt{enable} y \texttt{core\_rst}. El estado es el campo \texttt{state} del bloque de estado.
+\texttt{LOAD} y \texttt{RESET} se aceptan desde cualquier estado.}{fig:estados}
+
+\begin{description}[nosep,leftmargin=1.2em]
+  \item[\texttt{NO\_PROG}] Sin programa válido: el core queda en reset. Es el estado después de
+        encender la placa o de una carga fallida.
+  \item[\texttt{READY}] Programa cargado, PC en 0, registros en 0 y pipeline vacío.
+  \item[\texttt{RUNNING}] Modo continuo: \texttt{enable = 1} hasta que el HALT llega a WB. En
+        ese momento la FPGA manda un \texttt{EVT\_HALTED} sin que la PC lo pida.
+  \item[\texttt{PAUSED}] Detenido en medio de la ejecución por \texttt{STEP} o \texttt{STOP}. El
+        pipeline puede tener instrucciones en vuelo: es una pausa de depuración.
+  \item[\texttt{HALTED}] El programa terminó con el pipeline vacío. Para volver a correr hace
+        falta \texttt{RESET} (el mismo programa) o \texttt{LOAD}.
+\end{description}
+
+\texttt{RUN} y \texttt{STEP} solo se aceptan en \texttt{READY} o \texttt{PAUSED}, y las lecturas en
+cualquier estado menos \texttt{RUNNING}, para que la foto sea consistente. Un comando fuera de su
+estado responde \texttt{ERR\_STATE} sin efectos. \texttt{STOP} existe para los programas que no
+terminan, como un lazo infinito.
+
+\subsection{Dos máquinas de estado}
+
+La Debug Unit tiene dos FSM independientes (\decision{006}):
+
+\begin{description}[style=nextline,nosep,leftmargin=1.2em]
+  \item[FSM de protocolo (\repo{rtl/debug/debug_unit.v})] Recibe la trama, la valida, ejecuta el
+        comando y transmite la respuesta. También escribe la memoria de programa durante un
+        \texttt{LOAD} y limpia las memorias (decisiones 036 y 038).
+  \item[FSM de ejecución (\repo{rtl/debug/debug_exec.v})] Es la dueña del estado de ejecución.
+        Genera \texttt{enable} y \texttt{core\_rst}, cuenta los ciclos y detecta el
+        \texttt{halt} (\decision{037}).
+\end{description}
+
+Separarlas permite que el core corra mientras llega una trama nueva (por eso \texttt{STOP} y
+\texttt{STATUS} funcionan en \texttt{RUNNING}), y que el \texttt{halt} se atienda en el mismo ciclo
+aunque la FSM de protocolo esté ocupada: la de ejecución baja \texttt{enable} y marca el evento
+pendiente, y la de protocolo lo manda cuando termina la respuesta en curso. El volcado de
+registros, latches y memoria está en \repo{rtl/debug/debug_dump.v}, con el mapa de palabras
+usadas en \repo{debug_used_map.v}.
+
+\begin{lstlisting}[style=verilog,numbers=none]
+enable   = (RUNNING | step) & ~halted;   // step = 1 solo el ciclo siguiente al STEP
+core_rst = rst | NO_PROG | clearing;     // mas un ciclo despues de LOAD y RESET
+\end{lstlisting}
+
+\diagrama{debug_unit_fsm.png}{FSM de protocolo}{Recepción, validación, ejecución y transmisión
+de una trama, con los estados \texttt{LOAD\_PREP} y \texttt{CLEAR} de la carga de
+programa.}{fig:fsm_protocolo}
+
+\subsection{Carga y reprogramación}
+
+\texttt{LOAD} es el único mecanismo de carga y sirve igual para la primera vez y para reprogramar
+sin resintetizar (\decision{004}). Se acepta en cualquier estado, también con el core corriendo un
+lazo infinito:
+
+\begin{enumerate}[nosep]
+  \item Con el encabezado válido, la Debug Unit pasa a \texttt{NO\_PROG}: \texttt{enable = 0} y
+        \texttt{core\_rst = 1}.
+  \item Escribe cada palabra en la memoria de programa por el puerto~B a medida que llega.
+  \item Con el checksum correcto, rellena el resto de la memoria de programa con HALT, pone la
+        memoria de datos y el mapa de usadas en cero y suelta el reset: el core queda en
+        \texttt{READY}, con los registros en cero y el pipeline vacío.
+  \item Si el checksum falla o hay timeout, queda en \texttt{NO\_PROG} y no se puede ejecutar
+        hasta repetir el \texttt{LOAD}: un programa a medio escribir nunca corre.
+\end{enumerate}
+
+\diagrama[0.85\linewidth]{protocolo_carga.png}{Carga de programa}{La secuencia de un
+\texttt{LOAD}, con el relleno con HALT y la limpieza de la memoria de datos, y los dos casos de
+error.}{fig:proto_carga}

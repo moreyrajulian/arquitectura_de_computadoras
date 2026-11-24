@@ -1,6 +1,6 @@
 # 037 - FSM de ejecución de la Debug Unit: STEP, enable, prioridades y gancho de la carga
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-13
 - **Autores:** Costamagna, Matías
 

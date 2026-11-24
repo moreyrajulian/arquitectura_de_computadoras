@@ -1,6 +1,6 @@
 # 035 - UART de la Debug Unit: interfaz de bytes y FIFO de recepción
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-09
 - **Autores:** Moreyra, Julián
 

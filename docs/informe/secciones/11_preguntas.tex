@@ -1,0 +1,79 @@
+% ===========================================================================
+\section{Respuestas a las preguntas de la consigna}
+\label{sec:preguntas}
+
+Las respuestas completas, con las pruebas que respaldan cada una, están en
+\repo{docs/decisiones/preguntas_consigna.md} (I-59).
+
+\subsection{¿Hay que vaciar la memoria, los registros, el pipeline y la memoria de programa al
+cargar un programa nuevo?}
+
+Hay que vaciar la memoria de datos, los registros y el pipeline; la memoria de programa se
+sobrescribe. Todo lo hace un solo comando, \texttt{LOAD} (decisiones 004 y 038):
+
+\begin{center}
+\small
+\begin{tabular}{@{}l p{5.2cm} p{6.2cm}@{}}
+  \toprule
+  & \textbf{Qué hace \texttt{LOAD}} & \textbf{Por qué hace falta} \\
+  \midrule
+  Memoria de datos    & La pone en cero, junto con el mapa de palabras usadas & Si no, el programa nuevo lee datos del anterior y la memoria usada mezcla los dos \\
+  Registros           & En cero, con el reset del core & El mismo programa daría resultados distintos según qué se corrió antes \\
+  Pipeline            & Vacío, con el reset del core (todos los \texttt{valid} en 0) & Las instrucciones viejas en vuelo escribirían memoria o registros del programa nuevo \\
+  Memoria de programa & Escribe el programa y rellena el resto con HALT & Vaciarla a cero no alcanza (\texttt{0x00000000} se ejecuta como NOP y el PC seguiría de largo); lo que importa es no ejecutar la cola de un programa anterior más largo \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Lo prueban \repo{debug_load_tb.v} (reprogramar en los cuatro estados, también con el core corriendo
+un lazo infinito) y la placa: \repo{placa.py} carga los 22 programas uno tras otro sin resetear la
+placa, y todos dan su resultado esperado.
+
+\subsection{¿Qué sucede si en la memoria no se encuentra una instrucción de parada?}
+
+Al final de un programa no puede faltar, porque \texttt{LOAD} llena con HALT todo lo que el
+programa no ocupa: un programa que ``se olvida'' el \texttt{halt} igual se detiene en la palabra
+siguiente a la última. Quedan dos casos en que el procesador no se detiene solo:
+
+\begin{itemize}[nosep]
+  \item \textbf{Un lazo infinito}: el HALT nunca llega a ID y el core corre para siempre. Para eso
+        está \texttt{STOP}, que baja \texttt{enable} y deja el core en \texttt{PAUSED} para
+        inspeccionarlo; también sirven \texttt{RESET}, \texttt{LOAD} y el botón de reset.
+  \item \textbf{Un programa de exactamente 1024 palabras sin HALT}: el PC llega a \texttt{0x1000},
+        vuelve a la palabra 0 por el alias de direcciones y el programa se repite; el core levanta
+        \texttt{imem\_fault}. Se corta igual con \texttt{STOP}.
+\end{itemize}
+
+En ningún caso se ejecuta basura de un programa anterior ni memoria sin inicializar.
+
+\subsection{¿Cuál es el camino crítico del sistema?}
+
+A \qty{92}{\mega\hertz}, post-implementación (sección~\ref{sec:timing}):
+
+\begin{lstlisting}[style=verilog,numbers=none]
+dmem_bram (clock-to-out, un load en MEM)
+  -> mux de WB -> forwarding desde MEM/WB (operando del salto en EX)
+  -> comparador de igualdad rs1_val == rs2_val
+  -> taken -> redirect -> flush de ID/EX
+slack +0,026 ns, 10,117 ns de datos, 9 niveles de logica
+\end{lstlisting}
+
+Es el caso de un \texttt{beq}/\texttt{bne} que compara un registro recién cargado. No es un camino
+único: varias etapas quedan en el límite y todas salen de la BRAM de datos.
+
+\subsection{¿Este camino crítico genera skew? ¿Qué consecuencias tiene?}
+
+Muy poco: $-73$~ps en el camino crítico, el 0,7\,\% del período y menos que el jitter del MMCM
+(129~ps). No limita la frecuencia ni rompe el hold, porque hay un solo reloj por un BUFG y el paso a
+paso se hace con \texttt{enable} sin tocar el reloj (sección~\ref{sec:skew}).
+
+\subsection{De encontrarse skew: frecuencia óptima, métricas y aplicarla}
+
+El skew resultó despreciable, pero igual se buscó la frecuencia óptima, porque lo que la limita es
+el camino crítico. \repo{scripts/barrido.tcl} implementó el diseño en 16 frecuencias de 65 a
+\qty{100}{\mega\hertz}; la óptima es \textbf{\qty{92}{\mega\hertz}}, la máxima que cierra. Las
+métricas salen de \repo{scripts/timing.tcl} (\texttt{report\_timing\_summary},
+\texttt{report\_utilization}, \texttt{report\_power}, \texttt{report\_clock\_utilization}) y la
+frecuencia se aplicó en el Clock Wizard y en el parámetro \texttt{CLK\_FREQ\_HZ} del top, del que
+salen el divisor de la UART y el timeout de la Debug Unit. La regresión y la placa pasan completas a
+\qty{92}{\mega\hertz}, e \texttt{INFO} informa \texttt{clk\_khz = 92000}.

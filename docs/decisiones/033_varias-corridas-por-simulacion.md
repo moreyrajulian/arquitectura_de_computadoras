@@ -1,6 +1,6 @@
 # 033 - Varias corridas en una simulación de `pipeline_tb`
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-10
 - **Autores:** Costamagna, Matías
 

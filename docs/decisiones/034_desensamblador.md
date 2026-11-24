@@ -1,6 +1,6 @@
 # 034 - Desensamblador: `rvasm` envuelve el del modelo de referencia
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-10
 - **Autores:** Costamagna, Matías
 

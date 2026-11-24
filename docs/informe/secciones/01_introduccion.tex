@@ -1,0 +1,131 @@
+% ===========================================================================
+\section{Introducción}
+\label{sec:intro}
+
+\begin{consigna}[Trabajo final \textemdash{} Pipeline del procesador RISC-V]
+\small\raggedright\setlength{\parskip}{4pt}
+\textbf{Consigna.} Implementar el pipeline del procesador RISC-V (etapas IF, ID, EX, MEM y WB);
+una Debug Unit que permita enviar y recibir información al procesador mediante protocolo UART, y
+una interfaz para visualizar los datos e interactuar con la Debug Unit (CLI, GUI y/o TUI).
+
+\textbf{Instrucciones a implementar.}
+\begin{itemize}[nosep]
+  \item R-type: \texttt{add, sub, sll, srl, sra, and, or, xor, slt, sltu}.
+  \item I-type: \texttt{lb, lh, lw, lbu, lhu, addi, andi, ori, xori, slti, sltiu, slli, srli,
+        srai, jalr}.
+  \item S-type: \texttt{sb, sh, sw}. \quad B-type: \texttt{beq, bne}. \quad J-type:
+        \texttt{jal}. \quad U-type: \texttt{lui}.
+\end{itemize}
+
+\textbf{Requerimientos.} El procesador debe poder programarse y reprogramarse con comandos por
+UART, sin resintetizar. El clock no debe verse intervenido en ninguna parte del proyecto. Las
+decisiones de diseño se documentan con su porqué.
+
+\textbf{Debug Unit.} Se envían a la PC por la UART el contenido de los 32 registros, de los
+latches intermedios y de la memoria de datos usada.
+
+\textbf{Carga de programa.} El programa está escrito en ensamblador, con un mecanismo para
+traducirlo a lenguaje máquina y una instrucción HALT. El sistema permite programar el procesador
+escribiendo la memoria de programa, reprogramarlo de manera dinámica, y responde: ¿es necesario
+vaciar la memoria?, ¿y los registros?, ¿se necesita vaciar el pipeline?, ¿y la memoria de
+programa?
+
+\textbf{Modos de operación.} Continuo (un comando ejecuta el programa hasta el final y se
+muestran todos los valores) y paso a paso (cada comando ejecuta un ciclo de clock y se muestran
+los valores). En ambos casos el pipeline debe quedar vacío al terminar. Responder: ¿qué sucede si
+en la memoria no se encuentra una instrucción de parada?
+
+\textbf{Clock.} En la integración: ¿cuál es el camino crítico del sistema?, ¿genera skew y qué
+consecuencias tiene? De encontrarse skew, encontrar la frecuencia óptima, generar métricas con
+las herramientas de Vivado y aplicar esa frecuencia.
+\end{consigna}
+
+El trabajo final de la materia es un procesador \textbf{RISC-V RV32I segmentado en cinco etapas}
+(IF, ID, EX, MEM, WB), con unidad de cortocircuitos (\emph{forwarding}), detección de riesgos y
+una \textbf{Debug Unit} que se comunica con la PC por UART. Está escrito en Verilog, se implementa
+en una Basys~3 (Artix-7 \texttt{xc7a35tcpg236-1}) con Vivado~2024.2 y se maneja desde la PC con un
+debugger de texto propio.
+
+Desde la PC se puede cargar un programa en ensamblador sin volver a sintetizar, ejecutarlo de
+corrido o de a un ciclo por comando, y ver en cada paso los 32 registros, los cuatro registros de
+segmentación, la memoria de datos usada y qué instrucción hay en cada etapa.
+
+\subsection{Resultados}
+
+\begin{itemize}[nosep]
+  \item \textbf{ISA}: el subset RV32I de la consigna (32 instrucciones) más \texttt{halt}
+        (\texttt{ebreak}), sección~\ref{sec:isa}.
+  \item \textbf{Pipeline}: cinco etapas con forwarding desde EX/MEM y MEM/WB, bypass en el banco
+        de registros, un ciclo de \emph{stall} por carga-uso y saltos resueltos en EX con
+        \emph{flush} de dos ciclos (secciones~\ref{sec:pipeline} y~\ref{sec:riesgos}).
+  \item \textbf{Debug Unit}: protocolo de tramas con checksum, 14 comandos y dos máquinas de
+        estado, sin tocar el reloj: el core avanza o se detiene con una señal
+        \texttt{enable} (sección~\ref{sec:debug}).
+  \item \textbf{Reloj}: \qty{92}{\mega\hertz} con el Clock Wizard, la máxima frecuencia de un
+        barrido de 65 a \qty{100}{\mega\hertz} que cumple timing (slack $+0{,}026$~ns,
+        sección~\ref{sec:timing}).
+  \item \textbf{Verificación}: dos oráculos independientes (estado final escrito a mano y un
+        modelo de referencia ciclo a ciclo), un banco que compara los cuatro registros de
+        segmentación en cada ciclo, 39 mutantes del RTL y la prueba en la placa: 22 de 22
+        programas con ejecución continua y paso a paso, y 32 de 32 de las variantes sin
+        riesgos (sección~\ref{sec:verif}).
+  \item \textbf{Herramientas}: ensamblador, modelo de referencia, debugger con interfaz de texto y
+        scripts de regresión, timing y prueba en placa (secciones~\ref{sec:interfaz}
+        y~\ref{sec:uso}).
+\end{itemize}
+
+\subsection{Repositorio}
+\label{sec:repo}
+
+\begin{nota}[Código, documentación y evidencia]
+\centering\normalsize
+\url{\Repo}\par\smallskip
+\small Versión descripta en este informe: tag \href{\Repo/tree/v1.0}{\texttt{v1.0}}
+\end{nota}
+
+Este informe resume el trabajo; lo completo está en el repositorio: el RTL, los testbenches, los
+programas de prueba, las herramientas de la PC, la especificación, las 45 notas de decisión y los
+reportes de Vivado. Las rutas que aparecen en el texto con este formato, como
+\repo{docs/spec/pipeline.md} o \repo{tools/debugger/}, son relativas a la raíz del repositorio.
+Para empezar conviene leer:
+
+\begin{itemize}[nosep]
+  \item \href{\Repo\#readme}{\texttt{README.md}}: estado, estructura y cómo usar el procesador.
+  \item \href{\Repo/tree/master/docs}{\texttt{docs/}}: especificación, decisiones, diagramas,
+        timing y capturas de la placa.
+  \item \href{\Repo/tree/master/sw/demo}{\texttt{sw/demo/}}: los programas de demostración y el
+        guion para recorrerlos con el debugger.
+  \item \href{\Repo/blob/master/docs/informe/presentacion.pdf}{\texttt{docs/informe/presentacion.pdf}}:
+        la presentación del trabajo.
+\end{itemize}
+
+\subsection{Cómo está organizado el trabajo}
+
+Este informe resume y enlaza la documentación del repositorio:
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{4.2cm} p{11.4cm}@{}}
+  \toprule
+  \textbf{Carpeta} & \textbf{Contenido} \\
+  \midrule
+  \repo{docs/spec/}        & Especificación escrita antes del código: ISA, pipeline, memorias, protocolo, interfaz y verificación \\
+  \repo{docs/decisiones/}  & 45 notas de decisión de diseño, con las opciones y el porqué (anexo~\ref{anx:decisiones}) \\
+  \repo{docs/timing/}      & Reportes de Vivado, camino crítico, skew y barrido de frecuencias \\
+  \repo{rtl/}, \repo{fpga/}, \repo{ip/} & Diseño sintetizable, top de la placa y scripts de los IP cores \\
+  \repo{tb/}               & Testbenches unitarios y el banco de pruebas del pipeline \\
+  \repo{sw/}               & Programas de prueba en ensamblador con su resultado esperado \\
+  \repo{tools/}            & Ensamblador, modelo de referencia y debugger \\
+  \repo{scripts/}          & Proyecto de Vivado, regresión, timing y barrido \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Metodología.} El pipeline se construyó \textbf{etapa por etapa}: cada etapa fue un
+hito con sus módulos, sus testbenches unitarios y una integración verificada contra el modelo de
+referencia antes de pasar a la siguiente. Los riesgos se agregaron recién con las cinco etapas
+funcionando, porque involucran a varias a la vez. Cada tarea fue una issue de GitHub (se citan
+como I-NN) con sus criterios de terminado, una rama y un pull request revisado por el otro
+integrante. Antes de escribir un módulo se documentó su interfaz en \repo{docs/spec/}, y cada
+decisión de diseño quedó en una nota numerada. La planificación por hitos está en
+\repo{docs/planificacion.md}; el avance real, en las issues y los pull requests del repositorio.

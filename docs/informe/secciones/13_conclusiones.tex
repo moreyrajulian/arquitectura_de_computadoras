@@ -1,0 +1,35 @@
+% ===========================================================================
+\section{Conclusiones}
+\label{sec:conclusiones}
+
+Se implementó y verificó en la Basys~3 un procesador RISC-V RV32I segmentado en cinco etapas, con
+forwarding, detección de carga-uso y flush por saltos, controlado desde la PC por una Debug Unit que
+carga programas, ejecuta de corrido o de a un ciclo y vuelca registros, latches y memoria de datos
+usada. Funciona a \qty{92}{\mega\hertz}, la máxima frecuencia que cumple timing, con un solo reloj y
+sin intervenirlo.
+
+\paragraph{Lo que funcionó.}
+\begin{itemize}[nosep]
+  \item \textbf{Especificar antes de codificar.} Las interfaces de cada módulo y el contrato de
+        nombres de los registros de segmentación se fijaron en \repo{docs/spec/} antes del RTL. El
+        mismo empaquetado de los latches sirve para la traza del modelo, el banco de pruebas y el
+        volcado de la Debug Unit, así que la placa se compara con el modelo sin traducciones.
+  \item \textbf{Integrar etapa por etapa.} Cada error quedó acotado a la última etapa agregada.
+  \item \textbf{Dos oráculos independientes y mutantes.} Con los \texttt{.exp} a mano y el
+        modelo escritos por separado, cada diferencia señalaba qué revisar (la ISA, el modelo o el
+        RTL); los mutantes mostraron qué programas faltaban para cubrir cada mecanismo.
+  \item \textbf{Medir antes de optimizar.} La hipótesis del camino crítico de la \decision{012} se
+        confirmó en el qué y se corrigió en el cómo (el desplazador, no la resta), y eso llevó a una
+        mejora que no cambió ciclos ni resultados: el comparador de igualdad.
+\end{itemize}
+
+\paragraph{Limitaciones y trabajo futuro.}
+\begin{itemize}[nosep]
+  \item Sin excepciones: los accesos inválidos se truncan y dejan un aviso (\decision{015}).
+  \item Los saltos tomados cuestan 2 ciclos. Una predicción de saltos hacia atrás o el forwarding
+        hacia MEM para un \texttt{sw} después de un \texttt{lw} ahorrarían ciclos a cambio de más
+        lógica en el camino crítico.
+  \item A \qty{92}{\mega\hertz} varias etapas quedan en el límite y todas empiezan en la BRAM de
+        datos; subir más exige registrar su salida o la redirección, con un ciclo más por load o por
+        salto.
+\end{itemize}

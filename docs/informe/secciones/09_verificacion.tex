@@ -1,0 +1,150 @@
+% ===========================================================================
+\section{Verificación}
+\label{sec:verif}
+
+El plan de verificación se escribió antes que el RTL (\repo{docs/spec/verificacion.md}). Fija
+qué se prueba, contra qué se compara y cuándo una prueba pasa.
+
+\subsection{Niveles de prueba}
+
+\begin{center}
+\small
+\begin{tabular}{@{}l p{6.2cm} p{5.6cm}@{}}
+  \toprule
+  \textbf{Nivel} & \textbf{Qué prueba} & \textbf{Dónde} \\
+  \midrule
+  1. Unitario      & Un módulo aislado, con estímulos propios (barrido exhaustivo cuando la interfaz lo permite) & \repo{tb/unit/}, 27 testbenches \\
+  2. Por etapa     & El pipeline hasta la etapa $N$, comparando los registros de segmentación con el modelo en cada ciclo & \repo{pipeline_tb.v} \\
+  3. Core completo & Cada programa hasta el HALT: traza ciclo a ciclo y estado final & \repo{pipeline_tb.v} \\
+  4. Debug Unit    & Protocolo, carga, modos de ejecución y volcado, desde tramas UART & \repo{tb/unit/debug_*_tb.v}, \repo{top_tb.v} \\
+  5. Placa         & Los mismos programas cargados desde la PC, contra el \texttt{.exp} y el modelo & \repo{placa.py}, \repo{comparar.py} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Todos los testbenches son autoverificantes: cuentan los errores, terminan con una línea
+\texttt{TEST PASSED} o \texttt{TEST FAILED} y tienen un watchdog para que un procesador que no
+llega al HALT no cuelgue la simulación. Los estímulos aleatorios usan semilla fija. Las
+simulaciones de RTL corren en xsim (Vivado), porque los testbenches que usan las memorias simulan
+el IP de la BRAM.
+
+\subsection{Dos oráculos independientes}
+
+Una prueba vale lo que vale su resultado esperado. Hay dos fuentes, escritas por separado del RTL
+y entre sí:
+
+\begin{description}[style=nextline,nosep,leftmargin=1.2em]
+  \item[Estado esperado a mano (\repo{sw/<prog>.exp})] Registros, memoria y ciclos al terminar,
+        calculados leyendo \repo{isa.md} a partir de un comentario por instrucción en el
+        \texttt{.s}. \textbf{Nunca} se copian de la salida del modelo ni del RTL: si salieran de
+        alguno de los dos, un error de interpretación de la ISA estaría en ambos lados y la
+        prueba pasaría igual.
+  \item[Modelo de referencia (\repo{tools/isasim})] Ejecuta cada instrucción y, con las reglas de
+        \repo{pipeline.md}, calcula qué hay en cada registro de segmentación en cada ciclo
+        (sección~\ref{sec:interfaz}).
+\end{description}
+
+El modelo tiene que coincidir con el \texttt{.exp} de todos los programas antes de usarse para
+verificar el RTL, y el RTL tiene que coincidir con los dos. Cuando dos fuentes escritas por
+separado coinciden, es poco probable que compartan el mismo error.
+
+\subsection{Programas de prueba}
+
+Hay 39 programas en \repo{sw/} (\decision{019}). Cada uno prueba \textbf{un mecanismo}, termina
+en \texttt{halt} y tiene un comentario por instrucción con el valor que deja:
+
+\begin{itemize}[nosep]
+  \item \textbf{Uno por tipo de instrucción} (10): \repo{alu_r}, \repo{alu_i}, \repo{shifts},
+        \repo{lui}, \repo{mem_palabra}, \repo{mem_byte_media}, \repo{branch_cond}, \repo{jump},
+        \repo{halt_basico}, \repo{mem_avisos}. Entre todos cubren las 32 instrucciones y el HALT.
+  \item \textbf{Uno por caso de riesgo} (12): forwarding desde cada etapa y con prioridad,
+        destino \texttt{x0}, bypass del banco, carga-uso en \texttt{rs1} y \texttt{rs2}, load
+        seguido de \texttt{sw}, \texttt{beq} y \texttt{jalr}, load sin dependencia, saltos que
+        dependen de la instrucción anterior, HALT retenido por un stall, HALT en el camino
+        equivocado y un lazo realista (\repo{mixto_lazo}).
+  \item \textbf{Variantes sin riesgos} (10 \repo{*_nops}): resuelven los riesgos en software con
+        \texttt{nop}, para probar las cinco etapas antes de tener forwarding.
+  \item \textbf{Independientes} (7 \repo{indep_*}): parten de un estado inicial y no leen
+        registros que escriben, para las integraciones anteriores a WB.
+\end{itemize}
+
+Los tests de \repo{sw/} comprueban que toda instrucción aparece en algún programa, que todo caso de
+riesgo de \repo{pipeline.md} tiene el suyo y que cada \texttt{.s} tiene su \texttt{.exp}.
+
+\subsection{Banco de pruebas incremental}
+
+\repo{tb/integration/pipeline_tb.v} es un único banco para todas las etapas
+(\decision{021}). Carga el programa en la memoria de programa por el puerto~B, como la Debug Unit,
+y en \textbf{cada ciclo} compara los cuatro registros de segmentación con la traza del modelo:
+\texttt{(dut \^{} ref) \& mask}, donde la máscara ignora los campos de datos de las burbujas. Con
+\texttt{+FINAL} compara además el estado final con el \texttt{.exp}; con \texttt{+PAUSAS=<semilla>}
+baja \texttt{enable} en ciclos al azar y comprueba que con el core detenido nada cambia.
+
+Las etapas se habilitaron con \emph{defines} acumulativos (\texttt{STAGE\_IF}, \texttt{STAGE\_ID},
+\ldots): cada integración comparó solo los latches de las etapas que ya existían, así que cada error
+quedó acotado a la última etapa agregada.
+
+\subsection{Regresión y mutantes}
+
+\repo{scripts/regresion.py} y \repo{regresion.tcl} corren \repo{pipeline_tb} con los 39 programas y
+después los 27 testbenches unitarios, en una sola simulación de Vivado por lotes (decisiones 028,
+032 y 033). La regresión de \texttt{master} pasa \textbf{39 de 39} corridas y \textbf{27 de 27}
+testbenches.
+
+Para saber si los programas cubren de verdad cada mecanismo, \repo{scripts/mutantes.py} tiene
+\textbf{39 mutantes} del RTL: cada uno rompe una regla de \repo{pipeline.md} (el forwarding sin
+prioridad, el stall sin burbuja, el salto sin flush de IF/ID, la parada por HALT mirando solo ID,
+\ldots). \textbf{Todos} hacen fallar al menos una corrida (\decision{031}). Los mutantes que detecta
+un solo programa son justamente los casos que tienen un programa propio: la prioridad del
+forwarding, el destino \texttt{x0}, el HALT en el camino equivocado y el HALT retenido por un
+stall. Dos mutantes son equivalentes (ningún programa puede activar esos términos en el core) y los
+prueba el testbench de \repo{hazard_unit} con las entradas sueltas.
+
+\subsection{Ciclos por programa}
+
+Con la regresión aprobada, el modelo, el \texttt{.exp} y el RTL dan el mismo número de ciclos, que
+cumple
+\[
+  \text{ciclos} = n + 4 + \text{stalls} + 2 \cdot \text{saltos tomados}
+\]
+con $n$ las instrucciones que llegan a WB (HALT incluido) y 4 ciclos de llenado. En los 22 programas
+del plan:
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r r r r r@{}}
+  \toprule
+  & $n$ & \textbf{Stalls} & \textbf{Saltos tomados} & \textbf{Ciclos} & \textbf{CPI} \\
+  \midrule
+  \repo{loaduse_sw_beq} & 19 & 5 & 2 & 32 & 1,68 \\
+  \repo{salto_depende}  & 13 & 0 & 3 & 23 & 1,77 \\
+  \repo{mixto_lazo}     & 58 & 5 & 8 & 83 & 1,43 \\
+  \midrule
+  \textbf{Total de los 22} & 394 & 14 & 28 & 552 & 1,40 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+El flush cuesta más que el stall: 56 ciclos (10\,\%) contra 14 (3\,\%). Sin los 4 de llenado, que
+pesan mucho en programas cortos, el CPI es $(552 - 88)/394 = 1{,}18$. Las variantes con
+\texttt{nop} tardan entre 2 y 30 ciclos más: \repo{mixto_lazo_nops} tarda 113 contra 83, un 36\,\%
+más. Es lo que ahorran en hardware el forwarding y el stall. La tabla completa está en
+\repo{verificacion.md} §8.8.
+
+\subsection{Prueba en la placa}
+
+Con el bitstream de \qty{92}{\mega\hertz}:
+
+\begin{itemize}[nosep]
+  \item \repo{placa.py} carga los 22 programas del plan uno tras otro (cada uno con un
+        \texttt{LOAD}, sin resetear la placa), los corre con \texttt{RUN} y con \texttt{STEP}, y
+        compara el estado final con el \texttt{.exp} y cada paso con la traza del modelo:
+        \textbf{22 de 22}. Con las variantes \repo{_nops}, \textbf{32 de 32}.
+  \item \repo{comparar.py --cada-ciclo} compara un programa con el modelo en todos los ciclos. Los
+        dos programas de la demostración (sección~\ref{sec:demo}) coinciden en los 15 y los 44
+        ciclos.
+\end{itemize}
+
+\captura[0.32\textheight]{comparar_alu_r_y_mixto_lazo.png}{Placa contra el modelo}{Salida de
+\repo{comparar.py} con \repo{alu_r} y \repo{mixto_lazo}: el volcado de la placa coincide con la
+foto del modelo de referencia.}{fig:comparar}

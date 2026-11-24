@@ -1,6 +1,6 @@
 # 023 - Interfaz de debug del core y estructura de la etapa IF
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-11
 - **Autores:** Costamagna, Matías
 

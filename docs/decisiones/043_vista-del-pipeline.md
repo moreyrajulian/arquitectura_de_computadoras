@@ -1,6 +1,6 @@
 # 043 - Vista del pipeline: instrucción de cada etapa, riesgos inferidos, historial y F4
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-18
 - **Autores:** Costamagna, Matías
 

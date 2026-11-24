@@ -1,6 +1,6 @@
 # 045 - Reloj del sistema a 92 MHz, la máxima frecuencia del barrido
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-22
 - **Autores:** Moreyra, Julián
 

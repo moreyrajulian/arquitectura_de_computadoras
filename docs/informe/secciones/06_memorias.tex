@@ -1,0 +1,73 @@
+% ===========================================================================
+\section{Memorias}
+\label{sec:memorias}
+
+La arquitectura es \textbf{Harvard}: dos espacios de direcciones independientes, uno para
+instrucciones y otro para datos, los dos desde \texttt{0x0}
+(\repo{docs/spec/memoria.md}, decisiones 013 y 014).
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{2.4cm} p{6.1cm} p{6.3cm}@{}}
+  \toprule
+  & \textbf{Memoria de programa} (\texttt{imem}) & \textbf{Memoria de datos} (\texttt{dmem}) \\
+  \midrule
+  Tamaño            & 1024 palabras de 32 bits (4~KiB) & 1024 palabras de 32 bits (4~KiB) \\
+  Índice de palabra & \texttt{pc[11:2]} & \texttt{addr[11:2]} \\
+  Implementación    & Block Memory Generator, \emph{True Dual Port}, 1 RAMB36 & Ídem, con \emph{byte write enable} \\
+  Puerto A          & Core (IF): lectura & Core (MEM): lectura y escritura por byte \\
+  Puerto B          & Debug Unit: escritura (\texttt{LOAD}) & Debug Unit: lectura (volcado) y limpieza \\
+  Latencia          & 1 ciclo & 1 ciclo \\
+  Contenido inicial & HALT en todas las palabras & ceros \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+1024 palabras de 32~bits ocupan exactamente una RAMB36, así que las dos memorias usan 2 de las
+50 BRAM del \texttt{xc7a35t} (4\,\%). Los IP se generan desde \repo{ip/*.tcl} al crear el proyecto.
+
+\subsection{BRAM sincrónicas en el pipeline}
+
+Las BRAM tienen lectura sincrónica: la dirección entra en un flanco y el dato sale en el
+siguiente. En lugar de agregar un ciclo, el diseño usa el registro de salida de la BRAM como parte
+del registro de segmentación (\decision{009}): en IF, la dirección es el próximo PC y la salida es
+\texttt{if\_id\_instr}; en MEM, la dirección es \texttt{ex\_mem\_result} y la salida es
+\texttt{mem\_wb\_read\_data}. Por eso el \emph{enable} de cada BRAM es el mismo del registro de
+segmentación al que pertenece su salida, y con \texttt{enable = 0} la BRAM tampoco avanza.
+
+El costo es que el \emph{clock-to-out} de la BRAM (2,45~ns) queda al comienzo del camino crítico
+(sección~\ref{sec:timing}). Activar su registro de salida lo sacaría del camino, pero sumaría un
+ciclo a cada load y a cada búsqueda.
+
+\subsection{Accesos desalineados y fuera de rango}
+
+El subset no tiene excepciones, así que el core no se detiene ante un acceso inválido: el hardware
+ignora los bits que no corresponden y el acceso cae en una posición válida. A cambio, cada caso
+deja un \textbf{aviso persistente} que se ve en el bloque de estado y en un LED hasta el próximo
+\texttt{LOAD} o \texttt{RESET} (\decision{015}):
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{5.6cm} p{5.6cm} l@{}}
+  \toprule
+  \textbf{Caso} & \textbf{Qué hace el hardware} & \textbf{Aviso} \\
+  \midrule
+  \texttt{lh}, \texttt{lhu}, \texttt{sh} con \texttt{addr[0] = 1} & accede a la media palabra alineada & \texttt{dmem\_misaligned} \\
+  \texttt{lw}, \texttt{sw} con \texttt{addr[1:0]} $\neq$ \texttt{00} & accede a la palabra alineada & \texttt{dmem\_misaligned} \\
+  Load o store con \texttt{addr} $\geq$ \texttt{0x1000} & accede a \texttt{addr mod 4096} & \texttt{dmem\_oob} \\
+  PC fuera de rango o no múltiplo de 4 & busca la palabra que lo contiene & \texttt{imem\_fault} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\texttt{imem\_fault} se evalúa en WB, con el PC de la instrucción que llegó: una búsqueda en el
+camino equivocado de un salto se descarta antes y no levanta el aviso.
+
+\subsection{Memoria de datos usada}
+
+La consigna pide enviar a la PC ``la memoria de datos usada''. Se definió como las palabras que el
+programa escribió desde el último \texttt{LOAD} o \texttt{RESET} (\decision{005}). La Debug Unit
+tiene un mapa de 1024 bits en RAM distribuida (unas 20~LUT) y un contador: el core marca la palabra
+en cada store, y \texttt{READ\_DMEM\_USED} recorre el mapa en orden y manda los pares
+(dirección, valor) de las palabras marcadas. El mapa se borra en el mismo recorrido que limpia la
+memoria de datos al cargar un programa.

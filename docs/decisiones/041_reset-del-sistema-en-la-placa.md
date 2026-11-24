@@ -1,6 +1,6 @@
 # 041 - Reset del sistema en la placa: botón sincronizado y reset de encendido
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-17
 - **Autores:** Costamagna, Matías
 

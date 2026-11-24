@@ -1,6 +1,6 @@
 # 038 - Carga de programa en la Debug Unit: contrato con la FSM de ejecución y con el mapa de usadas
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-13
 - **Autores:** Moreyra, Julián
 

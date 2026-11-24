@@ -1,6 +1,6 @@
 # 040 - Interfaz de usuario: capas `model` y `session`, hilos y corte con la I-53
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-17
 - **Autores:** Moreyra, Julián
 

@@ -1,0 +1,62 @@
+% ===========================================================================
+\section{Arquitectura del sistema}
+\label{sec:sistema}
+
+\diagrama{sistema.png}{Vista de sistema}{Bloques, interfaces y quién controla a quién. La PC
+nunca accede directamente al core ni a las memorias: todo entra por la UART y lo interpreta la
+Debug Unit. Fuente editable: \repo{docs/diagramas/sistema.drawio}.}{fig:sistema}
+
+El diseño de la placa (\repo{fpga/riscv_basys3/top.v}) tiene cinco bloques
+(figura~\ref{fig:sistema}):
+
+\begin{description}[style=nextline,nosep,leftmargin=1.2em]
+  \item[Clock Wizard (MMCM)] Genera desde los \qty{100}{\mega\hertz} de la placa el único reloj
+        del sistema, \qty{92}{\mega\hertz} (\decision{045}). Hasta que el MMCM engancha
+        (\texttt{locked}) todo queda en reset.
+  \item[Reset] El botón central, sincronizado y alargado por \repo{rtl/common/reset_sync.v},
+        más el reset de encendido (\decision{041}).
+  \item[UART] La del TP2 (receptor, transmisor y generador de baudios con sobremuestreo
+        $16\times$) con una FIFO de recepción, a 115200~baudios 8N1 (decisiones 003 y 035).
+  \item[Debug Unit] Interpreta las tramas de la PC, carga el programa por el puerto~B de la
+        memoria de programa, genera \texttt{enable} y \texttt{core\_rst} y vuelca el estado del
+        core (sección~\ref{sec:debug}).
+  \item[Core] El procesador segmentado con sus dos memorias BRAM: la de programa (IF) y la de
+        datos (MEM), de 1024 palabras cada una (secciones~\ref{sec:pipeline}
+        a~\ref{sec:memorias}).
+\end{description}
+
+\subsection{Un solo dominio de reloj}
+
+La consigna prohíbe intervenir el reloj. El diseño tiene \textbf{un único reloj}, que sale del
+MMCM por un BUFG y llega a todos los elementos sincrónicos: core, memorias, Debug Unit y UART. No
+hay \emph{clock gating}, divisores ni relojes generados con lógica.
+
+Parar o avanzar el core se hace con una señal \texttt{enable} que maneja la Debug Unit: todo
+elemento con estado del core (PC, registros de segmentación, escritura del banco y de la memoria
+de datos, registro \texttt{halted} y avisos) solo se actualiza en los flancos con
+\texttt{enable = 1} (\decision{018}). En la serie 7 cada flip-flop tiene su entrada de
+\emph{clock enable} (CE), así que esto no agrega lógica en el camino de datos: usa el CE. Un
+\texttt{STEP} es \texttt{enable = 1} durante un ciclo de reloj; mientras tanto el reloj sigue
+corriendo para la UART y la Debug Unit, que pueden leer el estado del core detenido por puertos
+propios (el puerto~B de las BRAM y un tercer puerto de lectura del banco).
+
+La sección~\ref{sec:skew} muestra la consecuencia medida: el skew del reloj es de decenas de
+picosegundos, menor que el jitter del MMCM.
+
+\subsection{LEDs de la placa}
+
+Para saber si la FPGA responde aunque no responda la UART, el top muestra el estado en los LEDs:
+
+\begin{center}
+\small
+\begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{LED} & \textbf{Significado} \\
+  \midrule
+  LD0 a LD4   & Estado de ejecución, uno encendido: \texttt{NO\_PROG}, \texttt{READY}, \texttt{RUNNING}, \texttt{PAUSED}, \texttt{HALTED} \\
+  LD8 a LD10  & Avisos de acceso: \texttt{imem\_fault}, \texttt{dmem\_oob}, \texttt{dmem\_misaligned} \\
+  LD14        & Reset del sistema activo \\
+  LD15        & Latido de \qty{2}{\hertz}; quieto significa sin reloj o con el reset apretado \\
+  \bottomrule
+\end{tabular}
+\end{center}

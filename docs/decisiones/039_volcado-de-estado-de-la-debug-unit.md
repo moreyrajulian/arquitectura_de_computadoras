@@ -1,6 +1,6 @@
 # 039 - Volcado de estado de la Debug Unit: latches, mapa de usadas y fuente del payload
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-15
 - **Autores:** Costamagna, Matías
 

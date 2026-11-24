@@ -1,6 +1,6 @@
 # 032 - Testbenches unitarios en la regresión por lotes
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-09
 - **Autores:** Costamagna, Matías
 

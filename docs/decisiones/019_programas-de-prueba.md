@@ -1,6 +1,6 @@
 # 019 - Programas de prueba: estado inicial, variantes con nop y convenciones de sw/
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-03
 - **Autores:** Costamagna, Matías
 

@@ -1,6 +1,6 @@
 # 018 - Ejecución paso a paso sin intervenir el clock
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-03
 - **Autores:** Moreyra, Julián
 
