@@ -1,6 +1,6 @@
 # 022 - Memoria de programa: sin reset del registro de salida y contenido inicial sin archivo
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-08
 - **Autores:** Moreyra, Julián
 

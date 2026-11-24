@@ -1,6 +1,6 @@
 # 027 - Memoria de datos: qué lógica de MEM va en `dmem`
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-22
 - **Autores:** Costamagna, Matías
 

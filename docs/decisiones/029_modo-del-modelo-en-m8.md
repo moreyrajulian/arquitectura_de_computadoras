@@ -1,6 +1,6 @@
 # 029 - Modo del modelo de referencia durante las integraciones de M8
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-03
 - **Autores:** Moreyra, Julián
 

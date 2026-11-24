@@ -1,6 +1,6 @@
 # 026 - Control de la ALU en ID, sin módulo aparte
 
-- **Estado:** Aceptada
+- **Estado:** aceptada
 - **Fecha:** 2026-10-21
 - **Autores:** Costamagna, Matías
 

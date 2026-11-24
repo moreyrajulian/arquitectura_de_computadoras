@@ -1,6 +1,6 @@
 # 025 - Filtro de palabras fuera de isa.md en el toolchain
 
-- **Estado:** Aceptada
+- **Estado:** aceptada
 - **Fecha:** 2026-10-21
 - **Autores:** Costamagna, Matías
 

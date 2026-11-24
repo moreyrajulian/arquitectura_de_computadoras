@@ -1,6 +1,6 @@
 # 028 - Regresión del pipeline por lotes en Vivado
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-01
 - **Autores:** Moreyra, Julián
 

@@ -1,6 +1,6 @@
 # 036 - FSM de protocolo de la Debug Unit: alcance, puertos y reglas de validación
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-12
 - **Autores:** Moreyra, Julián
 

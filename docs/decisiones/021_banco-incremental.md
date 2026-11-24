@@ -1,6 +1,6 @@
 # 021 - Banco de pruebas incremental: carga, comparación y cortes por etapa
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-07
 - **Autores:** Costamagna, Matías
 

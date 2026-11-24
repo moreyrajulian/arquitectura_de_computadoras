@@ -1,6 +1,6 @@
 # 042 - Reloj del sistema a 65 MHz con el Clock Wizard para la prueba en placa
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-11-17
 - **Autores:** Costamagna, Matías
 

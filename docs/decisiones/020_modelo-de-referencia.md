@@ -1,6 +1,6 @@
 # 020 - Modelo de referencia: semántica de la ISA más pipeline ciclo a ciclo
 
-- **Estado:** propuesta
+- **Estado:** aceptada
 - **Fecha:** 2026-10-05
 - **Autores:** Moreyra, Julián
 
