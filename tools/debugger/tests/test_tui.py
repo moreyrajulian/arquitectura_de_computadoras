@@ -1,7 +1,7 @@
 """Tests de la interfaz de texto (decisiones 040 y 043) con `App.run_test()` y Pilot, sobre
 la Debug Unit simulada: los controles de interfaz_pc.md §3, la tabla de registros, los
-controles deshabilitados y la vista del pipeline (§4: etapas, resaltado, latches, historial
-y «correr hasta cursor»). Se saltean si no está textual."""
+controles deshabilitados y la vista del pipeline (§4: etapas, resaltado, latches y «correr
+hasta cursor»). Se saltean si no está textual."""
 
 import asyncio
 import io
@@ -23,7 +23,7 @@ from rvdebug.tui.screens import ConfirmScreen, ErrorsScreen  # noqa: E402
 from rvdebug.tui.widgets import CHANGED  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
-SIZE = (160, 45)                     # tamaño mínimo de la terminal (interfaz_pc.md §2)
+SIZE = (172, 45)                     # tamaño mínimo de la terminal (interfaz_pc.md §2)
 
 
 class Bench:
@@ -338,7 +338,7 @@ def test_pipeline_del_boceto_en_el_ciclo_7(tmp_path):
                 assert text in boxes, text
             events = plain(app, "#pipe-events")
             assert "STALL" in events and "lw x4, 0(x0) en MEM" in events
-            assert "inferidos" in events
+            assert "inferidos" not in events           # sin la nota al pie
             assert stage_column(app) == {3: "WB", 4: "MEM", 5: "ID*", 6: "IF*"}
             # Resaltado de lo que cambió en el último paso
             assert app.query_one("#registers").border_title == "Registros (1 cambió)"
@@ -347,11 +347,6 @@ def test_pipeline_del_boceto_en_el_ciclo_7(tmp_path):
             assert regs.get_row_at(1)[0].style != CHANGED
             used = app.query_one("#used-table", DataTable).get_row_at(0)
             assert [str(c) for c in used] == ["0x00000000", "0x0000000C", "12", "ciclo 7"]
-            hist = app.query_one("#history-table", DataTable)
-            assert hist.row_count == 8                 # LOAD y 7 pasos
-            row = [str(c) for c in hist.get_row_at(0)]   # el más nuevo arriba
-            assert row[:3] == [">", "7", "0x018"]
-            assert "STALL" in row[4] and row[5] == "x3=12, M[0x0]=12"
             assert "último paso: 1 reg" in plain(app, "#statusbar")
     run(body())
 
@@ -377,32 +372,26 @@ def test_latches_campo_por_campo_y_crudos(tmp_path):
     run(body())
 
 
-def test_historial_muestra_un_volcado_viejo_y_vuelve(tmp_path):
+def test_un_latch_por_columna_y_todo_entra_al_tamano_minimo(tmp_path):
+    """IF/ID, ID/EX, EX/MEM y MEM/WB en una fila, en el orden del pipeline. Al tamaño mínimo
+    ni el panel de latches ni la tabla de registros se desplazan, también con el decimal más
+    largo (-2147483648) y los cuatro títulos con «— burbuja» del final de RUN."""
     async def body():
-        bench = suma_bench(tmp_path)
+        bench = Bench(prog=write(tmp_path, "lui x10, 0x80000\nhalt\n"), device=ModelDebugUnit())
         async with bench.app.run_test(size=SIZE) as pilot:
             await settle(pilot)
-            await steps(pilot, 3)
+            await pilot.press("f5")
+            await settle(pilot)
             app = bench.app
-            table = app.query_one("#history-table", DataTable)
-            table.focus()
-            table.move_cursor(row=2)                   # el ciclo 1
-            await pilot.press("enter")
-            await settle(pilot)
-            assert app.viewing == 1
-            assert "HISTORIAL" in plain(app, "#header")
-            assert app.query_one("#pipeline").border_title.startswith("Pipeline — ciclo 1 ")
-            await pilot.press("escape")
-            await settle(pilot)
-            assert app.viewing is None
-            assert app.query_one("#pipeline").border_title.startswith("Pipeline — ciclo 3 ")
-            table.move_cursor(row=3)
-            await pilot.press("enter")
-            await settle(pilot)
-            await pilot.press("f10")                   # un paso vuelve al volcado vivo
-            await settle(pilot)
-            assert app.viewing is None
-            assert app.query_one("#pipeline").border_title.startswith("Pipeline — ciclo 4 ")
+            assert app.session.state == State.HALTED
+            first = plain(app, "#latches-body").splitlines()[0]
+            where = [first.find(f"{name} — burbuja") for name in ("IF/ID", "ID/EX", "EX/MEM",
+                                                                   "MEM/WB")]
+            assert -1 not in where and where == sorted(where), first
+            latches = app.query_one("#latches")
+            assert (latches.max_scroll_x, latches.max_scroll_y) == (0, 0)
+            assert regs_table(app)[10][2] == "-2147483648"
+            assert app.query_one("#regs-table", DataTable).max_scroll_x == 0
     run(body())
 
 

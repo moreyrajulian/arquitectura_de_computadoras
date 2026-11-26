@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, ScrollableContainer, Vertical, VerticalScroll
 from textual.message import Message
 from textual.widgets import (Button, DataTable, Input, Label, RichLog, Static, TabbedContent,
                              TabPane)
@@ -27,8 +27,7 @@ from ..hazards import (BRANCH_NEXT, BUBBLE, DONE, EMPTY, FLUSH, FWD, HALT, INSTR
 from ..model import (ABI, IMEM_WORDS, LATCHES, LAYOUT, TITLES, Diff, Snapshot, fmt_dec,
                      fmt_hex, reg_name)
 from ..protocol import Cmd, Err, Info, State, Status, name_of
-from ..session import (CONNECT, LOAD, REFRESH, REPROGRAM, RESET, RUN, RUN_TO, STEP, STEP_N,
-                       STOP, Entry, LoadedProgram)
+from ..session import LoadedProgram
 
 # Colores explícitos: el amarillo ANSI de muchas terminales sale naranja y se confunde con
 # el de las etapas retenidas
@@ -49,13 +48,6 @@ EVENT_BADGE = {
     HALT: ("HALT", HALT_STYLE),
     WARN: ("INCONSISTENTE", HALT_STYLE),
     DONE: ("HALTED", "bold black on hot_pink"),
-}
-
-# Cómo se llegó a cada renglón del historial
-ACTION_LABEL = {
-    CONNECT: "conectar", LOAD: "LOAD", REPROGRAM: "reprogramar", RESET: "RESET",
-    STEP: "paso", STEP_N: "paso xN", RUN_TO: "hasta cursor", RUN: "RUN", STOP: "STOP",
-    REFRESH: "refrescar",
 }
 
 
@@ -110,8 +102,7 @@ class HeaderBar(Static):
     """Puerto, baudrate, archivo cargado, estado del core y avisos de acceso."""
 
     def show(self, port: str | None, baud: int, loaded: LoadedProgram | None,
-             status: Status | None, viewing: int | None = None) -> None:
-        """`viewing`: el ciclo del renglón del historial que se está mirando, si hay uno."""
+             status: Status | None) -> None:
         text = Text(" RISC-V Debugger", style="bold")
         text.append(f" · {port} @ {baud}" if port else " · sin conectar")
         if loaded is not None:
@@ -122,10 +113,6 @@ class HeaderBar(Static):
         if warnings:
             text.append("  ")
             text.append(f" ⚠ {', '.join(warnings)} ", style="bold black on yellow")
-        if viewing is not None:
-            text.append("  ")
-            text.append(f" HISTORIAL: ciclo {viewing} (solo lectura) · Esc vuelve ",
-                        style="bold black on grey70")
         self.update(text)
 
 
@@ -239,8 +226,7 @@ class RegistersPanel(Vertical):
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="regs-table", cursor_type="none", zebra_stripes=False)
-        yield Label("[d] con/sin signo  [0] ocultar ceros", classes="help",
-                    markup=False)
+        yield Label("[d] signo  [0] ocultar ceros", classes="help", markup=False)
 
     def on_mount(self) -> None:
         self.border_title = "Registros"
@@ -407,8 +393,6 @@ class PipelinePanel(Vertical):
             line.append(" ")
             line.append(event.text, style=FWD_STYLE if event.kind == FWD else "")
             lines.append(line)
-        lines.append(Text("Riesgos inferidos por la PC a partir de los latches (la FPGA no "
-                          "los informa).", style="dim"))
         events.update(Group(*lines))
 
     def _box(self, view: StageView) -> Panel:
@@ -429,9 +413,11 @@ class PipelinePanel(Vertical):
                      padding=0)
 
 
-class LatchesPanel(VerticalScroll):
+class LatchesPanel(ScrollableContainer):
     """Los cuatro latches campo por campo, con los nombres de pipeline.md §8, o sus
-    palabras de 32 bits crudas (tecla c). Lo que cambió en el último paso, en amarillo."""
+    palabras de 32 bits crudas (tecla c), uno por columna en el orden del pipeline. Lo que
+    cambió en el último paso, en amarillo. Si el panel es más angosto que las cuatro
+    columnas, se desplaza a lo ancho en vez de partir los renglones."""
 
     def compose(self) -> ComposeResult:
         yield Static("", id="latches-body")
@@ -449,18 +435,18 @@ class LatchesPanel(VerticalScroll):
             return
         fields = snapshot.fields
         retained = {v.stage for v in analysis.stages if v.retained} if analysis else set()
-        blocks = []
+        grid = Table.grid(padding=(0, 2))
+        columns = []
         for latch in LATCHES:
             words = snapshot.latches.words(latch)
             if raw or fields is None:
-                blocks.append(self._raw(latch, words))
+                column, width = self._raw(latch, words)
             else:
-                blocks.append(self._fields(latch, fields[latch], diff,
-                                           "ID" in retained and latch == "if_id"))
-        left = Text("\n\n").join([blocks[0], blocks[1]])
-        right = Text("\n\n").join([blocks[2], blocks[3]])
-        grid = Table.grid(padding=(0, 3))
-        grid.add_row(left, right)
+                column, width = self._fields(latch, fields[latch], diff,
+                                             "ID" in retained and latch == "if_id")
+            grid.add_column(width=width)
+            columns.append(column)
+        grid.add_row(*columns)
         if fields is None:
             body.update(Group(Text("Los latches tienen otro formato que pipeline.md §8: solo "
                                    "las palabras crudas", style=HALT_STYLE), grid))
@@ -468,91 +454,61 @@ class LatchesPanel(VerticalScroll):
             body.update(grid)
 
     @staticmethod
-    def _raw(latch: str, words: tuple[int, ...]) -> Text:
+    def _raw(latch: str, words: tuple[int, ...]) -> tuple[Text, int]:
         text = Text()
         text.append(TITLES[latch], style="bold")
         for i, word in enumerate(words):
             text.append(f"\nw{i} 0x{word:08X}")
-        return text
+        return text, len(f"w{len(words) - 1} 0x00000000")
 
     @staticmethod
-    def _fields(latch: str, values: dict[str, int], diff: Diff, retained: bool) -> Text:
+    def _fields(latch: str, values: dict[str, int], diff: Diff,
+                retained: bool) -> tuple[Text, int]:
+        """La columna de un latch y su ancho (`LATCH_WIDTH`): cada nombre a la izquierda y
+        su valor a la derecha. El desensamblado de IF/ID no ensancha la columna: si no
+        entra, se parte en dos renglones."""
         valid = values["valid"]
+        column = LATCH_WIDTH[latch]
         title = TITLES[latch] + (" *" if retained else "") + ("" if valid else " — burbuja")
         text = Text()             # el estilo va en cada parte: el de Text() se hereda
         text.append(title, style=RETAINED if retained else "bold" if valid else BUBBLE_STYLE)
         for name, width, _ in LAYOUT[latch]:
-            value = values[name]
-            if width == 32:
-                shown = fmt_hex(value)
-            elif name in ("rd", "rs1", "rs2"):
-                shown = f"x{value} ({ABI[value]})"
-            elif name == "funct3":
-                shown = f"{value:03b}"
-            elif name == "alu_ctrl":
-                shown = f"{value:04b} {ALU_CODES.get(value, '?')}"
-            else:
-                shown = str(value)
+            shown = field_text(name, width, values[name])
             style = (CHANGED if (latch, name) in diff.latches
                      else "" if valid else BUBBLE_STYLE)
-            text.append(f"\n{name:<10} {shown:>12}", style=style)
+            text.append(f"\n{name}{shown:>{column - len(name)}}", style=style)
             if latch == "if_id" and name == "instr" and valid:
-                text.append(f"\n  {disassemble_safe(value).split('  #')[0]}", style="dim")
-        return text
+                text.append(f"\n{disassemble_safe(values[name]).split('  #')[0]}",
+                            style="dim")
+        return text, column
 
 
-class HistoryPanel(Vertical):
-    """Un renglón por volcado, el más nuevo arriba: ciclo, PC, acción, eventos inferidos y
-    qué cambió. Enter muestra ese volcado (solo lectura: la placa no vuelve atrás)."""
+def field_text(name: str, width: int, value: int) -> str:
+    """Cómo se muestra un campo de latch: hex los de 32 bits, `x4 (tp)` los registros,
+    binario funct3 y alu_ctrl (con el nombre de la operación), decimal el resto."""
+    if width == 32:
+        return fmt_hex(value)
+    if name in ("rd", "rs1", "rs2"):
+        return f"x{value} ({ABI[value]})"
+    if name == "funct3":
+        return f"{value:03b}"
+    if name == "alu_ctrl":
+        return f"{value:04b} {ALU_CODES.get(value, '?')}"
+    return str(value)
 
-    ROWS = 500                        # los más nuevos; el historial guarda más
 
-    class Selected(Message):
-        def __init__(self, index: int):
-            super().__init__()
-            self.index = index
+def latch_width(latch: str) -> int:
+    """Ancho de la columna de un latch: el renglón más largo que puede tener (nombre, un
+    espacio y el valor más largo de ese campo) o el título con «— burbuja». Sale de todos
+    los valores posibles y no de los actuales, así la columna no cambia de ancho entre un
+    paso y otro. Hasta 5 bits se prueban todos; uno de 32 siempre lleva 8 dígitos hex."""
+    rows = max(len(name) + 1 + max(len(field_text(name, width, value))
+                                   for value in range(1 << min(width, 5)))
+               for name, width, _ in LAYOUT[latch])
+    return max(rows, len(TITLES[latch]) + len(" — burbuja"))
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._shown: tuple | None = None
-        self._count = 0
 
-    def compose(self) -> ComposeResult:
-        yield DataTable(id="history-table", cursor_type="row", zebra_stripes=False)
-
-    def on_mount(self) -> None:
-        self.border_title = "Historial de pasos (guardado en la PC)"
-        self.query_one(DataTable).add_columns("", "Ciclo", "PC", "Acción", "Eventos inferidos",
-                                              "Cambios")
-
-    def show(self, history: list[Entry], viewing: int | None) -> None:
-        key = (len(history), id(history[-1]) if history else None, viewing)
-        if key == self._shown:
-            return
-        self._shown = key
-        self._count = len(history)
-        table = self.query_one(DataTable)
-        table.clear()
-        current = len(history) - 1 if viewing is None else viewing
-        first = max(0, len(history) - self.ROWS)
-        for index in range(len(history) - 1, first - 1, -1):
-            entry = history[index]
-            snap = entry.snapshot
-            style = "bold" if index == current else ""
-            table.add_row(Text(">" if index == current else " ", style=style),
-                          Text(str(snap.status.cycles), style=style),
-                          Text(short_pc(snap.status.pc), style=style),
-                          Text(ACTION_LABEL.get(entry.action, entry.action), style="dim"),
-                          Text(entry.analysis.short),
-                          Text(entry.diff.summary(snap)))
-        if viewing is not None and len(history) - 1 - viewing < table.row_count:
-            table.move_cursor(row=len(history) - 1 - viewing)
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        event.stop()
-        index = self._count - 1 - event.cursor_row
-        if 0 <= index < self._count:
-            self.post_message(self.Selected(index))
+LATCH_WIDTH = {latch: latch_width(latch) for latch in LATCHES}
 
 
 class StatusBar(Static):

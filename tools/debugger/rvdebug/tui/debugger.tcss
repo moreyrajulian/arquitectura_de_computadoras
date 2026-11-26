@@ -29,16 +29,8 @@ Screen {
     width: 1fr;
 }
 
-#bottom {
-    height: 10;
-}
-
-#bottom > .panel {
-    height: 1fr;
-}
-
 #registers {
-    width: 40;
+    width: 36;
 }
 
 .panel {
@@ -51,20 +43,35 @@ Screen {
     text-opacity: 50%;
 }
 
-#program, #pipeline {
+#program, #pipeline, #memory {
     height: 1fr;
 }
 
-#memory, #latches {
-    height: 1fr;
+#pipeline {
+    min-height: 13;
 }
 
-#history {
-    width: 1fr;
+/* Un latch por columna: la altura es la del más largo (ID/EX) y el pipeline toma el resto.
+   Con menos ancho que las cuatro columnas, el panel se desplaza a lo ancho. */
+#latches {
+    height: auto;
+}
+
+#latches-body {
+    width: auto;
+}
+
+/* Sin el relleno del panel: la tabla entra justa con el decimal más largo (-2147483648) */
+#registers.panel {
+    padding: 0;
+}
+
+#registers .help {
+    padding: 0 1;
 }
 
 #frames {
-    width: 60;
+    height: 10;
 }
 
 .placeholder {

@@ -55,17 +55,19 @@ que espera el final de a 0,5 s y manda `STATUS` entre espera y espera; mientras 
 
 El boceto muestra el **ciclo 7** del programa de ejemplo, justo después de un `STEP`, con un
 stall por load-use (`lw x4` seguido de `add x5, x4, x1`). Tamaño mínimo de la terminal:
-**160 × 45**. Con menos, Historial y Tramas pasan a pestañas.
+**172 × 45**: es lo que ocupan Programa, los cuatro latches en columnas y Registros
+(decisión [045](../decisiones/045_pantalla-sin-historial-y-latches-en-columnas.md)). Con
+menos, el panel de latches se desplaza a lo ancho. El boceto todavía tiene el panel de
+historial y los latches de a dos: la tabla de abajo manda.
 
 | Panel | Contenido | Fuente (comando) |
 |---|---|---|
 | Encabezado | Puerto, baudrate, archivo cargado y **estado del core** (`NO_PROG`, `READY`, `RUNNING`, `PAUSED`, `HALTED`) con un color por estado. Advertencia si hay algún aviso de acceso (`imem_fault`, `dmem_oob`, `dmem_misaligned`: el programa accedió fuera de rango o desalineado, [`memoria.md`](memoria.md) §6) | Bloque de estado (`flags`) |
 | **Programa** | Dirección, palabra en hex, instrucción desensamblada y una etiqueta con la **etapa** en la que está cada instrucción (IF, ID, EX, MEM, WB; `*` si está retenida). Pestaña «Fuente .s» con el texto original y sus comentarios. | Lo que se envió con `LOAD` + PC de cada latch |
 | **Pipeline** | Cinco cajas IF → WB con PC e instrucción de cada etapa. Burbujas en gris con su causa (stall, flush, HALT, reset), etapas retenidas en naranja, HALT en rojo. Debajo de cada caja, qué hace (PC retenido, `lee M[…]`, `x3 ← 12`). Debajo, los riesgos inferidos con la explicación (§4.3). | `pc` del estado (IF) + `pc` y `valid` de cada latch. La instrucción de ID sale de `IF/ID.instr`; la de las demás etapas, de lo que se envió con `LOAD` en ese `pc` (los latches no llevan la palabra, decisión [043](../decisiones/043_vista-del-pipeline.md)) |
-| **Latches intermedios** | IF/ID, ID/EX, EX/MEM y MEM/WB campo por campo, con los nombres de `pipeline.md`. Tecla `c`: alterna entre campos y las palabras de 32 bits crudas. | `READ_LATCHES` (dentro de `READ_ALL`) |
-| **Registros** | Los 32 registros con nombre ABI (`x1/ra`, `x2/sp`, …), hex y decimal. Los que valen 0 en gris. Tecla `d`: decimal con o sin signo; `0`: ocultar los que valen 0. | `READ_REGS` |
+| **Latches intermedios** | IF/ID, ID/EX, EX/MEM y MEM/WB campo por campo, con los nombres de `pipeline.md`, **uno por columna** en el orden del pipeline (debajo de las cajas IF → WB). Cada columna tiene el ancho de su renglón más largo posible, así no cambia entre un paso y otro. Tecla `c`: alterna entre campos y las palabras de 32 bits crudas. | `READ_LATCHES` (dentro de `READ_ALL`) |
+| **Registros** | Los 32 registros con nombre ABI (`x1/ra`, `x2/sp`, …), hex y decimal. Los que valen 0 en gris. Tecla `d`: decimal con o sin signo; `0`: ocultar los que valen 0. 36 columnas: entra justo `-2147483648` sin desplazar la tabla. | `READ_REGS` |
 | **Memoria de datos** | Pestaña «Usada»: pares dirección/valor escritos por el programa y el ciclo en que se escribieron. Pestaña «Rango»: se pide dirección y cantidad. | `READ_DMEM_USED` / `READ_DMEM` |
-| **Historial de pasos** | Un renglón por volcado, el más nuevo arriba: ciclo, PC, acción, eventos inferidos y qué cambió. Enter sobre un renglón muestra ese volcado (solo lectura, la placa no vuelve atrás); Esc o cualquier acción con la placa vuelve al volcado actual. Guarda 10 000 renglones y muestra los 500 más nuevos | Volcados guardados en la PC |
 | **Tramas** | Últimas tramas enviadas/recibidas en hex, con tiempo de respuesta. Oculto por defecto (`t`). | `client` |
 | Barra de estado | Conexión, versión del protocolo, tamaños de memoria y frecuencia (de `INFO`), PC, ciclos (y su tiempo a `clk_khz`), palabras usadas y cuántas cosas cambiaron en el último paso | `INFO` + bloque de estado |
 | Footer | Atajos de teclado (§3) | — |
@@ -101,8 +103,8 @@ Los que no corresponden al estado actual se muestran deshabilitados en el footer
 | Salir | `q` | Cierra el puerto | Siempre |
 
 La I-52 implementa todos menos «Correr hasta cursor», que agrega la I-53. También están `d` y
-`0` en Registros, `t` para Tramas y `c` en Latches (§2), y Esc para volver del historial o
-cancelar «Correr hasta cursor». `Ctrl+P` > *Screenshot* (de Textual) guarda la pantalla en SVG.
+`0` en Registros, `t` para Tramas y `c` en Latches (§2), y Esc para cancelar «Correr hasta
+cursor». `Ctrl+P` > *Screenshot* (de Textual) guarda la pantalla en SVG.
 
 **Comparación con el modelo de referencia (I-54).** El boceto tenía un control «Exportar
 volcado» (`e`) que guardaba el `Snapshot` en JSON para compararlo después con el modelo. En
@@ -156,22 +158,23 @@ Cada `STEP` avanza **un ciclo de reloj** (no una instrucción). Después de cada
    burbuja solo se resaltan `valid` y el control: sus datos no importan (`pipeline.md` §2).
    Contra qué volcado se compara depende de la acción: Paso, Paso×N, F4 y Detener, con el
    anterior; el final de `RUN`, con el anterior al `RUN` (§5); Conectar, Cargar y Reiniciar
-   empiezan el historial de nuevo y no resaltan nada (decisión
-   [043](../decisiones/043_vista-del-pipeline.md)).
-4. **Historial:** se agrega un renglón con el ciclo, el PC, los eventos inferidos y un
-   resumen de cambios (`x3=12, M[0x0]=12`).
-5. **Barra de estado:** ciclo, tiempo equivalente (`cycles / clk_khz`) y resumen del paso.
+   empiezan el historial de la sesión de nuevo y no resaltan nada (decisión
+   [043](../decisiones/043_vista-del-pipeline.md)). El historial queda en `Session.history`
+   (lo usan el resaltado, las inconsistencias de §4.3 y la columna «Escrito»), pero la
+   pantalla no lo muestra (decisión [045](../decisiones/045_pantalla-sin-historial-y-latches-en-columnas.md)).
+4. **Barra de estado:** ciclo, tiempo equivalente (`cycles / clk_khz`) y resumen del paso.
    En Memoria, la columna «Escrito» dice el ciclo del volcado en que se vio la escritura
    (`<= N` si fue después de Paso×N o `RUN`: pudo ser antes).
-6. Si el paso dejó el core en **`HALTED`** (el HALT llegó a WB): aviso «Programa terminado en
+5. Si el paso dejó el core en **`HALTED`** (el HALT llegó a WB): aviso «Programa terminado en
    N ciclos, pipeline vacío», el pipeline se ve con las cinco cajas vacías y se deshabilitan
    Paso y Ejecutar hasta un `RESET` o `LOAD`.
 
 ### 4.3 Riesgos inferidos
 
 La Debug Unit no informa stalls ni forwarding; la PC los **deduce** de los campos de los
-latches (`rvdebug/hazards.py`, decisión [043](../decisiones/043_vista-del-pipeline.md)). Se
-marcan como «inferidos» para que quede claro que no los leyó del hardware.
+latches (`rvdebug/hazards.py`, decisión [043](../decisiones/043_vista-del-pipeline.md)). La
+pantalla no lo aclara en una nota: todo lo que el panel Pipeline dice de riesgos es inferido
+(decisión [045](../decisiones/045_pantalla-sin-historial-y-latches-en-columnas.md)).
 
 Hay dos tipos de reglas, y todas se aplican sobre **un solo volcado**, así funcionan también
 después de Paso×N o `RUN`:
@@ -242,12 +245,12 @@ prueba en las dos plataformas desde el comienzo de I-52.
 | Colores | 24 bits | 24 bits en las terminales de arriba. En `xterm` o terminales viejas, 256 colores: Textual aproxima los tonos y funciona igual |
 | Codificación | UTF-8 (por defecto en Windows Terminal) | Locale UTF-8. Si los bordes salen como `?`: `export LANG=C.UTF-8` |
 | Dentro de `tmux` | — | Para tener 24 bits: `set -as terminal-features ",*:RGB"` en `.tmux.conf` |
-| Tamaño mínimo | 160 × 45 | 160 × 45 |
+| Tamaño mínimo | 172 × 45 | 172 × 45 |
 
 **Símbolos:** en las columnas que tienen que quedar alineadas (programa, pipeline, latches,
-registros, historial) se usan solo ASCII y caracteres de caja (`─│╭╮╰╯`). Símbolos como `⏸` o
-`▶` se dibujan con ancho doble en algunas fuentes y desalinean las columnas; por eso la marca de
-etapa retenida es `*` y la fila actual del historial se marca con `>`.
+registros) se usan solo ASCII y caracteres de caja (`─│╭╮╰╯`). Símbolos como `⏸` o `▶` se
+dibujan con ancho doble en algunas fuentes y desalinean las columnas; por eso la marca de
+etapa retenida es `*`.
 
 ### Puerto serie
 
@@ -280,7 +283,8 @@ puede pasar `--port` por línea de comandos.
 ## 8. Checklist de revisión
 
 - [x] TUI con Textual y separación `client` / `model` / `session` / `tui` (decisión 008)
-- [x] Paneles del boceto: programa, pipeline, latches, registros, memoria usada, historial
+- [x] Paneles del boceto: programa, pipeline, latches, registros, memoria usada (el historial
+  se sacó de la pantalla en la decisión 045)
 - [x] Lista de controles, atajos y en qué estados se habilitan
 - [x] Qué se muestra en cada paso y cómo se resaltan los cambios
 - [x] Reglas para inferir stalls y forwarding

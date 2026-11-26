@@ -26,8 +26,8 @@ from ..session import (CONNECT, LOAD, REFRESH, REPROGRAM, RESET, RUN, RUN_TO, RU
                        STEP, STEP_N, STOP, Entry, ProgramFileError, Session)
 from .screens import (ConfirmScreen, ErrorsScreen, FileScreen, PortScreen, StepsScreen,
                       WatchdogScreen)
-from .widgets import (FramesPanel, HeaderBar, HistoryPanel, LatchesPanel, MemoryPanel,
-                      PipelinePanel, ProgramPanel, RegistersPanel, StatusBar)
+from .widgets import (FramesPanel, HeaderBar, LatchesPanel, MemoryPanel, PipelinePanel,
+                      ProgramPanel, RegistersPanel, StatusBar)
 
 # connector(nombre del puerto, on_frame) -> DebugClient. Los tests pasan uno con el
 # puerto simulado.
@@ -79,7 +79,7 @@ class DebuggerApp(App):
         Binding("0", "toggle_zero", "Ocultar ceros", show=False),
         Binding("c", "toggle_latches", "Campos/crudo", show=False),
         Binding("t", "toggle_frames", "Tramas", show=False),
-        Binding("escape", "back", "Volver", show=False),
+        Binding("escape", "cancel", "Cancelar", show=False),
         Binding("q", "quit", "Salir"),
     ]
 
@@ -101,7 +101,6 @@ class DebuggerApp(App):
         self.signed = True
         self.hide_zero = False
         self.raw_latches = False
-        self.viewing: int | None = None     # renglón del historial que se mira (solo lectura)
         self._cancel_run_to = False
         self._shown_program = None
         self._done_seen: Entry | None = None
@@ -119,9 +118,7 @@ class DebuggerApp(App):
                     with Vertical(id="col-b"):
                         yield PipelinePanel(id="pipeline", classes="panel")
                         yield LatchesPanel(id="latches", classes="panel")
-                with Horizontal(id="bottom"):
-                    yield HistoryPanel(id="history", classes="panel")
-                    yield FramesPanel(id="frames", classes="panel")
+                yield FramesPanel(id="frames", classes="panel")
             yield RegistersPanel(id="registers", classes="panel")
         yield StatusBar(id="statusbar")
         yield Footer()
@@ -132,30 +129,18 @@ class DebuggerApp(App):
         if self.port_name:
             self._connect(self.port_name)
 
-    def _shown_entry(self) -> Entry | None:
-        """El renglón del historial que se dibuja: el elegido o el último."""
-        s = self.session
-        if s is None or not s.history:
-            return None
-        if self.viewing is not None and 0 <= self.viewing < len(s.history):
-            return s.history[self.viewing]
-        return s.history[-1]
-
     def _show(self) -> None:
-        """Redibuja todo con el estado de la sesión (o con el renglón del historial elegido)."""
+        """Redibuja todo con el estado de la sesión."""
         s = self.session
-        if s is None or self.viewing is not None and self.viewing >= len(s.history):
-            self.viewing = None
-        entry = self._shown_entry()
-        viewing = self.viewing is not None
-        snapshot = entry.snapshot if viewing else (s.snapshot if s else None)
+        entry = s.last if s else None
+        snapshot = s.snapshot if s else None
         changes = entry.diff if entry else Diff()
         analysis = entry.analysis if entry else None
         status = s.status if s else None
         loaded = s.loaded if s else None
         imem_words = s.info.imem_words if s and s.info else IMEM_WORDS
         self.query_one(HeaderBar).show(self.port_name if s else None, self.baud, loaded,
-                                       status, entry.snapshot.status.cycles if viewing else None)
+                                       status)
         if loaded is not self._shown_program:
             self.query_one(ProgramPanel).show(loaded)
             self._shown_program = loaded
@@ -167,14 +152,11 @@ class DebuggerApp(App):
                                          written=s.written if s else None)
         self.query_one(PipelinePanel).show(snapshot if entry else None, analysis)
         self.query_one(LatchesPanel).show(snapshot, changes, analysis, raw=self.raw_latches)
-        self.query_one(HistoryPanel).show(s.history if s else [], self.viewing)
         self.query_one(StatusBar).show(self.port_name, s.info if s else None, status,
                                        changes.counts if entry else None)
-        last = s.last if s else None
-        if not viewing and last is not None and last is not self._done_seen \
-                and last.analysis.of(DONE):
-            self._done_seen = last
-            self.notify(last.analysis.of(DONE)[0].text + ". Paso y Ejecutar quedan "
+        if entry is not None and entry is not self._done_seen and entry.analysis.of(DONE):
+            self._done_seen = entry
+            self.notify(entry.analysis.of(DONE)[0].text + ". Paso y Ejecutar quedan "
                         "deshabilitados hasta Reiniciar o Cargar.", title="HALTED")
         # En RUNNING las lecturas no se permiten: se ve el último volcado, atenuado (§5)
         stale = s is not None and s.state == State.RUNNING
@@ -197,10 +179,8 @@ class DebuggerApp(App):
     # ---- trabajos con el puerto ----------------------------------------------------------
 
     def _job(self, fn: Callable, *args, done: Callable | None = None) -> None:
-        """Corre `fn(*args)` en un hilo; al terminar redibuja y llama `done(resultado)`.
-        Cualquier acción con el puerto vuelve del historial al volcado vivo."""
+        """Corre `fn(*args)` en un hilo; al terminar redibuja y llama `done(resultado)`."""
         self._jobs += 1
-        self.viewing = None
         self.refresh_bindings()
 
         def body() -> None:
@@ -334,17 +314,10 @@ class DebuggerApp(App):
         self._job(self.session.run_to, addr, RUN_TO_LIMIT,
                   lambda: self._cancel_run_to or self._exiting, done=done)
 
-    def action_back(self) -> None:
-        """Esc: cancela «hasta cursor» o vuelve del historial al volcado vivo."""
+    def action_cancel(self) -> None:
+        """Esc: cancela «hasta cursor»."""
         if self._jobs:
             self._cancel_run_to = True
-        elif self.viewing is not None:
-            self.viewing = None
-            self._show()
-
-    def on_history_panel_selected(self, event: HistoryPanel.Selected) -> None:
-        self.viewing = event.index
-        self._show()
 
     def action_stop(self) -> None:
         if self._run_loop:
@@ -389,7 +362,6 @@ class DebuggerApp(App):
 
     def action_run(self) -> None:
         self._jobs += 1
-        self.viewing = None
         self._run_loop = True
         self.refresh_bindings()
         self.run_worker(self._run_body, thread=True, group="run", exit_on_error=False)

@@ -78,7 +78,7 @@ cerrar el debugger, y al revés.
 | `no se pudo conectar con la FPGA` o `NoResponseError` | El puerto es la otra interfaz del FT2232 (JTAG), la placa no está programada, o otro programa tiene el puerto. Con LD15 quieto, el reset está apretado |
 | `Permission denied` al abrir el puerto (Linux) | Falta el grupo `dialout`: `sudo usermod -aG dialout $USER` y volver a iniciar sesión |
 | `la FPGA informa (…) palabras por latch y el modelo (…)` | El bitstream es de otra versión de [`pipeline.md`](../../docs/spec/pipeline.md) §8: volver a generarlo |
-| El debugger se ve cortado, con bordes `?` o sin colores | La terminal es chica (mínimo 160 × 45), no es UTF-8 (`export LANG=C.UTF-8`) o es la consola clásica de Windows en lugar de Windows Terminal |
+| El debugger se ve cortado, con bordes `?` o sin colores | La terminal es chica (mínimo 172 × 45), no es UTF-8 (`export LANG=C.UTF-8`) o es la consola clásica de Windows en lugar de Windows Terminal |
 | `RUN` no termina y aparece el aviso del watchdog | El programa no tiene HALT o queda en un lazo: Detener (F6) y seguir paso a paso |
 
 ### Capturas de pantalla
@@ -262,7 +262,7 @@ cortar o corromper la próxima petición o respuesta, e inyectar basura en la l�
 | `test_model.py` | Nombres ABI, hex y decimal con y sin signo, `Snapshot`, los campos de cada latch (sin el relleno, y `None` con otras palabras por latch), `word_at` (resto en HALT, alias `addr[11:2]`) y `diff` (en una burbuja solo `valid` y el control) |
 | `test_hazards.py` | La inferencia de riesgos (`interfaz_pc.md` §4.3): en cada ciclo de los programas del plan y sus variantes `_nops`, el stall, el salto tomado y el HALT deducidos coinciden con los eventos del modelo, sin inconsistencias. A mano: el stall y las cajas del ciclo 7 del boceto, el forwarding (prioridad, x0, operando que no se usa, burbujas), el flush, el HALT sin stalls falsos y cada inconsistencia |
 | `test_session.py` | Cada control de `Session` contra la Debug Unit simulada (qué comandos manda y qué devuelve), la lectura de `.s`, `.hex` y `.bin`, los errores de ensamblado y las palabras rechazadas sin `LOAD`, Paso×N que corta en `HALTED`, el watchdog y la tabla de controles habilitados de `interfaz_pc.md` §3. Con `ModelDebugUnit`: el historial, contra qué volcado se compara cada acción, la columna «Escrito» y `run_to` (llega a WB, termina en `HALTED`, límite y cancelado) |
-| `test_tui.py` | La app con `App.run_test()` y Pilot a 160 × 45: conectar con `--port` y F1, cargar con `--prog` y F2, la tabla de registros (ABI, `d`, `0`), los controles deshabilitados en cada estado, Paso×N, los errores de ensamblado, el watchdog y la confirmación de Cargar en `RUNNING`, y los selectores de archivo y de puerto. La vista del pipeline en el ciclo 7 del boceto (cajas, eventos, etapas en Programa, resaltado, «Escrito», historial y barra de estado), los latches con `c`, el historial con Enter y Esc, F4 y el final de `RUN` |
+| `test_tui.py` | La app con `App.run_test()` y Pilot a 172 × 45: conectar con `--port` y F1, cargar con `--prog` y F2, la tabla de registros (ABI, `d`, `0`), los controles deshabilitados en cada estado, Paso×N, los errores de ensamblado, el watchdog y la confirmación de Cargar en `RUNNING`, y los selectores de archivo y de puerto. La vista del pipeline en el ciclo 7 del boceto (cajas, eventos, etapas en Programa, resaltado, «Escrito» y barra de estado), los latches con `c`, un latch por columna sin desplazar el panel ni la tabla de registros (con `-2147483648`) al tamaño mínimo, F4 y el final de `RUN` |
 | `test_cliente.py` | Cada comando contra la Debug Unit simulada. El filtro de `classify` antes de `LOAD`. Reintentos ante respuesta perdida o rota, `ERR_CHECKSUM` y `ERR_TIMEOUT`. `STEP` y `RUN` sin repetir a ciegas. El `EVT_HALTED` en medio de otra respuesta, el watchdog y `STOP` desde otro hilo |
 | `test_placa.py` | `placa.py` contra una Debug Unit simulada cuyo core es el modelo de referencia: los 22 programas del plan (y las variantes `_nops`) pasan; un registro mal, un aviso de más, un `valid` mal en un paso y el relleno distinto de 0 se informan donde corresponde; un dato de una burbuja no se compara; los `indep_*`, una FPGA muda y otras palabras por latch terminan con 2 |
 | `test_comparar.py` | `comparar.py` contra la misma Debug Unit simulada: todos los `.s` de `sw/` coinciden con `RUN` (también los `indep_*`); `--ciclos` (corta en `HALTED`), `--cada-ciclo`, `--sin-cargar`, un `.hex` y un programa sin HALT. Un registro mal, un aviso de más y un `valid` mal en un paso se informan en su ciclo, y `--cada-ciclo` corta en la primera diferencia; un dato de una burbuja no se compara; una placa que no termina se detiene con `STOP`. Terminan con 2: un programa sin HALT sin `--ciclos`, un ciclo fuera de lo que simuló el modelo, la placa en `NO_PROG` o `RUNNING` con `--sin-cargar`, opciones incompatibles, errores de ensamblado, una FPGA muda y otras palabras por latch |
@@ -307,7 +307,8 @@ python tools/debugger/debugger.py --port /dev/ttyUSB1               # Linux
 | `--baud` | Baudrate (115200 por defecto) |
 | `--watchdog` | Segundos de `RUN` sin `EVT_HALTED` antes de preguntar si se detiene (5 por defecto) |
 
-La terminal tiene que tener al menos 160 × 45. En Windows, con Windows Terminal; los
+La terminal tiene que tener al menos 172 × 45 (con menos, los latches se desplazan a lo
+ancho). En Windows, con Windows Terminal; los
 requisitos de cada sistema y del puerto están en
 [`interfaz_pc.md`](../../docs/spec/interfaz_pc.md) §6.
 
@@ -325,7 +326,6 @@ requisitos de cada sistema y del puerto están en
 | `F9` | Refrescar: `READ_ALL` | Todos menos `RUNNING` |
 | `d` / `0` | Registros: decimal con o sin signo / ocultar los que valen 0 | Siempre |
 | `c` | Latches: campo por campo o las palabras de 32 bits crudas | Siempre |
-| Enter en Historial | Muestra ese volcado (solo lectura); Esc vuelve al actual | Siempre |
 | `t` | Mostrar u ocultar las tramas | Siempre |
 | `q` | Salir | Siempre |
 
@@ -341,8 +341,10 @@ estado en que quedó la placa (§8).
   deduce la PC: stall, forwarding, salto tomado o flush, HALT en vuelo e inconsistencias
   (`interfaz_pc.md` §4.3).
 - **Programa:** la etapa de cada instrucción (`*` = retenida por un stall).
-- **Resaltado:** en amarillo lo que cambió en Registros, Memoria y Latches. El historial
-  guarda cada volcado con sus eventos y sus cambios.
+- **Latches:** uno por columna, IF/ID → MEM/WB, debajo de las cajas del pipeline.
+- **Resaltado:** en amarillo lo que cambió en Registros, Memoria y Latches. `Session.history`
+  guarda cada volcado con sus eventos y sus cambios (la pantalla no lo muestra, decisión
+  [045](../../docs/decisiones/045_pantalla-sin-historial-y-latches-en-columnas.md)).
 
 Si la placa ya tenía un programa que no cargó esta PC, las etapas que no son ID muestran `?`.
 
